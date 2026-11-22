@@ -56,6 +56,7 @@ import type { PlacementResult, Recommendation } from '@/lib/learner/types'
 import type { RecommendContent, RecommendState } from '@/lib/learner/recommend'
 import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
+import { alsoNext } from '@/pages/lesson/also-next'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
 import { FINISH_BAR_SCROLL_PADDING, gradedSurfaceInView, scrollBehavior } from '@/lib/lesson-scroll'
@@ -608,7 +609,16 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
 
   if (load.status === 'error' || (load.status === 'ready' && !rec)) return <NextLessonLink lesson={lesson} trackColor={trackColor} />
   if (!rec) return <div data-up-next-slot aria-busy="true" className="min-h-[9.5rem] rounded-lg border border-line bg-surface-1" />
-  return <UpNextCard rec={rec} as="h2" />
+  const also = alsoNext(rec, nextLesson(lesson))
+  if (!also) return <UpNextCard rec={rec} as="h2" />
+  return (
+    <div className="flex flex-col gap-2">
+      <UpNextCard rec={rec} as="h2" />
+      <Link to={lessonPath(also.lesson)} data-also-next className="font-mono text-[11px] text-text-3 underline-offset-2 hover:text-text-1 hover:underline">
+        Or continue the track: {also.label}
+      </Link>
+    </div>
+  )
 }
 
 /** The pre-Wave-1 footer link, kept as the fallback and for the last lesson's way on to the capstone. */
