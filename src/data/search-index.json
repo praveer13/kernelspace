@@ -8,7 +8,7 @@
 ["r.l5","Structs, Enums, Option & Result","Make invalid states hard to express, then move ordinary…",["The question-mark operator is typed early return","Model six small domains"]],
 ["r.l6","Collections, Closures & Iterators","Own a sequence with Vec, index by key with HashMap, and…",["Choose the iterator that matches ownership","Build the Forge data paths"]],
 ["r.l7","Smart Pointers: Box, Rc & Arc","Choose heap placement or shared ownership deliberately: Box…",["Clone the handle, not the payload","Pick the smallest ownership mechanism"]],
-["r.l8","Interior Mutability: Cell, RefCell & Mutex","When mutation must live behind shared ownership, choose a…",["One rule, three permissions","A write that needs only R","RefCell is the same rule, checked later","Make the guard shorter","Mutex: the same rule across threads","Trigger the trap, then remove it"]],
+["r.l8","Interior Mutability: Cell, RefCell & Mutex","When mutation must live behind shared ownership, choose a…",["One rule, three permissions","A write that needs only R","RefCell is the same rule, checked later","Make the guard shorter","Mutex and RwLock: the rule across threads","Trigger the trap, then remove it"]],
 ["r.l9","Practical Lifetimes","Read lifetime syntax as a contract between references, then…",["Read the contract from the caller's side","Where a loan ends: a drop needs Own","A struct that holds a loan: Block<'a>","When the checker is stricter than the program","Prove borrowed views"]],
 ["r.l10","Atomics & Memory Orderings","Atomicity is only half the contract. Use Relaxed for…",["Compare-and-exchange is conditional ownership transfer","Practice before lock-free"]],
 ["t0.l1","Why Systems Thinking Matters for LLM Serving","The whole field re-derives 50 years of OS ideas:…",["The same fifty-year-old ideas","You are closer than you think","Why decode is bandwidth-bound — a preview","How this course works"]],
@@ -458,7 +458,7 @@
 [15,"genai-perf","GenAI-Perf (NVIDIA) status","being phased out; use AIPerf",""],
 [16,"uidellm","GuideLLM status and traffic profiles","live; recommended by the vLLM docs for production servers",""],
 [15,"aiperf","AIPerf status and benchmarking modes","live; NVIDIA's replacement for GenAI-Perf",""],
-[7,"rust.polonius","Polonius Alpha is not yet on stable Rust: the conditional-return borrow is still rejected","as of Rust 1.100.0, Nov 2026",""]
+[7,"rust.polonius","Polonius is not on stable Rust: the conditional-return borrow is still rejected","no stable release through Rust 1.100.0, Nov 2026, ships Polonius",""]
 ],
 "glossary": [
 ["page","Page","KV token block (tens of tokens)","t2.l2","block, chunk, memory unit"],

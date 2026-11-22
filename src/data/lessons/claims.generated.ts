@@ -68,7 +68,7 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "2",
   },
   "status.rust.polonius": {
-    cite: "as of Rust 1.100.0, Nov 2026",
+    cite: "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
   },
   "status.trtllm.enable-chunked-prefill-default": {
     cite: "False as of NVIDIA/TensorRT-LLM v1.4.0rc4, read 2026-11-22",
