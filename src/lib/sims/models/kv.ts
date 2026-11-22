@@ -95,6 +95,12 @@ export const GPU_COUNT_PRESETS: readonly number[] = [1, 2, 4, 8]
 
 /** vLLM's default tokens per KV block. */
 export const BLOCK_SIZE = claimNumber('production.vllm.block-size')
+/**
+ * The scope words the simulator prints beside vLLM's default block: the lessons' ENGINE_BLOCK_SCOPE
+ * (src/data/lessons/claims.ts) without its code marks. The simulator keeps its own copy so its chunk imports nothing from
+ * the lessons; tests/content/k0-fix4.test.ts holds the two equal.
+ */
+export const ENGINE_BLOCK_SCOPE_TEXT = "ROCm's paged-attention backend keeps its own size, and an explicit --block-size overrides either"
 /** Memory lost to block rounding under PagedAttention, in percent (a scenario figure: `synthetic.kv.paged-waste`). */
 export const PAGED_WASTE_PCT = claimNumber('synthetic.kv.paged-waste')
 /**

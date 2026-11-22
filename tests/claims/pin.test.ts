@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { CLAIMS, byId, isEngineSetting, pinProblems, type Claim } from '../../src/data/claims'
-import { VLLM_PIN } from '../../src/data/claims/engines'
+import { SGLANG_PIN, VLLM_PIN } from '../../src/data/claims/engines'
 import { TOKEN_CORPUS, TOKEN_CORPUS_IDS } from '../../src/data/engine/token-corpus'
 
 const base: Claim = {
@@ -74,6 +74,9 @@ describe('the registry', () => {
     const refs = (prefix: string) => new Set(CLAIMS.filter((c) => isEngineSetting(c) && c.id.startsWith(prefix)).map((c) => `${c.pin!.repo}@${c.pin!.ref}`))
     expect([...refs('production.vllm.')]).toEqual(['vllm-project/vllm@v0.34.0'])
     expect([...refs('production.sglang.')]).toEqual(['sgl-project/sglang@v0.5.23'])
+    // The one place a test types the pinned releases (K0-FIX4): every other test reads VLLM_PIN and SGLANG_PIN.
+    expect(VLLM_PIN).toEqual({ repo: 'vllm-project/vllm', ref: 'v0.34.0' })
+    expect(SGLANG_PIN).toEqual({ repo: 'sgl-project/sglang', ref: 'v0.5.23' })
   })
 
   test('the SGLang retract quote is the v0.5.23 lines, with the finishing-requests wait before the retraction', () => {

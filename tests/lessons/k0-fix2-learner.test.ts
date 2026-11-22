@@ -36,7 +36,7 @@ describe('the closing learner check, fix round 2', () => {
   test('no typed estimate-sized default in t5.l5, and the util default is the claim value as the claim gives it', () => {
     const util = claimNumber('production.vllm.gpu-memory-utilization')
     if (util !== 0.92) expect(text('t5.l5')).not.toContain('0.92')
-    expect(text('t5.l5')).toContain(`defaults to ${fractionText(util)} with it on`)
+    expect(text('t5.l5')).toContain(`With the extensible KV cache on, \`gpu_memory_utilization\` defaults to ${fractionText(util)};`)
   })
 
   test("t5.l5 says what the erratum's after says: CUDA, ROCm and --block-size", () => {

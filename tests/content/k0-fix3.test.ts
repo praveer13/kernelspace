@@ -152,7 +152,7 @@ describe('R4: one story for "<4%" and Figure 2, in the erratum, t1.l4, t2.l7, t5
   })
 
   test('t1.l4 and t5.l5 give the same waste sentences, built once from the claims and the mix', () => {
-    const story = `The paper's Figure 2 labels vLLM's bar ${claimNumber(FIG2)}% token states: an average over one experiment (§6.2), not a bound. "Under ${BOUND}%" is the course's estimate, not the paper's, and it holds only where blocks are small next to the sequences: the course's mixed batch of eight sequences (${mixRange()} tokens) wastes ${mixWastePct(PAPER)}% at the paper's ${PAPER}-token blocks and ${mixWastePct(ENGINE)}% at vLLM's default of ${ENGINE}.`
+    const story = `The paper's Figure 2 labels vLLM's bar ${claimNumber(FIG2)}% token states: an average over one experiment (§6.2), not a bound. So by Figure 2, about ${(100 - claimNumber(FIG2)).toFixed(1)}% of vLLM's KV memory held something other than token states in that experiment. "Under ${BOUND}%" is the course's estimate, not the paper's, and it holds only where blocks are small next to the sequences: the course's mixed batch of eight sequences (${mixRange()} tokens) wastes ${mixWastePct(PAPER)}% at the paper's ${PAPER}-token blocks and ${mixWastePct(ENGINE)}% at vLLM's default of ${ENGINE}.`
     expect(text('t1.l4')).toContain(story)
     expect(text('t5.l5')).toContain(story)
     expect(read('src/data/lessons/t5/pagedattention-deep-dive.ts')).not.toMatch(/\(\d+ to \d+ tokens\)/)
@@ -180,7 +180,7 @@ describe('R6: t5.l5 prints the pool claims as the claims give them, and reads cl
   })
   test('the util default is the claim value, and no sentence points at an unnamed file', () => {
     const t = text('t5.l5')
-    expect(t).toContain(`defaults to ${fraction()?.(claimNumber('production.vllm.gpu-memory-utilization'))} with it on`)
+    expect(t).toContain(`With the extensible KV cache on, \`gpu_memory_utilization\` defaults to ${fraction()?.(claimNumber('production.vllm.gpu-memory-utilization'))};`)
     expect(t).not.toContain('same file')
   })
   test('the first block-size sentences are whole sentences', () => {

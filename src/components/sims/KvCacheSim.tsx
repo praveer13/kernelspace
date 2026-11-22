@@ -20,6 +20,7 @@ import { useSimHost } from '@/lib/sims/host'
 import {
   BATCH_STEPS,
   BLOCK_SIZE,
+  ENGINE_BLOCK_SCOPE_TEXT,
   CTX_STEPS,
   DTYPES,
   GPUS,
@@ -767,9 +768,10 @@ export default function KvCacheSim() {
             <div className="font-mono text-[11px] leading-relaxed text-text-3">
               {paged ? (
                 <>
-                  allocate KV in {BLOCK_SIZE}-token blocks (vLLM&apos;s default) as tokens arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
+                  allocate KV in {BLOCK_SIZE}-token blocks (vLLM&apos;s default on CUDA; {ENGINE_BLOCK_SCOPE_TEXT}) as tokens
+                  arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
                   <span className="text-t5">KV block table</span>. a sequence strands under one block, half on average:{' '}
-                  {fmtTailPct(tailWastePct(ctx))}% of a {fmtCtx(ctx)} context. the calculator books a flat{' '}
+                  {fmtTailPct(tailWastePct(ctx))}% of a context of {fmtCtx(ctx)} tokens. the calculator books a flat{' '}
                   <span className="text-accent">{PAGED_WASTE_PCT}%</span> (the course estimate, not the paper&apos;s figure); shorter
                   sequences waste more. that&apos;s the entire PagedAttention trick.
                 </>

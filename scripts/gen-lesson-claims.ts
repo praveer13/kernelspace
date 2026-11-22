@@ -19,6 +19,12 @@ export const LESSON_CLAIMS = [
   'synthetic.kv.paged-waste',
   'model.kv.static-utilization-low',
   'model.kv.static-utilization-high',
+  'model.llama3-8b.kv-bytes-per-token',
+  'serving.pagedattention.throughput-gain-low',
+  'serving.pagedattention.throughput-gain-high',
+  'serving.pagedattention.ft-request-rate',
+  'serving.pagedattention.kernel-overhead-low',
+  'serving.pagedattention.kernel-overhead-high',
 ]
 
 export const OUT = new URL('../src/data/lessons/claims.generated.ts', import.meta.url)

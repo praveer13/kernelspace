@@ -23,8 +23,8 @@ import radixCache, { TWIN_ITEMS as RADIX_ITEMS } from '../../src/data/twins/radi
 import { collectTwinItems, discoverTwins } from '../../scripts/item-pools'
 
 const TWINS: { twin: TwinModule; items: readonly TwinModule['items'][number][]; claimId: string; repo: string; ref: string; path: string }[] = [
-  { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: 'sgl-project/sglang', ref: 'v0.5.23', path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
-  { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: 'vllm-project/vllm', ref: 'v0.34.0', path: 'vllm/v1/core/sched/scheduler.py' },
+  { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: SGLANG_PIN.repo, ref: SGLANG_PIN.ref, path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
+  { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: VLLM_PIN.repo, ref: VLLM_PIN.ref, path: 'vllm/v1/core/sched/scheduler.py' },
 ]
 
 /* ------------------------------ lab 06 names its release from the pin ------------------------------ */

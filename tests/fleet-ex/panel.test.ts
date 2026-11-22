@@ -42,6 +42,8 @@ import {
 } from '../../src/components/fleet-ex/session'
 import { byId, getClaim } from '../../src/data/claims'
 import '../../src/data/claims/lazy/serving3'
+// The releases come from the pins; tests/claims/pin.test.ts is the one place that types them (K0-FIX4).
+import { SGLANG_PIN, VLLM_PIN } from '../../src/data/claims/engines'
 import { lessonById } from '../../src/data/lessons'
 import type { FleetExerciseBlock } from '../../src/data/lessons/types'
 import { validateEvent } from '../../src/lib/ledger/codec'
@@ -561,8 +563,8 @@ describe('the copy and the In-production rows', () => {
         expect(`${PRODUCTION_ROWS[id].lead} ${PRODUCTION_ROWS[id].tail}`).not.toMatch(/(^|[^A-Za-z0-9])\d/) // H100 and H200 are names, not figures
       }
     }
-    expect(pinnedReleases(knee.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.23'])
-    expect(pinnedReleases(pd.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.23'])
+    expect(pinnedReleases(knee.productionClaims)).toEqual([`${VLLM_PIN.repo} ${VLLM_PIN.ref}`, `${SGLANG_PIN.repo} ${SGLANG_PIN.ref}`])
+    expect(pinnedReleases(pd.productionClaims)).toEqual([`${VLLM_PIN.repo} ${VLLM_PIN.ref}`, `${SGLANG_PIN.repo} ${SGLANG_PIN.ref}`])
   })
 })
 
@@ -1107,7 +1109,7 @@ describe('the panel, mounted', () => {
     const page = await open(rig([]))
     const rows = page.container.querySelectorAll('[data-production] li')
     expect(rows.map((li) => li.getAttribute('data-claim'))).toEqual(knee.productionClaims)
-    expect(page.container.querySelector('[data-production]')!.textContent).toContain('vllm-project/vllm v0.34.0')
+    expect(page.container.querySelector('[data-production]')!.textContent).toContain(`${VLLM_PIN.repo} ${VLLM_PIN.ref}`)
     expect(rows[0].textContent).toContain('1,024 sequences')
     expect(rows[1].textContent).toContain('2,048 to 4,096, sized from KV capacity')
     await page.unmount()

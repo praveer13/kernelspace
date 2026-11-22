@@ -17,18 +17,21 @@ function strings(v: unknown, out: string[] = []): string[] {
 }
 const all = strings(lesson)
 const text = all.join('\n')
+// T5.L4's 8B model: KV bytes per token are a claim, so the MiB per block follow it (K0-FIX4).
+const kib = claimNumber('model.llama3-8b.kv-bytes-per-token') / 1024
+const paper = claimNumber('serving.pagedattention.paper-block-size')
 const engine = claimNumber('production.vllm.block-size')
 
 describe('t5.l5 block-size claims (K0-D12)', () => {
   test("the JSON carries vLLM's default and its release from the claim", () => {
     expect(JSON.stringify(lesson)).toContain(String(engine))
     expect(text).toContain(claimRelease('production.vllm.block-size'))
-    expect(text).toContain(`${engine} × 128 KiB = ${(engine * 128) / 1024} MiB`)
+    expect(text).toContain(`${engine} × ${kib} KiB = ${(engine * kib) / 1024} MiB`)
   })
 
   test("the worked block is the paper's 16 and says so", () => {
     expect(text).toContain("2023 paper's block of 16 tokens")
-    expect(text).toContain('16 × 128 KiB = 2 MiB')
+    expect(text).toContain(`${paper} × ${kib} KiB = ${(paper * kib) / 1024} MiB`)
   })
 
   test('no string types vLLM default as 16', () => {
@@ -38,7 +41,7 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
   test('the pool sentence names where N comes from, with both pool claims', () => {
     expect(text).toContain('N is what is left of the GPU after the weights and warmup')
     expect(text).toContain(claimRelease('production.vllm.extensible-kv-cache'))
-    expect(text).toContain(`defaults to ${fractionText(claimNumber('production.vllm.gpu-memory-utilization'))} with it on`)
+    expect(text).toContain(`With the extensible KV cache on, \`gpu_memory_utilization\` defaults to ${fractionText(claimNumber('production.vllm.gpu-memory-utilization'))};`)
   })
 
   test("<4% is not called the paper's figure", () => {

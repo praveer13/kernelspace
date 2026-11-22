@@ -9,7 +9,8 @@ export default {
   before:
     'The lessons called "<4%" KV waste the PagedAttention paper\'s headline number.',
   after:
-    'The paper\'s words are near-zero waste. Its Figure 2 shows vLLM\'s KV memory almost all holding token states: an average over one experiment, not a bound. Under 4% is the course\'s estimate, true where blocks are small next to the sequences.',
+    // The third sentence is fig2Rest() in src/data/lessons/pagedMix.ts, word for word (tests/content/k0-fix4.test.ts).
+    "The paper's words are near-zero waste. Its Figure 2 averages one experiment and is not a bound. So by Figure 2, about 3.7% of vLLM's KV memory held something other than token states in that experiment. Under 4% is the course's estimate.",
   why: 'A bound the paper never prints was taught as its result. The lessons now give the paper\'s words and its Figure 2, and call under 4% the course\'s estimate.',
   source: {
     url: 'https://arxiv.org/pdf/2309.06180v1',

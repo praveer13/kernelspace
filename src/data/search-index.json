@@ -437,6 +437,11 @@
     ["field.burstgpt.mean-response-tokens","BurstGPT v2.0: mean response tokens over the rows vLLM keeps",218.8,"tokens"],
     ["serving.pagedattention.paper-block-size","PagedAttention paper (SOSP 2023): the block size it chose (its default then)",16,"tokens/block"],
     ["serving.pagedattention.fig2-vllm-token-states","PagedAttention paper (SOSP 2023), Figure 2: share of vLLM's KV cache memory holding token states",96.3,"% of KV cache memory"],
+    ["serving.pagedattention.throughput-gain-low","PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, low end",2,"× throughput"],
+    ["serving.pagedattention.throughput-gain-high","PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, high end",4,"× throughput"],
+    ["serving.pagedattention.ft-request-rate","PagedAttention paper (SOSP 2023): vLLM's highest sustained request rate against FasterTransformer, at similar latency",22,"× request rate"],
+    ["serving.pagedattention.kernel-overhead-low","PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, low end",20,"% attention-kernel latency"],
+    ["serving.pagedattention.kernel-overhead-high","PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, high end",26,"% attention-kernel latency"],
     ["production.vllm.extensible-kv-cache","vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)","on",""],
     ["production.vllm.gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""]
   ],
