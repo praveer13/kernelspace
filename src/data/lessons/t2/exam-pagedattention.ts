@@ -221,9 +221,18 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `This is the T2 spiral checkpoint (the track's exam), and it is not a test of memory — it is a test of *translation*. You are going to read the paper that kicked off modern LLM serving, **"Efficient Memory Management for Large Language Model Serving with PagedAttention"** (Kwon et al., SOSP 2023), the way a systems engineer reads it: every section mapped to an OS primitive you learned in this track. You will not need any ML background beyond one idea (the KV cache), which the paper itself introduces and which T5 will dissect fully.
+      md: `This is the T2 spiral checkpoint (the track's exam), and it is not a test of memory — it is a test of *translation*. You are going to read the paper that kicked off modern LLM serving, ["Efficient Memory Management for Large Language Model Serving with PagedAttention"](https://arxiv.org/abs/2309.06180) (Kwon et al., SOSP 2023), the way a systems engineer reads it: every section mapped to an OS primitive you learned in this track. You will not need any ML background beyond one idea (the KV cache), which the paper itself introduces and which T5 will dissect fully.
 
 The checkpoint rule: eight items, **six right**, with at least one written or computed answer among them. Four items are about this lesson; four come back to earlier T0–T2 ideas, because a translation only works if the original is still in your head. Nothing locks: a miss offers fresh numbers, or you can carry on and return. Take the guided read seriously and the items will feel like a formality.`,
+    },
+    {
+      type: 'field-note',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention',
+      source: 'Kwon et al.',
+      href: 'https://arxiv.org/abs/2309.06180',
+      published: "SOSP '23",
+      verified: '2026-11',
+      md: `The guided read below follows the paper in its own order: §1–3 (the problem and the allocator autopsy), §4 (PagedAttention and the block table), §4.5 (scheduling), and §5–6 (the kernel and the measured numbers). Read each section alongside the mapping in this lesson, and leave the attention equations for a second pass.`,
     },
     {
       type: 'prose',
