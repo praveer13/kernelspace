@@ -332,7 +332,7 @@
     ["production.vllm.block-size","vLLM default KV cache block size",64,"tokens/block"],
     ["production.vllm.v1-preemption","vLLM V1 default preemption mode","recompute",""],
     ["production.glibc.mmap-threshold","glibc malloc initial mmap threshold (128 KiB)",131072,"bytes"],
-    ["production.glibc.bins","glibc malloc free-chunk bin kinds","fast, unsorted, small, large",""],
+    ["production.glibc.bins","glibc malloc free-chunk bin kinds","unsorted, small, large",""],
     ["production.jemalloc.classes-per-doubling","jemalloc size classes per doubling in size",4,"classes per doubling"],
     ["production.jemalloc.max-internal-frag","jemalloc internal fragmentation bound from size-class spacing",20,"%"],
     ["production.jemalloc.small-classes","jemalloc smallest size classes on 64-bit","8, 16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256","bytes"],

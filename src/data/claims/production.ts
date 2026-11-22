@@ -14,9 +14,9 @@ const GLIBC_MALLOPT = {
   url: 'https://man7.org/linux/man-pages/man3/mallopt.3.html',
   title: 'mallopt(3), Linux man-pages',
 }
-const GLIBC_INTERNALS = {
-  url: 'https://sourceware.org/glibc/wiki/MallocInternals',
-  title: 'glibc wiki: MallocInternals',
+const GLIBC_MALLOC_C = {
+  url: 'https://gitlab.com/gnutools/glibc/-/raw/glibc-2.43/malloc/malloc.c',
+  title: 'glibc malloc/malloc.c at tag glibc-2.43 (a mirror of the glibc repository)',
 }
 const JEMALLOC_MAN = {
   url: 'https://jemalloc.net/jemalloc.3.html',
@@ -76,16 +76,16 @@ export const PRODUCTION_CLAIMS: Claim[] = [
   {
     id: 'production.glibc.bins',
     kind: 'spec',
-    value: 'fast, unsorted, small, large',
+    value: 'unsorted, small, large',
     label: 'glibc malloc free-chunk bin kinds',
     source: {
-      ...GLIBC_INTERNALS,
-      quote: 'The normal bins are divided into "small" bins, where each chunk is the same size, and "large" bins, where chunks are a range of sizes.',
-      row: 'Arenas > bins',
+      ...GLIBC_MALLOC_C,
+      quote: 'for the small bins, which all contain the same-sized chunks, but',
+      row: 'malloc.c line 1484 (Bins); the word fastbin occurs 106 times at tag glibc-2.42 and 0 times at glibc-2.43 and glibc-2.44',
     },
-    verifiedAt: '2026-10-05',
+    verifiedAt: '2026-11-22',
     ttlDays: 365,
-    boundary: 'Per arena, with a per-thread cache (tcache) in front. Fastbins do not coalesce; small and large bins do.',
+    boundary: 'Per arena, with a per-thread cache (tcache) in front. Fastbins left malloc in glibc 2.43. Read in the mirror\'s tags glibc-2.42 (fastbins present, M_MXFAST honoured), glibc-2.43 and glibc-2.44 (no fastbin in malloc.c; M_MXFAST marked deprecated and ignored). Older glibc still has fastbins, and distributions that ship 2.42 or earlier keep them.',
   },
   {
     id: 'production.jemalloc.classes-per-doubling',
