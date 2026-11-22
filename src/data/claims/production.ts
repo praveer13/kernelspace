@@ -81,11 +81,11 @@ export const PRODUCTION_CLAIMS: Claim[] = [
     source: {
       ...GLIBC_MALLOC_C,
       quote: 'for the small bins, which all contain the same-sized chunks, but',
-      row: 'malloc.c line 1484 (Bins); the word fastbin occurs 106 times at tag glibc-2.42 and 0 times at glibc-2.43 and glibc-2.44',
+      row: 'malloc.c line 1484 names the small bins, lines 1635 and 1645 the unsorted bin, line 4053 the large bins; 106 lines of malloc.c at tag glibc-2.42 contain fastbin (ignoring case), and none at glibc-2.43 or glibc-2.44 (tags read on the mirror)',
     },
     verifiedAt: '2026-11-22',
     ttlDays: 365,
-    boundary: 'Per arena, with a per-thread cache (tcache) in front. Fastbins left malloc in glibc 2.43. Read in the mirror\'s tags glibc-2.42 (fastbins present, M_MXFAST honoured), glibc-2.43 and glibc-2.44 (no fastbin in malloc.c; M_MXFAST marked deprecated and ignored). Older glibc still has fastbins, and distributions that ship 2.42 or earlier keep them.',
+    boundary: 'Per arena, with a per-thread cache (tcache) in front, in glibc 2.43 and 2.44. glibc 2.42 and earlier also keep fastbins and honour M_MXFAST; in 2.43 and 2.44 M_MXFAST is marked deprecated and setting it has no effect.',
   },
   {
     id: 'production.jemalloc.classes-per-doubling',
