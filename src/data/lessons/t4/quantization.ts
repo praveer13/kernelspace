@@ -125,19 +125,19 @@ const SPIRAL: AuthoredItem[] = [
     id: 't4.spiral.few-warps',
     kcs: ['t4.occupancy'],
     q: {
-      q: 'A kernel whose threads use 128 registers each stalls on HBM loads, with only four warps resident on each multiprocessor. Which change is most likely to raise throughput?',
+      q: 'A kernel stalls on HBM loads, with only four warps resident on each multiprocessor. Its threads use 128 registers each, and its blocks of 64 threads use 100 KiB of shared memory each. Which change is most likely to raise throughput?',
       options: [
-        'Use fewer registers per thread, with more warps then fitting to cover each wait',
+        'Use less shared memory per block, with more blocks then fitting to cover each wait',
         'Raise the shared memory per block, with the larger tile making each load faster',
         'Launch more blocks of the same kind, with the extra blocks queued behind the first ones',
         'Move the weights into L2, with the shorter latency removing the need for other warps',
       ],
       correct: [0],
       explanation:
-        'Occupancy is set by the tightest per-multiprocessor budget; relaxing the binding one, here registers, lets more warps hide the wait.',
+        'Occupancy is set by the tightest per-multiprocessor budget; relaxing the binding one, here shared memory, lets more warps hide the wait.',
       why: [
-        'Right: registers cap how many warps fit, so trimming them lets more warps stay resident, and a stalled warp then has others to switch to.',
-        'Misconception: more shared memory helps. It is another budget for residency, and raising it per block usually fits fewer blocks, not more.',
+        'Right: shared memory binds, since two 100 KiB blocks fill it and give four warps, while the registers alone would allow sixteen. Trimming it keeps more warps resident for a stalled one to hand over to.',
+        'Misconception: more shared memory helps. It is the budget that already binds here, and raising it per block fits fewer blocks, not more.',
         'Misconception: more blocks mean more warps. Extra blocks wait in a queue until resident ones finish; residency, not the launch size, hides latency.',
         'Misconception: shorter latency removes the need for warps. L2 still takes tens of cycles and the data does not fit there; other warps remain the cover.',
       ],
@@ -289,7 +289,7 @@ Three schemes dominate, and you should know them by their trade-offs:
       type: 'statline',
       stats: [
         { value: '×2', label: 'FP8 decode rate', hint: 'Half the weight bytes per token on a bandwidth-bound path ≈ twice the tokens/s.' },
-        { value: '×4', label: 'INT4 capacity', hint: 'A 70B model: 140 GB → ~35 GB. One GPU instead of four.' },
+        { value: '×4', label: 'INT4 capacity', hint: 'A 70B model: 140 GB → ~35 GB. One GPU instead of two.' },
         { value: '~1%', label: 'INT4 quality cost', hint: 'Per-group GPTQ/AWQ with calibration, typical benchmarks.' },
         { value: '128', label: 'group size', hint: 'The sweet spot: fine enough scales, negligible metadata overhead.' },
       ],
