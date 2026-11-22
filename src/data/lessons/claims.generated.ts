@@ -4,6 +4,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 0.011776,
     cite: "0.011776147370379336",
   },
+  "hw.h100-sxm.max-warps-per-sm": {
+    value: 64,
+    cite: "64",
+  },
   "model.kv.static-utilization-high": {
     value: 38.2,
     cite: "38.2",

@@ -445,6 +445,7 @@
 [0,"production.vllm.extensible-kv-cache","vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)","on",""],
 [16,"gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""],
 [0,"hw.cuda.coalesce-transaction-bytes","Bytes in one coalesced global-memory transaction",32,"B"],
+[3,"h100-sxm.max-warps-per-sm","Maximum concurrent warps per SM (Hopper, H100 SXM5)",64,"warps"],
 [0,"status.dynamo.transport","Dynamo default transport","TCP",""],
 [7,"chromium.memory-safety-share","Chromium memory-unsafe share",70,"%"],
 [7,"android.memory-safety-share","Android memory-safety share","below 20","%"],

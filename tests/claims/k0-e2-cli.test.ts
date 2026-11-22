@@ -61,6 +61,7 @@ describe('the ids are collected from the readers, not typed', () => {
         'production.sglang.chunked-prefill-size',
         'status.vllm.speculative-methods',
         'status.trtllm.enable-chunked-prefill-default',
+        'hw.h100-sxm.max-warps-per-sm',
       ]),
     )
     expect(LESSON_CLAIMS).toEqual([...LESSON_CLAIMS].sort())
