@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { KCS } from '../../src/data/kc'
 import { PLAYS } from '../../src/data/plays'
 import { INDEX_PATH } from '../../scripts/build-search-index'
-import { indexItems, makeSearcher, type SearchIndex } from '../../src/lib/search'
+import { decodeSearchIndex, indexItems, makeSearcher, type EncodedSearchIndex, type SearchIndex } from '../../src/lib/search'
 import { STATIC_ITEMS } from '../../src/components/CommandPalette'
 
 /**
@@ -13,7 +13,7 @@ import { STATIC_ITEMS } from '../../src/components/CommandPalette'
  * they come from the palette's static list and never from the index.
  */
 const root = resolve(import.meta.dir, '../..')
-const index = JSON.parse(readFileSync(join(root, INDEX_PATH), 'utf8')) as SearchIndex
+const index: SearchIndex = decodeSearchIndex(JSON.parse(readFileSync(join(root, INDEX_PATH), 'utf8')) as EncodedSearchIndex)
 const search = makeSearcher([...indexItems(index), ...STATIC_ITEMS])
 
 const FRONTIER = new Set(['t3', 't4', 't5', 't6', 't7'])

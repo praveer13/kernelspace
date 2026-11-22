@@ -6,7 +6,9 @@
  * the index (wave-2.md §7.4), so the bank's entries never reach it. The file is committed; CI regenerates it
  * and fails on a diff (`bun run verify:search-index`), the way it does for public/lessons-md. The palette
  * imports it as its own chunk on first open, so the file is kept compact: positional rows, one per line, no
- * authored prose beyond titles, hooks and headings.
+ * authored prose beyond titles, hooks and headings. Since K0-Z3 the file holds `EncodedSearchIndex` (src/lib/search.ts):
+ * the same rows, with concept anchors and claim references as positions and claim ids front-coded, which the palette
+ * decodes on load.
  *
  *   bun scripts/build-search-index.ts
  */
@@ -19,7 +21,7 @@ import { PLAYS } from '../src/data/plays'
 import { ALL_LESSONS, lessonById } from '../src/data/lessons'
 import type { Lesson } from '../src/data/lessons/types'
 import { extractHeadings, slugify } from '../src/pages/lesson/markdown'
-import type { SearchIndex } from '../src/lib/search'
+import type { EncodedClaimRow, EncodedKcRow, EncodedSearchIndex, SearchIndex } from '../src/lib/search'
 
 export const INDEX_PATH = 'src/data/search-index.json'
 
@@ -110,16 +112,44 @@ export function buildSearchIndex(hookMax = HOOK_MAX, canMax = CAN_MAX): SearchIn
   }
 }
 
-/** The committed file's text: top-level keys on their own lines and one row per line, so a content change diffs small. */
+/**
+ * `index` in the committed encoding (`EncodedSearchIndex`, src/lib/search.ts; K0-Z3): `decodeSearchIndex` gives back
+ * every row exactly, which tests/search/k0-z3-encoding.test.ts checks row for row. It took the file from 20,475 B of gzip to 18,855 B (K0-Z3 measured each part: docs/specs/k0.md K0-Z-D16).
+ */
+export function encodeSearchIndex(index: SearchIndex): EncodedSearchIndex {
+  const h2sOf = new Map(index.lessons.map(([id, , , h2s]) => [id, h2s]))
+  const claimAt = new Map(index.claims.map(([id], i) => [id, i]))
+  const kcs = index.kcs.map<EncodedKcRow>(([id, title, can, lessonId, anchor, claimIds]) => {
+    const h2 = anchor ? (h2sOf.get(lessonId) ?? []).findIndex((text) => slugify(text) === anchor) : -1
+    if (anchor && h2 < 0) throw new Error(`kc ${id}: anchor ${anchor} is not an H2 of ${lessonId}`)
+    const refs = claimIds.map((c) => claimAt.get(c) ?? c)
+    if (refs.length > 0) return [id, title, can, lessonId, h2, refs]
+    return h2 >= 0 ? [id, title, can, lessonId, h2] : [id, title, can, lessonId]
+  })
+  let prev = ''
+  const claims = index.claims.map<EncodedClaimRow>(([id, label, value, unit]) => {
+    let shared = 0
+    while (shared < prev.length && shared < id.length && prev[shared] === id[shared]) shared++
+    prev = id
+    return [shared, id.slice(shared), label, value, unit]
+  })
+  return { version: 2, lessons: index.lessons, kcs, plays: index.plays, claims, glossary: index.glossary }
+}
+
+/**
+ * The committed file's text: `index` encoded, top-level keys on their own lines and one row per line, so a content change
+ * diffs small. Rows carry no indent (K0-Z3: 105 B of gzip).
+ */
 export function serializeSearchIndex(index: SearchIndex): string {
-  const rows = (list: readonly unknown[]) => `[\n${list.map((r) => `    ${JSON.stringify(r)}`).join(',\n')}\n  ]`
+  const encoded = encodeSearchIndex(index)
+  const rows = (list: readonly unknown[]) => `[\n${list.map((r) => JSON.stringify(r)).join(',\n')}\n]`
   return `{
-  "version": ${index.version},
-  "lessons": ${rows(index.lessons)},
-  "kcs": ${rows(index.kcs)},
-  "plays": ${rows(index.plays)},
-  "claims": ${rows(index.claims)},
-  "glossary": ${rows(index.glossary)}
+"version": ${encoded.version},
+"lessons": ${rows(encoded.lessons)},
+"kcs": ${rows(encoded.kcs)},
+"plays": ${rows(encoded.plays)},
+"claims": ${rows(encoded.claims)},
+"glossary": ${rows(encoded.glossary)}
 }
 `
 }

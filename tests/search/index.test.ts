@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { byId, CLAIMS } from '../../src/data/claims'
 import { buildSearchIndex, CAN_MAX, clip, INDEX_PATH, serializeSearchIndex } from '../../scripts/build-search-index'
 import { ACCEPTANCE_QUERIES, checkSearchIndex } from '../../scripts/verify-search-index'
-import { GROUP_ORDER, claimPath, indexItems, makeSearcher, type SearchIndex } from '../../src/lib/search'
+import { GROUP_ORDER, claimPath, decodeSearchIndex, indexItems, makeSearcher, type EncodedSearchIndex } from '../../src/lib/search'
 
 /**
  * Wave 1 B24 (wave-1.md §7.4): the ⌘K index is generated, committed, fresh, small, and reaches lessons,
@@ -12,7 +12,8 @@ import { GROUP_ORDER, claimPath, indexItems, makeSearcher, type SearchIndex } fr
  */
 const root = resolve(import.meta.dir, '../..')
 const committed = readFileSync(join(root, INDEX_PATH), 'utf8')
-const index = JSON.parse(committed) as SearchIndex
+const encoded = JSON.parse(committed) as EncodedSearchIndex
+const index = decodeSearchIndex(encoded)
 const search = makeSearcher(indexItems(index))
 
 describe('search index freshness', () => {
@@ -41,8 +42,10 @@ describe('search index freshness', () => {
   })
 
   test('a hand-edited KC anchor fails the check as stale', () => {
-    const row = index.kcs.find((k) => k[4])!
-    const broken = committed.replace(`"${row[4]}"`, '"no-such-heading"')
+    // The file names an anchor by its place in the lesson's H2 list (K0-Z3); pointing it at another H2 is the hand edit.
+    const row = encoded.kcs.find((k) => k.length > 4 && k[4] >= 0)!
+    const line = JSON.stringify(row)
+    const broken = committed.replace(line, JSON.stringify([...row.slice(0, 4), row[4]! + 1, ...row.slice(5)]))
     expect(broken).not.toBe(committed)
     const errors = checkSearchIndex(broken)
     expect(errors.some((e) => e.includes('stale'))).toBe(true)

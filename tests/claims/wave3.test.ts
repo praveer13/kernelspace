@@ -8,6 +8,7 @@ import { MOE_CLAIMS } from '@/data/claims/lazy/moe'
 import { SERVING3_CLAIMS } from '@/data/claims/lazy/serving3'
 import { TILING_CLAIMS } from '@/data/claims/lazy/tiling'
 import { TWIN_CLAIMS } from '@/data/claims/lazy/twins'
+import { decodeSearchIndex, type EncodedSearchIndex } from '@/lib/search'
 
 /**
  * Wave 3's claims (spec wave-3 §4.4, 3a-08): every row of the §4.4 table exists, is quoted or pinned as its kind
@@ -202,7 +203,7 @@ describe('verify-claims on the new claims', () => {
 
 describe('the search index', () => {
   test('has a row for every new claim', () => {
-    const index = JSON.parse(readFileSync(join(root, 'src/data/search-index.json'), 'utf8')) as { claims: [string, string, number | string, string][] }
+    const index = decodeSearchIndex(JSON.parse(readFileSync(join(root, 'src/data/search-index.json'), 'utf8')) as EncodedSearchIndex)
     const ids = new Set(index.claims.map((row) => row[0]))
     for (const id of TABLE) expect(ids.has(id)).toBe(true)
   })
