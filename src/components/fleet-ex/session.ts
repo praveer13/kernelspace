@@ -457,7 +457,7 @@ function kneeCopy(): ExerciseCopy {
     tickLabel: (x) => `${formatNumber(x)}×`,
     explainPrompt: 'In a sentence or two, say why goodput peaks and then falls, instead of staying flat once load passes the peak.',
     model:
-      'Below the knee the engine keeps up: its slots free as fast as requests arrive, so goodput follows the offered load. Past it, arrivals outrun the rate the slots free at (Little\'s law: slots ÷ the time a request holds one), ' +
+      'Below the peak the engine keeps up: its slots free as fast as requests arrive, so goodput follows the offered load. Past it, arrivals outrun the rate the slots free at (Little\'s law: slots ÷ the time a request holds one), ' +
       'a queue builds, and queued requests wait past the TTFT SLO. They are served late, so they do not count: goodput falls even though the engine cannot finish requests any faster.',
     ideas: [
       'Below the peak the engine keeps up, so goodput rises with the load.',

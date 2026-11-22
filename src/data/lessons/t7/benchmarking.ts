@@ -27,7 +27,7 @@ Engines have state: prefix caches cold, CUDA graphs uncaptured, JIT uncompiled, 
 
 ## Rule 3: Percentiles need samples, and load needs steps
 
-A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 4, 8 … until SLO collapse), hold each step for hundreds of requests, and report the **goodput curve** (T7.L1), not a point. Between steps: the knee — where TTFT/TPOT violate SLO — *is* the capacity number. This is exactly the Fleet's scoreboard: your goodput % is the area under an implicit curve you now know how to draw.
+A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 4, 8 … until SLO collapse), hold each step for hundreds of requests, and report the **goodput curve** (T7.L1), not a point. Between steps: the knee, the highest step that still meets the SLO, *is* the capacity number. This is exactly the Fleet's scoreboard: your goodput % is the area under an implicit curve you now know how to draw.
 
 Reading a sweep is a lookup. In a hypothetical run with p95 TPOT of 22, 24, 31, 48, 96 and 240 ms at concurrency 1, 2, 4, 8, 16 and 32, and an SLO of TPOT < 100 ms, the knee is **16**: the highest step that still meets the bound. Step 32 may still add tokens per second, but its goodput is lower, because the requests it adds arrive outside the SLO.
 
@@ -67,10 +67,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
     {
       type: 'exercise',
       fleet: 'knee',
-      title: 'Find the knee',
+      title: 'Find the goodput peak',
       note: `Each seed puts its knee at one of four loads (0.75×, 1×, 1.25× or 1.5×), so the same answer comes up on different seeds, and the scene gave you what you needed to tell which one this seed uses. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
 
-That is Rule 3 on a small engine. The capacity number is where the curve bends, which a sweep of load steps finds and a single run does not: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
+That is Rule 3 on a small engine. The goodput peak is not quite the capacity number: goodput counts each request against its own bound, so at the peak a share of requests may already be late and the p95 may miss the SLO. The knee, the highest step that still meets the SLO, sits at or below the peak. A sweep of load steps finds both and a single run finds neither: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
     },
     {
       type: 'exercise',
@@ -138,7 +138,7 @@ To correct the number, take the flaw out and ask whether production's load queue
             'A single max-batch run lands past the knee and reveals nothing about where the cliff is. It reports throughput at a point where users already see SLO violations.',
             'That is a roofline upper bound. It ignores queueing, scheduling, KV capacity and the latency contract, so real capacity under SLO sits far below it.',
             'Latency stays low at light load, then queues build and it goes vertical at the knee. A linear extrapolation from one moderate point hides that cliff, and one point cannot locate a knee.',
-            'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee where the SLO first breaks is the capacity, and the curve is the deliverable.',
+            'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee, the highest step that still meets the SLO, is the capacity, and the curve is the deliverable.',
           ],
           kcs: ['t7.goodput-curve'],
           miss: ['t7.capacity-is-max-batch-run', 't7.capacity-is-roofline', 't7.capacity-is-linear-extrapolation', ''],
