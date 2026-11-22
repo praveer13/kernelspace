@@ -1017,7 +1017,7 @@
       "label": "KV calculator: memory lost to PagedAttention block rounding (course stand-in)",
       "verifiedAt": "2026-10-05",
       "ttlDays": 365,
-      "boundary": "No source for this exact figure: a round upper bound. The paper reports \"near-zero waste\"; the tail of one 16-token block per sequence is far below 4% at any context the calculator offers."
+      "boundary": "The course's estimate, not the paper's: a sequence strands half a block on average, so the share grows with block size and falls with length. The calculator books it flat and shows that mean tail at vLLM's default (production.vllm.block-size). The lessons' mixed batch (pagedMix.ts) is under it at the paper's block, over it at vLLM's. The paper says \"near-zero waste\"; Figure 2: serving.pagedattention.fig2-vllm-token-states."
     },
     {
       "id": "synthetic.kv.runtime-overhead",
@@ -1475,22 +1475,23 @@
     {
       "id": "production.vllm.block-size",
       "kind": "status",
-      "value": 16,
+      "value": 64,
       "unit": "tokens/block",
       "label": "vLLM default KV cache block size",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/cache.py",
-        "title": "vLLM v0.31.0 source: vllm/config/cache.py (CacheConfig)",
-        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 16",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/cache.py",
+        "title": "vLLM v0.34.0 source: vllm/config/cache.py (CacheConfig)",
+        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 64",
         "row": "CacheConfig.DEFAULT_BLOCK_SIZE"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size)."
+      "boundary": "When --block-size is not given. The v0.34.0 release notes: \"Backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size still wins.\" cache.py also has mamba_block_size. 16 before v0.34.0 (release notes: \"was 16\").",
+      "discrepancy": "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size)."
     },
     {
       "id": "production.vllm.v1-preemption",
@@ -1498,16 +1499,16 @@
       "value": "recompute",
       "label": "vLLM V1 default preemption mode",
       "source": {
-        "url": "https://docs.vllm.ai/en/v0.31.0/configuration/optimization/",
-        "title": "vLLM v0.31.0 docs: Optimization and Tuning (Preemption)",
+        "url": "https://docs.vllm.ai/en/v0.34.0/configuration/optimization/",
+        "title": "vLLM v0.34.0 docs: Optimization and Tuning (Preemption)",
         "quote": "In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture.",
         "row": "Preemption"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "V1 engine: a preempted request is recomputed, not swapped to CPU."
     },
@@ -1596,16 +1597,16 @@
       "value": "fcfs",
       "label": "vLLM default scheduling policy",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/scheduler.py",
-        "title": "vLLM v0.31.0 source: vllm/config/scheduler.py (SchedulerConfig)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/scheduler.py",
+        "title": "vLLM v0.34.0 source: vllm/config/scheduler.py (SchedulerConfig)",
         "quote": "policy: SchedulerPolicy = \"fcfs\"",
         "row": "SchedulerConfig.policy"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "SchedulerPolicy is Literal[\"fcfs\", \"priority\"] at this release: first come first served, or the priority a caller gives each request. Neither orders by prompt length, so shortest-prompt-first is a choice you make."
     },
@@ -1615,16 +1616,16 @@
       "value": "fcfs",
       "label": "SGLang default schedule policy",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/schedule.py",
-        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/arg_groups/fields/schedule.py",
+        "title": "SGLang v0.5.23 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
         "quote": "schedule_policy: A[ str, Arg( help=\"The scheduling policy of the requests.\", choices=[ \"lpm\", \"random\", \"fcfs\", \"dfs-weight\", \"lof\", \"priority\", \"routing-key\", \"hrrn\", \"shortest-prefill-first\", ], ), ] = \"fcfs\"",
         "row": "Schedule.schedule_policy"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "The default orders by arrival. At this release --schedule-policy also accepts \"shortest-prefill-first\" (plus lpm, random, priority and others), so SJF by prompt length is one flag away in SGLang and has no flag in vLLM."
     },
@@ -1634,16 +1635,16 @@
       "value": 1,
       "label": "SGLang default schedule conservativeness",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/schedule.py",
-        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/arg_groups/fields/schedule.py",
+        "title": "SGLang v0.5.23 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
         "quote": "schedule_conservativeness: A[ float, \"How conservative the schedule policy is. A larger value means more conservative scheduling. Use a larger value if you see requests being retracted frequently.\", ] = 1.0",
         "row": "Schedule.schedule_conservativeness"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "The setting the course ties to decode headroom. The source says a larger value means more conservative scheduling and advises raising it if requests are retracted often; it gives the direction, not a token count."
     },
@@ -1654,16 +1655,16 @@
       "unit": "fraction of KV blocks",
       "label": "vLLM default admission watermark (KV blocks kept free)",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/scheduler.py",
-        "title": "vLLM v0.31.0 source: vllm/config/scheduler.py (SchedulerConfig)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/scheduler.py",
+        "title": "vLLM v0.34.0 source: vllm/config/scheduler.py (SchedulerConfig)",
         "quote": "watermark: float = Field(default=0.0, ge=0.0, lt=1.0) \"\"\"Fraction of total KV cache blocks to keep free (the watermark) when admitting waiting or preempted requests into the running queue.",
         "row": "SchedulerConfig.watermark"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "vLLM at this release has an admission headroom setting, and its default of 0.0 disables it: out of the box, headroom is off. This is the vLLM side of the headroom dial."
     },
@@ -1673,18 +1674,18 @@
       "value": "retract",
       "label": "SGLang preemption mode when decode runs out of KV memory",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/managers/scheduler.py",
-        "title": "SGLang v0.5.21 source: srt/managers/scheduler.py (Scheduler)",
-        "quote": "# Check if decode out of memory if (kv_full_retract_flag := not batch.check_decode_mem()) or (",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/managers/scheduler.py",
+        "title": "SGLang v0.5.23 source: srt/managers/scheduler.py (Scheduler)",
+        "quote": "kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs: # The queued result frees the finishing requests' KV at the end of # this step; decode the rest next step instead of retracting them. batch.batch_is_full = False return None # Check if decode out of memory if kv_full_retract_flag or (",
         "row": "Scheduler.update_running_batch"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). --retraction-policy chooses the victims (\"length\" by default)."
+      "boundary": "When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). At v0.5.23, if requests are about to finish and would free KV this step, it decodes the rest next step instead of retracting. --retraction-policy chooses the victims: \"length\" (the default) retracts short-output, long-input requests first, and \"priority\" retracts lower-priority requests first."
     },
     {
       "id": "production.vllm.max-num-seqs",
@@ -1693,18 +1694,18 @@
       "unit": "sequences",
       "label": "vLLM default max_num_seqs on an H100 or H200 serving the OpenAI API",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/engine/arg_utils.py",
-        "title": "vLLM v0.31.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/engine/arg_utils.py",
+        "title": "vLLM v0.34.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
         "quote": "# For GPUs like H100 and H200, use larger offline defaults. default_max_num_batched_tokens = { UsageContext.LLM_CLASS: 16384, UsageContext.OPENAI_API_SERVER: 8192, } default_max_num_seqs = { UsageContext.LLM_CLASS: 1024, UsageContext.OPENAI_API_SERVER: 1024, }",
         "row": "EngineArgs.get_batch_defaults, the 70 GiB and larger branch that is not an A100"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "Applies when --max-num-seqs is not given. The default depends on the GPU: 256 below 70 GiB and on A100s, 1024 from 70 GiB, and --performance-mode throughput doubles it. SchedulerConfig.DEFAULT_MAX_NUM_SEQS = 128 is only a fallback for tests."
+      "boundary": "Applies when --max-num-seqs is not given. The default depends on the GPU: 256 below 70 GiB and on A100s, 1024 from 70 GiB, and --performance-mode throughput doubles it. The 70 GiB branch also excludes GB10 (DGX Spark, compute capability 12.1), which keeps the small-tier defaults (256 sequences, 2,048 tokens). SchedulerConfig.DEFAULT_MAX_NUM_SEQS = 128 is only a fallback for tests."
     },
     {
       "id": "production.sglang.max-running-requests",
@@ -1712,16 +1713,16 @@
       "value": "2,048 to 4,096, sized from KV capacity",
       "label": "SGLang max running requests when --max-running-requests is not given",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/mem_cache/kv_cache_configurator.py",
-        "title": "SGLang v0.5.21 source: srt/mem_cache/kv_cache_configurator.py (resolve_max_num_reqs)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/mem_cache/kv_cache_configurator.py",
+        "title": "SGLang v0.5.23 source: srt/mem_cache/kv_cache_configurator.py (resolve_max_num_reqs)",
         "quote": "estimated = int(token_capacity / self.model_config.context_len * 512) estimated = max(min(estimated, 4096), 2048)",
         "row": "KVCacheConfigurator.resolve_max_num_reqs"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "The flag defaults to None; the server then takes the KV pool's token capacity ÷ context length × 512, clamped to 2,048–4,096 and to at most half the token capacity. Hybrid (Mamba) models can cap it lower."
     },
@@ -1732,18 +1733,18 @@
       "unit": "tokens/iteration",
       "label": "vLLM default max_num_batched_tokens on an H100 or H200 serving the OpenAI API",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/engine/arg_utils.py",
-        "title": "vLLM v0.31.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/engine/arg_utils.py",
+        "title": "vLLM v0.34.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
         "quote": "# For GPUs like H100 and H200, use larger offline defaults. default_max_num_batched_tokens = { UsageContext.LLM_CLASS: 16384, UsageContext.OPENAI_API_SERVER: 8192, }",
         "row": "EngineArgs.get_batch_defaults, the 70 GiB and larger branch that is not an A100"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "Applies when --max-num-batched-tokens is not given. It is the per-iteration token budget that chunked prefill (on by default for models that support it) fills: 2,048 on smaller GPUs, 8,192 here, 16,384 from 160 GiB. --performance-mode throughput doubles it."
+      "boundary": "Applies when --max-num-batched-tokens is not given. It is the per-iteration token budget that chunked prefill (on by default for models that support it) fills: 2,048 on smaller GPUs, 8,192 here, 16,384 from 160 GiB. --performance-mode throughput doubles it. The 70 GiB branch also excludes GB10 (DGX Spark, compute capability 12.1), which keeps the small-tier defaults (256 sequences, 2,048 tokens)."
     },
     {
       "id": "production.sglang.chunked-prefill-size",
@@ -1752,16 +1753,16 @@
       "unit": "tokens/chunk",
       "label": "SGLang default chunked prefill size on an H100",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/memory_hook.py",
-        "title": "SGLang v0.5.21 source: srt/arg_groups/memory_hook.py (handle_gpu_memory_settings)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/arg_groups/memory_hook.py",
+        "title": "SGLang v0.5.23 source: srt/arg_groups/memory_hook.py (handle_gpu_memory_settings)",
         "quote": "# H100, A100 # (chunked_prefill_size 8k, max_bs 256 if tp < 4 else 512)",
         "row": "handle_gpu_memory_settings, 60 to 90 GiB of GPU memory"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Applies when --chunked-prefill-size is not given (the field is None until the GPU is known). 2,048 below 20 GiB, 4,096 for 20 to 60 GiB, 8,192 for 60 to 160 GiB (H100, A100, H20, H200) and 16,384 above that."
     },
@@ -2908,7 +2909,7 @@
         "repo": "deepseek-ai/EPLB",
         "ref": "d52c72d5b2f2fb4c41afbf8eb21366820239913d"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "rebalance_experts adds one replica at a time to the logical expert whose load divided by its replica count is highest. It then packs the replicas onto GPUs heaviest first, each onto the lightest GPU that still has a free slot (balanced_packing), within nodes when the expert-group count divides the node count. The repository publishes no release; the pin is a commit."
     },
@@ -2918,16 +2919,16 @@
       "value": "--enable-eplb, num_redundant_experts 0",
       "label": "vLLM EPLB flag and redundant experts",
       "source": {
-        "url": "https://docs.vllm.ai/en/v0.31.0/serving/expert_parallel_deployment/",
-        "title": "vLLM v0.31.0 docs: Expert Parallel Deployment (EPLB)",
+        "url": "https://docs.vllm.ai/en/v0.34.0/serving/expert_parallel_deployment/",
+        "title": "vLLM v0.34.0 docs: Expert Parallel Deployment (EPLB)",
         "quote": "--enable-eplb \\ --eplb-config '{\"window_size\":1000,\"step_interval\":3000,\"num_redundant_experts\":2,\"log_balancedness\":true}'",
         "row": "EPLB Parameters > example"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Off by default. --eplb-config takes a JSON string; the docs table gives num_redundant_experts as \"Additional global experts per EP rank beyond equal distribution\", default 0, and the example sets 2. EPLB needs expert parallelism (--enable-expert-parallel)."
     },
@@ -2937,16 +2938,16 @@
       "value": "--enable-eplb, --ep-num-redundant-experts 0",
       "label": "SGLang EPLB flag and redundant experts",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/exec_.py",
-        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/exec_.py (Exec fields)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/arg_groups/fields/exec_.py",
+        "title": "SGLang v0.5.23 source: srt/arg_groups/fields/exec_.py (Exec fields)",
         "quote": "ep_num_redundant_experts: A[ int, \"Allocate this number of redundant experts in expert parallel.\" ] = 0 ep_dispatch_algorithm: A[ Optional[Literal[\"static\", \"dynamic\", \"fake\", \"lp\"]], \"The algorithm to choose ranks for redundant experts in expert parallel.\", ] = None init_expert_location: A[str, \"Initial location of EP experts.\"] = \"trivial\" enable_eplb: A[bool, \"Enable EPLB algorithm\"] = False",
         "row": "Exec.ep_num_redundant_experts, Exec.enable_eplb"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Both default off (0 redundant experts, EPLB disabled). The field names are the flags with underscores for hyphens."
     },
@@ -2956,18 +2957,18 @@
       "value": "--kv-transfer-config, kv_role",
       "label": "vLLM prefill/decode disaggregation setting",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/kv_transfer.py",
-        "title": "vLLM v0.31.0 source: vllm/config/kv_transfer.py (KVTransferConfig)",
-        "quote": "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.\"\"\"",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/kv_transfer.py",
+        "title": "vLLM v0.34.0 source: vllm/config/kv_transfer.py (KVTransferConfig)",
+        "quote": "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.",
         "row": "KVTransferConfig.kv_role"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes."
+      "boundary": "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes. With MultiConnector, the roles of its connectors decide the instance's role."
     },
     {
       "id": "production.sglang.disagg",
@@ -2975,16 +2976,16 @@
       "value": "--disaggregation-mode prefill|decode",
       "label": "SGLang prefill/decode disaggregation flag",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/disagg.py",
-        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/disagg.py (Disagg fields)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/arg_groups/fields/disagg.py",
+        "title": "SGLang v0.5.23 source: srt/arg_groups/fields/disagg.py (Disagg fields)",
         "quote": "disaggregation_mode: A[ Literal[\"null\", \"prefill\", \"decode\"], 'Only used for PD disaggregation. \"prefill\" for prefill-only server, and \"decode\" for decode-only server. If not specified, it is not PD disaggregated', ] = \"null\"",
         "row": "Disagg.disaggregation_mode"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Off by default (\"null\"). The transfer backend is a second flag (disaggregation_transfer_backend, default mooncake)."
     },
@@ -3180,7 +3181,7 @@
         "repo": "triton-lang/triton",
         "ref": "v3.8.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Every config the tutorial lists for CUDA sets GROUP_SIZE_M to 8; the HIP list sets 4 or 6. The tutorial launches blocks in groups of GROUP_SIZE_M rows before moving to the next column, which is the cube's grouped raster."
     },
@@ -3190,16 +3191,16 @@
       "value": "rust",
       "label": "SGLang radix-tree core default",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/environ.py",
-        "title": "SGLang v0.5.21 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/environ.py",
+        "title": "SGLang v0.5.23 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)",
         "quote": "SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND = EnvStr(\"rust\")",
         "row": "envs.SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "The Rust TreeCore became the default with sgl-project/sglang PR #39627, merged 2026-09-29. The registry falls back to the Python core when its checks fail (Linux only, a supported PyTorch, a supported device, a toolchain or the bundled extension)."
     },
@@ -3209,16 +3210,16 @@
       "value": "no prefill or decode phase",
       "label": "vLLM v1 scheduler: one loop for every request",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/v1/core/sched/scheduler.py",
-        "title": "vLLM v0.31.0 source: vllm/v1/core/sched/scheduler.py (Scheduler.schedule)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/v1/core/sched/scheduler.py",
+        "title": "vLLM v0.34.0 source: vllm/v1/core/sched/scheduler.py (Scheduler.schedule)",
         "quote": "There's no \"decoding phase\" nor \"prefill phase\" in the scheduler.",
         "row": "Scheduler.schedule (NOTE on the scheduling algorithm)"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Each request has a count of computed tokens that catches up with its tokens to compute; schedule() spends one token budget per step across running and waiting requests, so chunked prefill, prefix caching and speculative decoding fall out of one rule."
     },
@@ -3228,18 +3229,18 @@
       "value": "vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.90",
       "label": "Field lab 1: start vLLM on Llama-3-8B with 4,096-token requests",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/cli/README.md",
-        "title": "vLLM v0.31.0 docs: cli/README.md (vllm serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/docs/cli/README.md",
+        "title": "vLLM v0.34.0 docs: cli/README.md (vllm serve)",
         "quote": "Starts the vLLM OpenAI Compatible API server.",
         "row": "serve"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py (default 0.92, so 0.90 is given on purpose and Boot-sized arithmetic uses it). 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
+      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 overrides the 1.0 default (cache.py advises leaving it unset); kept so the log matches Boot's arithmetic. 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
     },
     {
       "id": "field.decode-kv.bench",
@@ -3247,16 +3248,16 @@
       "value": "vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name random --input-len 128 --output-len 256 --num-prompts 16 --max-concurrency 1",
       "label": "Field lab 1: one user decoding 256 tokens, 16 times",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/benchmarking/cli.md",
-        "title": "vLLM v0.31.0 docs: benchmarking/cli.md (vllm bench serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/docs/benchmarking/cli.md",
+        "title": "vLLM v0.34.0 docs: benchmarking/cli.md (vllm bench serve)",
         "quote": "`--max-concurrency`: Limits concurrent outstanding requests. If this argument is not provided, concurrency is unlimited.",
         "row": "Parameters: --max-concurrency"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "With --max-concurrency 1 the server holds one request at a time, so every decode step is batch 1. --input-len and --output-len map to the random dataset's lengths, and the random dataset sets ignore_eos on the OpenAI-compatible backends, so each request generates exactly 256 tokens. Run it in a second terminal while the server from field.decode-kv.serve is up."
     },
@@ -3266,16 +3267,16 @@
       "value": "GPU KV cache size: N tokens, Maximum concurrency for 4,096 tokens per request: Mx",
       "label": "Field lab 1: the server log line that sizes the KV cache",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/v1/core/kv_cache_utils.py",
-        "title": "vLLM v0.31.0 source: vllm/v1/core/kv_cache_utils.py (update_kv_cache_capacity)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/v1/core/kv_cache_utils.py",
+        "title": "vLLM v0.34.0 source: vllm/v1/core/kv_cache_utils.py (update_kv_cache_capacity)",
         "quote": "\"%s KV cache size: %s tokens, \" \"Maximum concurrency for %s tokens per request: %.2fx\",",
         "row": "update_kv_cache_capacity (logger.info_once)"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Printed once while the server starts, before it accepts requests. The first %s is \"GPU\" on CUDA, the second is the token count with thousands separators, the third is --max-model-len; the concurrency is get_max_concurrency_for_kv_cache_config, so it equals the token count divided by --max-model-len. Enter the number before the x."
     },
@@ -3285,16 +3286,16 @@
       "value": "Mean TPOT (ms)",
       "label": "Field lab 1: the benchmark line that gives one user's decode speed",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/serve.py",
-        "title": "vLLM v0.31.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/benchmarks/serve.py",
+        "title": "vLLM v0.34.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
         "quote": "process_one_metric(\"tpot\", \"TPOT\", \"Time per Output Token (excl. 1st token)\")",
         "row": "the TPOT block of the Serving Benchmark Result"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "TPOT is computed once per request as (end-to-end latency - TTFT) / (output tokens - 1), then averaged, so it leaves out the first token (the prefill). At batch 1, 1000 / TPOT in ms is the tokens per second one user gets."
     },
@@ -3312,7 +3313,7 @@
         "repo": "HPMLL/BurstGPT",
         "ref": "v2.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "A 51,429,517-byte CSV, 1,404,294 rows. Its SHA-256 is the one public/traces/burstgpt-v2-busiest-hour.json records as sourceSha256: the Fleet's recorded hour is cut from this very file. sha256sum -c prints \"BurstGPT_without_fails_1.csv: OK\" or fails; do not benchmark a file that fails."
     },
@@ -3322,16 +3323,16 @@
       "value": "vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 8192 --gpu-memory-utilization 0.90",
       "label": "Field lab 2: start vLLM on Llama-3-8B with 8,192-token requests",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/cli/README.md",
-        "title": "vLLM v0.31.0 docs: cli/README.md (vllm serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/docs/cli/README.md",
+        "title": "vLLM v0.34.0 docs: cli/README.md (vllm serve)",
         "quote": "Starts the vLLM OpenAI Compatible API server.",
         "row": "serve"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "As field.decode-kv.serve, with --max-model-len 8192, the longest context the model's config.json allows (max_position_embeddings 8192). A request whose prompt plus output exceeds it is refused and counts under \"Failed requests\"."
     },
@@ -3341,16 +3342,16 @@
       "value": "vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name burstgpt --dataset-path BurstGPT_without_fails_1.csv --num-prompts 480 --request-rate inf --ignore-eos --seed 0",
       "label": "Field lab 2: replay 480 BurstGPT requests all at once",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/benchmarking/cli.md",
-        "title": "vLLM v0.31.0 docs: benchmarking/cli.md (vllm bench serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/docs/benchmarking/cli.md",
+        "title": "vLLM v0.34.0 docs: benchmarking/cli.md (vllm bench serve)",
         "quote": "BurstGPT | ✅ | ✅ | `wget https://github.com/HPMLL/BurstGPT/releases/download/v1.1/BurstGPT_without_fails_2.csv`",
         "row": "Supported datasets table: BurstGPT"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "--request-rate inf sends every request at time 0 (the flag's default), so the run measures saturation, not arrival bursts. --ignore-eos makes each request generate exactly the response length its BurstGPT row records. 480 matches the Fleet slice's request count. --seed 0 is the default, written out so the draw is the same on every run.",
       "discrepancy": "vLLM's docs point at BurstGPT v1.1's BurstGPT_without_fails_2.csv. This lab pins v2.0's BurstGPT_without_fails_1.csv, the file the Fleet's trace is cut from; the loader needs a Model column and the request and response token counts as the third and fourth columns, which the v2.0 file has (header: Timestamp,Model,Request tokens,Response tokens,Total tokens,Log Type)."
@@ -3361,16 +3362,16 @@
       "value": "GPT-4 rows with a positive response; lengths only",
       "label": "vLLM's BurstGPT loader: which rows it keeps and what it reads from them",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/datasets/datasets.py",
-        "title": "vLLM v0.31.0 source: vllm/benchmarks/datasets/datasets.py (BurstGPTDataset)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/benchmarks/datasets/datasets.py",
+        "title": "vLLM v0.34.0 source: vllm/benchmarks/datasets/datasets.py (BurstGPTDataset)",
         "quote": "Only rows with Model \"GPT-4\" and positive response tokens are used.",
         "row": "BurstGPTDataset"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "load_data keeps Model == \"GPT-4\" and Response tokens > 0, then sample() draws num_requests rows at random (pandas sample, random_state = --seed) and reads only the third and fourth columns of each, the request and response token counts. The Timestamp column is never read: the CLI replays BurstGPT's token lengths, not its arrival times. The prompt it sends is made-up token ids of the right length."
     },
@@ -3380,16 +3381,16 @@
       "value": "Output token throughput (tok/s)",
       "label": "Field lab 2: the benchmark line that gives the saturated output rate",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/serve.py",
-        "title": "vLLM v0.31.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/benchmarks/serve.py",
+        "title": "vLLM v0.34.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
         "quote": "\"Output token throughput (tok/s):\", metrics.output_throughput",
         "row": "the Serving Benchmark Result block"
       },
       "pin": {
         "repo": "vllm-project/vllm",
-        "ref": "v0.31.0"
+        "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Generated tokens divided by the benchmark duration, which runs from the first request sent to the last one finished, so it includes the slow tail of the longest responses and the prefill of every prompt. \"Failed requests\" prints just above it and should read 0."
     },
@@ -3621,7 +3622,7 @@
       },
       "verifiedAt": "2026-10-18",
       "ttlDays": 180,
-      "boundary": "The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM v0.31.0, the release the In-production rows quote, also defaults to 16 (production.vllm.block-size); this claim is the 0.10.2 benchmark's."
+      "boundary": "The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM's own default is production.vllm.block-size (64 since v0.34.0); this claim is the 0.10.2 benchmark's and stays 16."
     },
     {
       "id": "hw.hgx-b200.fp8-sparse-system",
@@ -6598,6 +6599,156 @@
       "verifiedAt": "2026-10-18",
       "ttlDays": 180,
       "boundary": "InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the median TTFT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "serving.pagedattention.paper-block-size",
+      "kind": "spec",
+      "value": 16,
+      "unit": "tokens/block",
+      "label": "PagedAttention paper (SOSP 2023): the block size it chose (its default then)",
+      "source": {
+        "url": "https://arxiv.org/pdf/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1)",
+        "quote": "Accordingly, vLLM sets its default block size as 16.",
+        "row": "Section 7.2, Impact of block size"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 365,
+      "boundary": "The 2023 paper's choice after a sweep in which 16 to 128 did best on ShareGPT and 16 or 32 on Alpaca. production.vllm.block-size is the engine's default at its pinned release."
+    },
+    {
+      "id": "serving.pagedattention.fig2-vllm-token-states",
+      "kind": "benchmark",
+      "value": 96.3,
+      "unit": "% of KV cache memory",
+      "label": "PagedAttention paper (SOSP 2023), Figure 2: share of vLLM's KV cache memory holding token states",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Figure 2",
+        "quote": "Average percentage of memory wastes in different LLM serving systems during the experiment in §6.2.",
+        "row": "Figure 2 (Section 1), the vLLM bar: its Token states segment is labelled 96.3"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "An average over one experiment (§6.2, basic sampling), not a bound for every workload. The bar's other segments (Reservation, Internal frag., External frag. & Others) carry no labels. The text gives no waste figure for vLLM; its words are \"near-zero waste\"."
+    },
+    {
+      "id": "serving.pagedattention.throughput-gain-low",
+      "kind": "benchmark",
+      "value": 2,
+      "unit": "× throughput",
+      "label": "PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, low end",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), abstract",
+        "quote": "Our evaluations show that vLLM improves the throughput of popular LLMs by 2-4× with the same level of latency compared to the state-of-the-art systems, such as FasterTransformer and Orca.",
+        "row": "Abstract"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "The paper's 2023 evaluation (§6: OPT and LLaMA models on A100 GPUs, workloads synthesized from ShareGPT and Alpaca) against FasterTransformer and Orca; not a gain over any engine today."
+    },
+    {
+      "id": "serving.pagedattention.throughput-gain-high",
+      "kind": "benchmark",
+      "value": 4,
+      "unit": "× throughput",
+      "label": "PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, high end",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), abstract",
+        "quote": "Our evaluations show that vLLM improves the throughput of popular LLMs by 2-4× with the same level of latency compared to the state-of-the-art systems, such as FasterTransformer and Orca.",
+        "row": "Abstract"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "The other end of the range in serving.pagedattention.throughput-gain-low."
+    },
+    {
+      "id": "serving.pagedattention.ft-request-rate",
+      "kind": "benchmark",
+      "value": 22,
+      "unit": "× request rate",
+      "label": "PagedAttention paper (SOSP 2023): vLLM's highest sustained request rate against FasterTransformer, at similar latency",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 6.2",
+        "quote": "Compared to FasterTransformer, vLLM can sustain up to 22× higher request rates, as FasterTransformer does not utilize a fine-grained scheduling mechanism and inefficiently manages the memory like Orca (Max).",
+        "row": "Section 6.2, Basic Sampling"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "An upper end ('up to') over the §6.2 basic-sampling runs. The paper gives two causes, scheduling as well as memory, so it is not a measure of paging alone."
+    },
+    {
+      "id": "serving.pagedattention.kernel-overhead-low",
+      "kind": "benchmark",
+      "value": 20,
+      "unit": "% attention-kernel latency",
+      "label": "PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, low end",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 7.1",
+        "quote": "As shown in Fig. 18(a), this leads to 20–26% higher attention kernel latency, compared to the highly-optimized FasterTransformer implementation.",
+        "row": "Section 7.1, Kernel Microbenchmark"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "The attention kernel alone, in a microbenchmark; the paper adds that the overhead \"only affects the attention operator but not the other operators in the model, such as Linear\"."
+    },
+    {
+      "id": "serving.pagedattention.kernel-overhead-high",
+      "kind": "benchmark",
+      "value": 26,
+      "unit": "% attention-kernel latency",
+      "label": "PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, high end",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 7.1",
+        "quote": "As shown in Fig. 18(a), this leads to 20–26% higher attention kernel latency, compared to the highly-optimized FasterTransformer implementation.",
+        "row": "Section 7.1, Kernel Microbenchmark"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "The other end of the range in serving.pagedattention.kernel-overhead-low."
+    },
+    {
+      "id": "production.vllm.extensible-kv-cache",
+      "kind": "status",
+      "value": "on",
+      "label": "vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/cache.py",
+        "title": "vLLM v0.34.0 source: vllm/config/cache.py (CacheConfig)",
+        "quote": "Reserve the KV cache address range with device virtual memory and commit physical pages after warmup, so the cache is sized from the memory actually free after CUDA graph capture rather than from a profiling estimate.",
+        "row": "CacheConfig.enable_extensible_kv_cache"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.34.0"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "When enable_extensible_kv_cache is not given: on for CUDA and ROCm unless kv_cache_memory_bytes is set (or NIXL on device memory has no IMEX channel); where the driver lacks virtual-memory support it falls back to estimate-based sizing."
+    },
+    {
+      "id": "production.vllm.gpu-memory-utilization",
+      "kind": "status",
+      "value": 1,
+      "label": "vLLM gpu_memory_utilization default with the extensible KV cache",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/cache.py",
+        "title": "vLLM v0.34.0 source: vllm/config/cache.py (CacheConfig)",
+        "quote": "If unspecified, 1.0 with the extensible KV cache (sized from measured memory) and 0.92 otherwise; see `resolved_gpu_memory_utilization`.",
+        "row": "CacheConfig.gpu_memory_utilization"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.34.0"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "When --gpu-memory-utilization is not given and the extensible KV cache is on. With it off, or with the flag set, the value is 0.92 (DEFAULT_GPU_MEMORY_UTILIZATION) or the flag."
     }
   ]
 }

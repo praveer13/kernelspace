@@ -1,4 +1,11 @@
 import type { Lesson } from '../types'
+import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
+
+// The worked setup uses 16-token blocks; vLLM's default block is its own claim, and the sentence below computes from it.
+const PROMPT = 130
+const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
+const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_FULL = Math.floor(PROMPT / ENGINE_BLOCK)
 
 const lesson: Lesson = {
   id: 't5.l6',
@@ -92,7 +99,7 @@ That removes work rather than making it faster. A 2,048-token system prompt foll
 
 vLLM-style **Automatic Prefix Caching (APC)** hashes full token blocks. Each key includes the parent hash and the next block's token ids, plus every value that can change K/V: model, adapter, multimodal inputs, and cache salt where isolation requires it. A request walks its prompt block by block until the first miss. Hits reuse physical KV blocks by refcount; misses prefill normally, then become cache entries when their blocks are complete.
 
-The block boundary matters. With 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens); the two-token tail cannot be shared safely yet. The payoff is nevertheless exact: **cached tokens do zero model work**. APC helps shared system prompts, repeated document prefixes, retries, parallel samples, and multi-turn chat. It does not help unrelated prompts, and it does not accelerate decode — only the prefill work that already exists in the cache.`,
+The block boundary matters. With the paper's 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens); the two-token tail cannot be shared safely yet. vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}). At ${ENGINE_BLOCK} tokens per block the same ${PROMPT} tokens give ${ENGINE_FULL} blocks (${ENGINE_FULL * ENGINE_BLOCK} tokens), and up to ${ENGINE_BLOCK - 1} matching tokens at the end of a prefix are never shared, because only full blocks are cached. The payoff is nevertheless exact: **cached tokens do zero model work**. APC helps shared system prompts, repeated document prefixes, retries, parallel samples, and multi-turn chat. It does not help unrelated prompts, and it does not accelerate decode — only the prefill work that already exists in the cache.`,
     },
     {
       type: 'diagram',

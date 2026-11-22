@@ -55,11 +55,11 @@ const rowOf = (rows: { id: string; value: number }[], id: string) => rows.find((
 
 /* ------------------------------ the pinned commands ------------------------------ */
 
-/** Every flag the five commands use, as found in vLLM v0.31.0's source on 2026-10-14 (config fields for `serve`, argparse names for `bench serve`). */
+/** Every flag the five commands use, as found in vLLM's source (read at v0.31.0 on 2026-10-14 and found again at v0.34.0 on 2026-11-21) (config fields for `serve`, argparse names for `bench serve`). */
 const FLAGS_AT_PIN = new Set([
   '--dtype', // vllm/config/model.py: dtype
   '--max-model-len', // vllm/config/model.py: max_model_len
-  '--gpu-memory-utilization', // vllm/config/cache.py: gpu_memory_utilization (default 0.92)
+  '--gpu-memory-utilization', // vllm/config/cache.py: gpu_memory_utilization (default None: 1.0 with the extensible KV cache, 0.92 otherwise)
   '--model', // vllm/benchmarks/serve.py
   '--dataset-name', // vllm/benchmarks/datasets/datasets.py (choices include random and burstgpt)
   '--dataset-path', // datasets.py
@@ -100,18 +100,45 @@ describe('the commands are pinned claims', () => {
       const expected = c.id.startsWith('field.burstgpt.fetch') || c.id.includes('mean-') ? BURSTGPT_PIN : VLLM_PIN
       expect(c.pin, c.id).toEqual(expected)
     }
-    expect(VLLM_PIN).toEqual({ repo: 'vllm-project/vllm', ref: 'v0.31.0' })
+    // The release the In-production claims read; tests/claims/pin.test.ts is the one place that types it (K0-FIX4).
+    expect(VLLM_PIN).toEqual(getClaim('production.vllm.block-size').pin)
+    expect(VLLM_PIN.repo).toBe('vllm-project/vllm')
   })
 
   test('commands carry a 60-day TTL, so the labs show "stale since" when the engine moves', () => {
-    for (const id of ['field.decode-kv.serve', 'field.decode-kv.bench', 'field.burstgpt.fetch', 'field.burstgpt.serve', 'field.burstgpt.bench']) {
+    // The four vLLM commands were re-read at v0.34.0 on 2026-11-21 (+ 60 days = 2027-01-20); the BurstGPT download was re-read the same day (asset size and SHA-256 matched).
+    const lapses: Record<string, [string, string, string]> = {
+      'field.decode-kv.serve': ['2027-01-20', '2027-01-21', '2027-01-20'],
+      'field.decode-kv.bench': ['2027-01-20', '2027-01-21', '2027-01-20'],
+      'field.burstgpt.serve': ['2027-01-20', '2027-01-21', '2027-01-20'],
+      'field.burstgpt.bench': ['2027-01-20', '2027-01-21', '2027-01-20'],
+      'field.burstgpt.fetch': ['2027-01-20', '2027-01-21', '2027-01-20'],
+    }
+    for (const [id, [last, after, since]] of Object.entries(lapses)) {
       const c = getClaim(id)
       expect(c.kind).toBe('status')
       expect(c.ttlDays).toBe(60)
-      // verified 2026-10-14 + 60 days = 2026-12-13
-      expect(staleSince(c, new Date('2026-12-13T00:00:00Z'))).toBeNull()
-      expect(staleSince(c, new Date('2026-12-14T00:00:00Z'))).toBe('2026-12-13')
+      expect(staleSince(c, new Date(`${last}T00:00:00Z`)), id).toBeNull()
+      expect(staleSince(c, new Date(`${after}T00:00:00Z`)), id).toBe(since)
     }
+  })
+
+  test('all eight vLLM field claims were re-read at the pin on 2026-11-21', () => {
+    const eight = FIELD_CLAIMS.filter((c) => c.pin === VLLM_PIN)
+    expect(eight.map((c) => c.id).sort()).toEqual([
+      'field.burstgpt.bench', 'field.burstgpt.loader', 'field.burstgpt.out-tps', 'field.burstgpt.serve',
+      'field.decode-kv.bench', 'field.decode-kv.kv-log', 'field.decode-kv.serve', 'field.decode-kv.tpot',
+    ])
+    for (const c of eight) expect(c.verifiedAt, c.id).toBe('2026-11-21')
+  })
+
+  test('the serve boundary states the tag\'s gpu_memory_utilization rule, not a flat default', () => {
+    const b = getClaim('field.decode-kv.serve').boundary!
+    expect(b).not.toContain('default 0.92')
+    expect(b).toContain('resolves to 1.0 with the extensible KV cache')
+    expect(b).toContain('0.92 otherwise')
+    expect(b).toContain('overrides the 1.0 default')
+    expect(b).not.toContain('logs a warning')
   })
 
   test('every flag in the vLLM commands was found at the pin', () => {

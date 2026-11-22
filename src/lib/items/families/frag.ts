@@ -12,12 +12,14 @@
  */
 
 import { claimNumber } from '@/data/claims'
+import '@/data/claims/lazy/kvpool'
 import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '../core'
 import { gradeResponse } from '../grade'
 import type { AnswerSpec, Gen, Instance, Level, Params, PromptPart, RatioRule, SolutionStep, UnitChoice, VariantSpec } from '../types'
 import { byteUnitChoices, formatNumber, KIB } from '../units'
 
 const BLOCK_CLAIM = 'production.vllm.block-size'
+const PAPER_CLAIM = 'serving.pagedattention.paper-block-size'
 // The four KC ids of src/data/kc/ids.ts, written out so the chunk need not carry the whole table (tests/items/frag.test.ts pins them to it).
 const KC = { internalFrag: 't1.internal-frag', externalFrag: 't1.external-frag', fixedBlocks: 't1.fixed-blocks', placementPolicy: 't1.placement-policy' }
 
@@ -341,7 +343,8 @@ function describeBlocks(p: Params, kv: boolean): Spec {
   const k = tally(block, sizes)
   const page = ask === 'kib'
   const unit = kv ? 'slots' : 'B'
-  const stock = kv && block === claimNumber(BLOCK_CLAIM)
+  // a kv block size is vLLM's default (when it equals that claim), the 2023 paper's (when it equals the other), or a scenario number; the vLLM case wins when both claims hold the same value
+  const source = !kv ? null : block === claimNumber(BLOCK_CLAIM) ? BLOCK_CLAIM : block === claimNumber(PAPER_CLAIM) ? PAPER_CLAIM : null
   const calc = wasteSteps(page ? 'page' : 'block', kv ? 'sequence' : 'request', unit, block, sizes, k)
   let answer: AnswerSpec
   if (ask === 'percent') {
@@ -355,15 +358,23 @@ function describeBlocks(p: Params, kv: boolean): Spec {
   }
   const size = kv ? v(block, 'tokens') : v(page ? block / KIB : block, page ? 'KiB' : 'B')
   const question = ask === 'percent' ? `What percent of the allocated ${kv ? 'token slots sit unused in last blocks' : 'bytes is wasted inside the blocks'}?` : page ? 'How much memory is wasted inside the pages, in KiB?' : kv ? 'How many token slots sit unused in the last blocks?' : 'How many bytes are wasted inside the blocks?'
-  const lead = kv ? (stock ? "A paged KV cache stores each sequence in fixed blocks of vLLM's default size, " : 'A hypothetical paged KV cache stores each sequence in fixed blocks of ') : page ? 'An OS hands out memory in whole pages of ' : 'A fixed-block allocator rounds every request up to whole blocks of '
+  const lead = kv
+    ? source === BLOCK_CLAIM
+      ? "A paged KV cache stores each sequence in fixed blocks of vLLM's default size, "
+      : source === PAPER_CLAIM
+        ? "A paged KV cache stores each sequence in fixed blocks of the 2023 PagedAttention paper's size, "
+        : 'A hypothetical paged KV cache stores each sequence in fixed blocks of '
+    : page
+      ? 'An OS hands out memory in whole pages of '
+      : 'A fixed-block allocator rounds every request up to whole blocks of '
   return {
-    stem: [t(lead), stock ? { t: 'claim', claim: BLOCK_CLAIM } : size, t(`. ${question}`)],
+    stem: [t(lead), source ? { t: 'claim', claim: source } : size, t(`. ${question}`)],
     givens: [
       { label: page ? 'Page size' : 'Block size', value: size },
       { label: kv ? 'Sequence lengths' : 'Requests', value: t(list(sizes, kv ? 'tokens' : 'B')) },
     ],
     answer,
-    claims: stock ? [claimRef(BLOCK_CLAIM)] : [],
+    claims: source ? [claimRef(source)] : [],
     calc,
     ...(kv
       ? { why: step(`Only a sequence's last block can be partly empty, so each sequence wastes at most ${f(block - 1)} slots, under one block. That caps this batch at ${f(sizes.length * (block - 1))} slots.`) }
@@ -615,7 +626,7 @@ const pins = [
     truth: SYNTHETIC.pin.oneWaste,
   },
   {
-    name: '<4 % vLLM KV waste, 16-token blocks',
+    name: '<4 % KV waste at 16-token blocks (the chip)',
     source: 't1.l4 chip',
     make: () => build('kv-block-waste', SYNTHETIC.transfer, 1, { block: SYNTHETIC.pin.block, lens: SYNTHETIC.pin.mix, ask: 'percent' }),
     truth: SYNTHETIC.pin.mixWaste,
@@ -624,7 +635,7 @@ const pins = [
 
 const gen: Gen = {
   id: 'frag',
-  version: 1,
+  version: 2,
   title: 'Block placement and fragmentation',
   kcs: [...new Set(VARIANTS.flatMap((x) => x.kcs))],
   variants: VARIANTS,

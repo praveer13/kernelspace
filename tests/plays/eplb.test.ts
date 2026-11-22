@@ -63,6 +63,8 @@ import {
   type Tally,
 } from '../../src/components/play/eplb/session'
 import { CLAIMS, byId } from '../../src/data/claims/all'
+// The engine releases come from the pins; tests/claims/pin.test.ts is the one place that types them (K0-FIX4).
+import { SGLANG_PIN, VLLM_PIN } from '../../src/data/claims/engines'
 import { KC } from '../../src/data/kc/ids'
 import { KCS } from '../../src/data/kc'
 import { EPLB, EPLB_PRODUCTION_ROWS, PLAYS, PLAY_IDS, PLAY_PRODUCTION_ROWS, getPlay } from '../../src/data/plays'
@@ -796,7 +798,7 @@ describe('the In-production card (§5.2)', () => {
     expect(text).toMatch(/Each MoE layer of DeepSeek-V3 has 256 experts routed by its router, plus one shared expert\./)
     expect(text).toMatch(/The router sends each token to 8 experts chosen from those\./)
     expect(html).toContain('--enable-eplb')
-    expect(html).toContain('deepseek-ai/DeepSeek-V3 e815299, deepseek-ai/EPLB d52c72d, vllm-project/vllm v0.31.0 and sgl-project/sglang v0.5.21')
+    expect(html).toContain(`deepseek-ai/DeepSeek-V3 e815299, deepseek-ai/EPLB d52c72d, ${VLLM_PIN.repo} ${VLLM_PIN.ref} and ${SGLANG_PIN.repo} ${SGLANG_PIN.ref}`)
   })
 })
 

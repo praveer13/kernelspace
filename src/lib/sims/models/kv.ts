@@ -95,8 +95,22 @@ export const GPU_COUNT_PRESETS: readonly number[] = [1, 2, 4, 8]
 
 /** vLLM's default tokens per KV block. */
 export const BLOCK_SIZE = claimNumber('production.vllm.block-size')
+/**
+ * The scope words the simulator prints beside vLLM's default block: the lessons' ENGINE_BLOCK_SCOPE
+ * (src/data/lessons/claims.ts) without its code marks. The simulator keeps its own copy so its chunk imports nothing from
+ * the lessons; tests/content/k0-fix4.test.ts holds the two equal.
+ */
+export const ENGINE_BLOCK_SCOPE_TEXT = "ROCm's paged-attention backend keeps its own size, and an explicit --block-size overrides either"
 /** Memory lost to block rounding under PagedAttention, in percent (a scenario figure: `synthetic.kv.paged-waste`). */
 export const PAGED_WASTE_PCT = claimNumber('synthetic.kv.paged-waste')
+/**
+ * The mean tail a paged sequence strands, half a block at vLLM's default, as a percent of a `ctx`-token context: what
+ * PAGED_WASTE_PCT stands in for. It stays within the stand-in from the shortest context up (tests/sims/kv.test.ts);
+ * shorter sequences waste more (t1.l4's mixed batch).
+ */
+export const tailWastePct = (ctx: number): number => (100 * (BLOCK_SIZE / 2)) / ctx
+/** A tail share as the calculator prints it: one decimal, or '<0.1' for long contexts. */
+export const fmtTailPct = (pct: number): string => (pct >= 0.1 ? pct.toFixed(1) : '<0.1')
 /** Share of a statically reserved KV cache that holds real token states, in percent (the paper's measured range, mid-point). */
 export const STATIC_UTILIZATION_PCT = claimNumber('model.kv.static-utilization')
 /** Share of a statically reserved KV cache that is waste, in percent. */

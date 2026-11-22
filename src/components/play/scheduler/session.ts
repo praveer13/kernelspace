@@ -210,7 +210,7 @@ export function progressWords(r: SchedFrameRun): string {
   return `decoded ${r.decoded} of ${r.output}`
 }
 
-/** "vllm-project/vllm v0.31.0", "sgl-project/sglang v0.5.21": the releases the card's claims pin, in row order, read from the claims. */
+/** "<repo> <ref>" for each engine: the releases the card's claims pin, in row order, read from the claims. */
 export function pinnedReleases(rows: readonly ProductionRow[] = SCHEDULER_PRODUCTION_ROWS): string[] {
   const out: string[] = []
   for (const r of rows) {

@@ -23,11 +23,11 @@ const EPLB_SOURCE = {
 }
 const VLLM_EP_DOCS = {
   url: `https://docs.vllm.ai/en/${VLLM_PIN.ref}/serving/expert_parallel_deployment/`,
-  title: 'vLLM v0.31.0 docs: Expert Parallel Deployment (EPLB)',
+  title: `vLLM ${VLLM_PIN.ref} docs: Expert Parallel Deployment (EPLB)`,
 }
 const SGLANG_EXEC = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/exec_.py`,
-  title: 'SGLang v0.5.21 source: srt/arg_groups/fields/exec_.py (Exec fields)',
+  title: `SGLang ${SGLANG_PIN.ref} source: srt/arg_groups/fields/exec_.py (Exec fields)`,
 }
 
 export const MOE_CLAIMS: Claim[] = [
@@ -62,7 +62,7 @@ export const MOE_CLAIMS: Claim[] = [
     label: 'DeepSeek EPLB replication rule',
     source: { ...EPLB_SOURCE, quote: 'redundant_indices = (weight / logcnt).max(dim=-1).indices', row: 'replicate_experts' },
     pin: DEEPSEEK_EPLB_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'rebalance_experts adds one replica at a time to the logical expert whose load divided by its replica count is highest. It then packs the replicas onto GPUs heaviest first, each onto the lightest GPU that still has a free slot (balanced_packing), within nodes when the expert-group count divides the node count. The repository publishes no release; the pin is a commit.',
@@ -78,7 +78,7 @@ export const MOE_CLAIMS: Claim[] = [
       row: 'EPLB Parameters > example',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Off by default. --eplb-config takes a JSON string; the docs table gives num_redundant_experts as "Additional global experts per EP rank beyond equal distribution", default 0, and the example sets 2. EPLB needs expert parallelism (--enable-expert-parallel).',
@@ -95,7 +95,7 @@ export const MOE_CLAIMS: Claim[] = [
       row: 'Exec.ep_num_redundant_experts, Exec.enable_eplb',
     },
     pin: SGLANG_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: 'Both default off (0 redundant experts, EPLB disabled). The field names are the flags with underscores for hyphens.',
   },

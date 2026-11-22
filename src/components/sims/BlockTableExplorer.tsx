@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ClaimValue } from '@/components/ClaimValue'
 import { useObserve } from '@/lib/sims/host'
 import {
   BLOCK_SIZE,
@@ -671,8 +672,8 @@ export default function BlockTableExplorer() {
             </div>
 
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
-              larger blocks amortize table-entry overhead but increase tail waste. 16 tokens is the
-              vLLM default because it keeps both numbers small.
+              larger blocks amortize table-entry overhead but increase tail waste. vLLM&apos;s default
+              is <ClaimValue id="production.vllm.block-size" />; this pool uses {BLOCK_SIZE}, the paper&apos;s size.
             </p>
           </ControlGroup>
         </aside>

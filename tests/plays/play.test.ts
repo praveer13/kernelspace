@@ -381,7 +381,7 @@ describe('the In-production card', () => {
     expect(html.match(/Show source/g)).toHaveLength(PRODUCTION_ROWS.length)
     for (const r of PRODUCTION_ROWS) expect(html).toContain(r.dial)
     // Values come from the claims, not from the copy.
-    expect(html).toContain('16 tokens/block')
+    expect(html).toContain(`${CLAIMS.find((c) => c.id === 'production.vllm.block-size')?.value} tokens/block`)
     expect(html).toContain('128 KiB')
     expect(html).toContain('4 classes per doubling')
     expect(html).toContain('recompute')

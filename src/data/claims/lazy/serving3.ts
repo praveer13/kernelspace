@@ -13,11 +13,11 @@ import type { Claim } from '../schema'
  */
 const VLLM_KV_TRANSFER = {
   url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/config/kv_transfer.py`,
-  title: 'vLLM v0.31.0 source: vllm/config/kv_transfer.py (KVTransferConfig)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/config/kv_transfer.py (KVTransferConfig)`,
 }
 const SGLANG_DISAGG = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/disagg.py`,
-  title: 'SGLang v0.5.21 source: srt/arg_groups/fields/disagg.py (Disagg fields)',
+  title: `SGLang ${SGLANG_PIN.ref} source: srt/arg_groups/fields/disagg.py (Disagg fields)`,
 }
 /** checkpoint-engine's README at its v0.4.2 tag, the latest release on 2026-10-14 (the README line is older than the tag). */
 const CHECKPOINT_ENGINE = {
@@ -47,14 +47,14 @@ export const SERVING3_CLAIMS: Claim[] = [
     source: {
       ...VLLM_KV_TRANSFER,
       quote:
-        "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.\"\"\"",
+        "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.",
       row: 'KVTransferConfig.kv_role',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes.",
+      "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes. With MultiConnector, the roles of its connectors decide the instance's role.",
   },
   {
     id: 'production.sglang.disagg',
@@ -68,7 +68,7 @@ export const SERVING3_CLAIMS: Claim[] = [
       row: 'Disagg.disaggregation_mode',
     },
     pin: SGLANG_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: 'Off by default ("null"). The transfer backend is a second flag (disaggregation_transfer_backend, default mooncake).',
   },

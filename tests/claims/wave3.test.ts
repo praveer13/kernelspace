@@ -87,7 +87,8 @@ describe('the §4.4 table', () => {
 
   test('the engine claims are read at the releases the other In-production claims use', () => {
     for (const id of ['production.vllm.eplb', 'production.vllm.disagg', 'twin.vllm.scheduler']) expect(byId[id].pin).toEqual(VLLM_PIN)
-    for (const id of ['production.sglang.eplb', 'production.sglang.disagg', 'twin.sglang.treecore']) expect(byId[id].pin).toEqual(SGLANG_PIN)
+    for (const id of ['production.sglang.eplb', 'production.sglang.disagg']) expect(byId[id].pin).toEqual(SGLANG_PIN)
+    expect(byId['twin.sglang.treecore'].pin).toEqual(SGLANG_PIN)
   })
 
   test('the checkpoint-engine line is a benchmark that carries no pin', () => {

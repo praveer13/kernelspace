@@ -20,6 +20,7 @@ import { useSimHost } from '@/lib/sims/host'
 import {
   BATCH_STEPS,
   BLOCK_SIZE,
+  ENGINE_BLOCK_SCOPE_TEXT,
   CTX_STEPS,
   DTYPES,
   GPUS,
@@ -33,12 +34,14 @@ import {
   STATIC_WASTE_PCT,
   dtypeBytes,
   fmtCtx,
+  fmtTailPct,
   fmtGb,
   gpuById,
   kvModel,
   normalizeConfig,
   presetById,
   setupMismatches,
+  tailWastePct,
 } from '@/lib/sims/models/kv'
 import type { Dtype, KvState, PresetId } from '@/lib/sims/models/kv'
 import {
@@ -538,7 +541,7 @@ export default function KvCacheSim() {
           <button
             onClick={() => {
               setPaged(!paged)
-              log('op', !paged ? `PAGEDATTENTION on — block=${BLOCK_SIZE}, waste <${PAGED_WASTE_PCT}% ≡ OS paging` : `STATIC reservation — reserve max ctx per seq (≈${STATIC_WASTE_PCT}% waste)`)
+              log('op', !paged ? `PAGEDATTENTION on — block=${BLOCK_SIZE}, mean tail ${fmtTailPct(tailWastePct(ctx))}% at ctx ${fmtCtx(ctx)}, booked ${PAGED_WASTE_PCT}% (course estimate) ≡ OS paging` : `STATIC reservation — reserve max ctx per seq (≈${STATIC_WASTE_PCT}% waste)`)
             }}
             aria-pressed={paged}
             className={cn(
@@ -765,9 +768,12 @@ export default function KvCacheSim() {
             <div className="font-mono text-[11px] leading-relaxed text-text-3">
               {paged ? (
                 <>
-                  allocate KV in {BLOCK_SIZE}-token blocks as tokens arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
-                  <span className="text-t5">KV block table</span>. internal fragmentation &lt; 1 block/seq ⇒{' '}
-                  <span className="text-accent">waste &lt;{PAGED_WASTE_PCT}%</span>. that's the entire PagedAttention trick.
+                  allocate KV in {BLOCK_SIZE}-token blocks (vLLM&apos;s default on CUDA; {ENGINE_BLOCK_SCOPE_TEXT}) as tokens
+                  arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
+                  <span className="text-t5">KV block table</span>. a sequence strands under one block, half on average:{' '}
+                  {fmtTailPct(tailWastePct(ctx))}% of a context of {fmtCtx(ctx)} tokens. the calculator books a flat{' '}
+                  <span className="text-accent">{PAGED_WASTE_PCT}%</span> (the course estimate, not the paper&apos;s figure); shorter
+                  sequences waste more. that&apos;s the entire PagedAttention trick.
                 </>
               ) : (
                 <>

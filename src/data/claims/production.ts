@@ -4,11 +4,11 @@ import { VLLM_PIN } from './engines'
 /** Pinned to the release the other engine claims use (engines.ts, Q10), so the whole In-production card reads one vLLM. */
 const VLLM_CACHE_CONFIG = {
   url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/config/cache.py`,
-  title: 'vLLM v0.31.0 source: vllm/config/cache.py (CacheConfig)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/config/cache.py (CacheConfig)`,
 }
 const VLLM_OPTIMIZATION = {
   url: `https://docs.vllm.ai/en/${VLLM_PIN.ref}/configuration/optimization/`,
-  title: 'vLLM v0.31.0 docs: Optimization and Tuning (Preemption)',
+  title: `vLLM ${VLLM_PIN.ref} docs: Optimization and Tuning (Preemption)`,
 }
 const GLIBC_MALLOPT = {
   url: 'https://man7.org/linux/man-pages/man3/mallopt.3.html',
@@ -32,14 +32,16 @@ export const PRODUCTION_CLAIMS: Claim[] = [
   {
     id: 'production.vllm.block-size',
     kind: 'status',
-    value: 16,
+    value: 64,
     unit: 'tokens/block',
     label: 'vLLM default KV cache block size',
-    source: { ...VLLM_CACHE_CONFIG, quote: 'DEFAULT_BLOCK_SIZE: ClassVar[int] = 16', row: 'CacheConfig.DEFAULT_BLOCK_SIZE' },
+    source: { ...VLLM_CACHE_CONFIG, quote: 'DEFAULT_BLOCK_SIZE: ClassVar[int] = 64', row: 'CacheConfig.DEFAULT_BLOCK_SIZE' },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-05',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
-    boundary: 'When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size).',
+    boundary:
+      'When --block-size is not given. The v0.34.0 release notes: "Backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size still wins." cache.py also has mamba_block_size. 16 before v0.34.0 (release notes: "was 16").',
+    discrepancy: "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size).",
   },
   {
     id: 'production.vllm.v1-preemption',
@@ -52,7 +54,7 @@ export const PRODUCTION_CLAIMS: Claim[] = [
       row: 'Preemption',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-05',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: 'V1 engine: a preempted request is recomputed, not swapped to CPU.',
   },

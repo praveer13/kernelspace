@@ -254,8 +254,8 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
         {
           os: 'size classes / slab',
           osLine: 'Standard sizes → O(1) fit, bounded internal waste.',
-          llm: 'fixed 16-token blocks',
-          llmLine: 'Waste capped at <4% — one partly-filled tail block per sequence.',
+          llm: 'fixed-size token blocks',
+          llmLine: 'Waste bounded to one partly filled tail block per sequence.',
           breaks: 'Size classes still mean several sizes, so each class can strand its own free blocks; KV paging has exactly one size, so the only waste left is the unfilled tail block.',
           work: {
             backgrounds: ['jvm'],
@@ -399,7 +399,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
           ],
           correct: [1],
           explanation:
-            'Same multiplexing problem, same recycle loop. vLLM\'s insight was to pick ONE block size (16 tokens by default), turning the fit-search into O(1) and bounding waste to the tail block — fragmentation physics you will quantify next lesson.',
+            'Same multiplexing problem, same recycle loop. vLLM\'s insight was to pick ONE block size (16 tokens in the 2023 paper), turning the fit-search into O(1) and bounding waste to the tail block — fragmentation physics you will quantify next lesson.',
           why: [
             'True of the toy, not of vLLM. The KV manager hands out fixed-size blocks, so there are no variable ranges to split and nothing to merge on free.',
             'Right: both multiplex one fixed resource among consumers with unknown lifetimes and recycle it through a free list. vLLM simply fixes the block size to remove fit-search.',

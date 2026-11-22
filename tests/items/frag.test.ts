@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { checkFamily, checkHashes, genSeeds, isRound, lintLiterals, readHashRows } from '../../scripts/verify-generators'
 import { claimRef, partsText } from '../../src/lib/items/core'
+import { claimNumber } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
 import gen from '../../src/lib/items/families/frag'
 import { correctResponse } from '../../src/lib/items/grade'
@@ -138,10 +139,26 @@ describe('frag: the numbers are right', () => {
         const waste = alloc - sum(lens)
         expect(waste).toBeLessThanOrEqual(lens.length * (block - 1))
         expect(truthOf(inst)).toBeCloseTo(inst.params.ask === 'percent' ? (waste * 100) / alloc : waste, 9)
-        // the vLLM default block size is a sourced claim; any other block size is a scenario number
-        expect(inst.claims).toEqual(block === 16 ? [claimRef('production.vllm.block-size')] : [])
+        // vLLM's default and the paper's block size are sourced claims (the vLLM one wins when both hold the same value); any other block size is a scenario number
+        const vllm = claimNumber('production.vllm.block-size')
+        const paper = claimNumber('serving.pagedattention.paper-block-size')
+        expect(inst.claims).toEqual(block === vllm ? [claimRef('production.vllm.block-size')] : block === paper ? [claimRef('serving.pagedattention.paper-block-size')] : [])
+        const stem = partsText(inst.prompt.stem)
+        expect(stem.includes("vLLM's default")).toBe(block === vllm)
+        expect(stem.includes('hypothetical')).toBe(block !== vllm && block !== paper)
         expect(gen.solution(inst).at(-1)!.result).toBeUndefined()
         expect(partsText(gen.solution(inst).at(-1)!.text)).toContain(`at most ${block - 1} slots, under one block`)
+      }
+    }
+  })
+})
+
+describe('frag: a kv stem says "default" only for vLLM\'s claimed block size', () => {
+  test('no kv stem says default unless the block equals production.vllm.block-size', () => {
+    const vllm = claimNumber('production.vllm.block-size')
+    for (const level of LEVELS) {
+      for (const inst of many('kv-block-waste', level)) {
+        expect(/default/i.test(partsText(inst.prompt.stem))).toBe(Number(inst.params.block) === vllm)
       }
     }
   })
@@ -168,7 +185,11 @@ describe('frag: the pins reproduce the lesson', () => {
     const inst = oneSeq.make()
     expect(truthOf(inst)).toBe(4)
     expect(Math.ceil(300 / 16)).toBe(19)
-    expect(inst.claims).toEqual([claimRef('production.vllm.block-size')])
+    // the pin reproduces the paper's 16; the vLLM claim wins while both claims hold 16
+    const vllm = claimNumber('production.vllm.block-size')
+    const paper = claimNumber('serving.pagedattention.paper-block-size')
+    expect(paper).toBe(16)
+    expect(inst.claims).toEqual([claimRef(vllm === paper ? 'production.vllm.block-size' : 'serving.pagedattention.paper-block-size')])
     expect(partsText(gen.solution(inst)[0].text)).toContain('19')
   })
 
