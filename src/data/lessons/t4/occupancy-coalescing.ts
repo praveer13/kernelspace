@@ -28,11 +28,11 @@ const lesson: Lesson = {
       {
         prompt: 'Count the memory transactions of one warp load when lane i reads base plus 4i bytes, and when it reads base plus 1024i bytes, and say what the second costs.',
         model:
-          'The first touches 128 consecutive bytes, so it takes one transaction at full bandwidth. In the second every lane lands in its own 128-byte segment, so the load takes 32 transactions and delivers about a thirty-second of peak bandwidth. Staging through shared memory fixes it by coalescing the global loads.',
+          'The first touches 128 consecutive bytes, so it takes four 32-byte transactions, which is full bandwidth. In the second every lane lands in its own 32-byte sector, so the load takes 32 transactions, moves 1,024 bytes for 128 used, and delivers about an eighth of peak bandwidth. Staging through shared memory fixes it by coalescing the global loads.',
         ideas: [
-          'Consecutive 4-byte reads fill one 128-byte segment, so one transaction',
-          'A kilobyte stride puts each lane in its own segment, so 32 transactions',
-          'Delivered bandwidth falls to about a thirty-second, and staging through shared memory restores it',
+          'Consecutive 4-byte reads fill one 128-byte line, so four 32-byte transactions',
+          'A kilobyte stride puts each lane in its own 32-byte sector, so 32 transactions',
+          'Delivered bandwidth falls to about an eighth, since only 4 of every 32 bytes moved are used, and staging through shared memory restores it',
         ],
         kcs: ['t4.coalescing'],
       },
@@ -100,9 +100,9 @@ The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats
       type: 'prose',
       md: `## Coalescing: the warp-wide memory contract
 
-When a warp issues a load, the hardware examines all 32 lane addresses and merges them into the fewest possible memory transactions. Ideal case — **lane i reads address base + i×4 bytes**: one 128-byte transaction serves the whole warp. Worst case — 32 scattered addresses: **32 separate transactions**, 1/32 of peak bandwidth for that instruction. This is the coalescing rule, and it's T0.L3 (row vs column) with a warp jury: consecutive lanes should touch consecutive addresses.
+When a warp issues a load, the hardware examines all 32 lane addresses and merges them into the fewest possible memory transactions, each one a 32-byte sector (compute capability 6.0 and later; the H100 is 9.0). Ideal case — **lane i reads address base + i×4 bytes**: four 32-byte transactions, one 128-byte line, serve the whole warp. Worst case — 32 scattered addresses: **32 separate transactions**. That moves 1,024 bytes to use 128 of them, so about 1/8 of peak bandwidth for that instruction. This is the coalescing rule, and it's T0.L3 (row vs column) with a warp jury: consecutive lanes should touch consecutive addresses.
 
-The classic violation is the "column walk" reincarnate: a kernel where \`threadIdx.x\` indexes the *slow* dimension of a row-major matrix (stride = row pitch). Every lane lands in a different 128-byte segment; the warp issues 32 transactions per load; effective bandwidth drops ~10–30×. The fixes are layout (transpose / structure-of-arrays — T0.L4 again), staging through **shared memory** (load coalesced, compute strided from SRAM — SRAM has no coalescing penalty, only bank conflicts), and padding.`,
+The classic violation is the "column walk" reincarnate: a kernel where \`threadIdx.x\` indexes the *slow* dimension of a row-major matrix (stride = row pitch). Every lane lands in a different 32-byte sector; the warp issues 32 transactions per load, each carrying 4 useful bytes; about 8× fewer useful bytes per byte moved. The fixes are layout (transpose / structure-of-arrays — T0.L4 again), staging through **shared memory** (load coalesced, compute strided from SRAM — SRAM has no coalescing penalty, only bank conflicts), and padding.`,
     },
     {
       type: 'diagram',
@@ -111,9 +111,9 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
       nodes: [
         { id: 'warp', x: 2, y: 8, w: 18, h: 10, label: 'warp (32 lanes)', sub: 'one load instr' },
         { id: 'coal', x: 30, y: 4, w: 30, h: 9, label: 'coalesced', sub: 'lanes → consecutive 4 B' },
-        { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '1 transaction', sub: '128 B, full BW', color: '#3EF2A4' },
+        { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '4 transactions', sub: '4 × 32 B, full BW', color: '#3EF2A4' },
         { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KiB' },
-        { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '~1/32 peak BW', color: '#FF5C6C' },
+        { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '1 KiB moved, ~1/8 peak BW', color: '#FF5C6C' },
       ],
       edges: [
         { from: 'warp', to: 'coal' },
@@ -123,8 +123,8 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
       ],
       steps: [
         { caption: 'One warp-level load instruction. The hardware coalescer inspects all 32 lane addresses and merges them into transactions.', active: ['warp'] },
-        { caption: 'Coalesced: lane i reads base+4i — the warp consumes 128 consecutive bytes in ONE transaction. Full bandwidth; this is why GPU layouts are SoA-shaped (T0.L4).', active: ['coal', 't1'], edges: ['warp->coal', 'coal->t1'] },
-        { caption: 'Scattered: lanes stride a kilobyte apart — 32 separate transactions, each wasting most of its segment. Same instruction count, ~1/32 the delivered bytes per cycle.', active: ['scat', 't32'], edges: ['warp->scat', 'scat->t32'] },
+        { caption: 'Coalesced: lane i reads base+4i — the warp consumes 128 consecutive bytes in four 32-byte transactions. Full bandwidth; this is why GPU layouts are SoA-shaped (T0.L4).', active: ['coal', 't1'], edges: ['warp->coal', 'coal->t1'] },
+        { caption: 'Scattered: lanes stride a kilobyte apart — 32 separate transactions, each wasting most of its 32-byte sector. Same instruction count, ~1/8 the useful bytes per byte moved.', active: ['scat', 't32'], edges: ['warp->scat', 'scat->t32'] },
       ],
       predictAt: {
         step: 2,
@@ -137,10 +137,10 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         ],
         correct: [3],
         why: [
-          'The coalescer can only merge addresses that fall in the same 128-byte segment. A kilobyte apart, no two lanes share one.',
-          'There is no half-warp rule here. Transactions are counted by distinct segments touched, and each lane touches its own.',
-          'Groups of four lanes would share a segment only if their addresses were within 128 bytes of each other, and a kilobyte stride puts them far apart.',
-          'Right: each lane lands in a different 128-byte segment, so the one instruction becomes 32 transactions, each fetching a segment to use 4 bytes. Delivered bandwidth falls to about a thirty-second.',
+          'The coalescer can only merge addresses that fall in the same 32-byte sector. A kilobyte apart, no two lanes share one.',
+          'There is no half-warp rule here. Transactions are counted by distinct 32-byte sectors touched, and each lane touches its own.',
+          'Groups of four lanes would share a sector only if their addresses were within 32 bytes of each other, and a kilobyte stride puts them far apart.',
+          'Right: each lane lands in a different 32-byte sector, so the one instruction becomes 32 transactions, each fetching a sector to use 4 bytes. Delivered bandwidth falls to about an eighth.',
         ],
         kcs: ['t4.coalescing'],
       },
@@ -169,7 +169,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
       taskIds: ['roof.coalesce', 'roof.occupancy', 'roof.bank'],
       config: { m: 'H100', accessPattern: 'strided', warps: 16, registers: 32, bankConflict: false },
       tasks: [
-        'Run the column-walk kernel; record delivered bandwidth vs peak (~1/32).',
+        'Run the column-walk kernel; record delivered bandwidth vs peak (~1/8).',
         'Switch to unit-stride (coalesced); confirm recovery. Then predict what a transpose through shared memory delivers, switch to it and compare.',
         'Predict the register limit of 16 warps per SM, then raise per-thread registers until occupancy drops below 25%; watch latency-hiding fail.',
         'Introduce a 32-way bank conflict in the SRAM tile, predict what +1 padding gives back, then apply it.',
@@ -202,16 +202,16 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
           q: 'A warp load where lane i reads address base + 4×i results in…',
           options: [
             '32 separate 4-byte transactions with one per lane as each lane issues its own independent load',
-            'One 128-byte transaction with 32 consecutive words sharing a segment at full bandwidth',
+            'Four 32-byte transactions with 32 consecutive words sharing a line at full bandwidth',
             'A shared-memory bank conflict with 32 consecutive words mapping onto 1 bank',
             'A divergent warp with 32 lanes computing 32 different addresses in that load',
           ],
           correct: [1],
           explanation:
-            'Consecutive lanes → consecutive addresses: the coalescer merges the warp\'s accesses into a single wide transaction. This is the GPU\'s native access pattern, and layouts are chosen to produce it.',
+            'Consecutive lanes → consecutive addresses: the coalescer merges the warp\'s accesses into four 32-byte transactions, one 128-byte line. This is the GPU\'s native access pattern, and layouts are chosen to produce it.',
           why: [
-            'The hardware inspects all 32 addresses of the warp together. Consecutive 4-byte addresses fall in one 128-byte segment and merge into a single transaction.',
-            'Right: 32 consecutive 4-byte words fill one 128-byte segment, so the coalescer serves the whole warp with one transaction at full bandwidth.',
+            'The hardware inspects all 32 addresses of the warp together. Consecutive 4-byte addresses fall in four adjacent 32-byte sectors, so the warp needs four transactions, not 32.',
+            'Right: 32 consecutive 4-byte words fill one 128-byte line, which is four 32-byte sectors, so the coalescer serves the whole warp with four transactions at full bandwidth.',
             'Consecutive words map to different banks, which is the conflict-free pattern in shared memory. Conflicts need many lanes on one bank.',
             'Divergence is about branching. Lanes may use different addresses in one instruction; all lanes still execute the same load.',
           ],

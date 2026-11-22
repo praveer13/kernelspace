@@ -171,8 +171,10 @@ export type AccessPattern = 'coalesced' | 'strided' | 'divergent' | 'staged'
 /** Effective HBM bandwidth multiplier for the access-pattern demo. */
 export const coalesceFactor = (pattern: 'coalesced' | 'strided' | 'divergent'): number => {
   if (pattern === 'coalesced') return 1
-  if (pattern === 'strided') return 1 / 32
-  return 1 / 8 // divergent: serialized warp paths
+  // strided: each lane's 4 useful bytes cost a whole 32-byte transaction (claim hw.cuda.coalesce-transaction-bytes), so 4 / 32 = 1/8 of the bytes moved are useful.
+  // The literal stays here so the model does not import the lazy claim; tests/sims/roofline.test.ts ties it to the claim.
+  if (pattern === 'strided') return 1 / 8
+  return 1 / 8 // divergent: branch paths run one after another (a different mechanism that happens to cost the same factor)
 }
 
 export interface AccessResult {
