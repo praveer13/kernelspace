@@ -134,8 +134,10 @@ export default function ItemBlock({ lessonId, blockIndex, block, trackColor, rea
     setStage({ kind: 'loading' })
     ;(async () => {
       try {
+        const [g, evs] = await Promise.all([loadFamily(block.family), depsFrom(useProgress).events({ refPrefix: familyPrefix(block.family) })])
+        // The working values are read after the engine has answered: the store hydrates from a snapshot, and the engine's boot
+        // (which `events` waits for) brings the stored path and mastery. Read before it, a learner on serving-first met the collapsed line.
         const deps = depsFrom(useProgress)
-        const [g, evs] = await Promise.all([loadFamily(block.family), deps.events({ refPrefix: familyPrefix(block.family) })])
         const s = readBlock(evs, at)
         const fresh = s.predict === null && s.served.length === 0
         // a reading block is for the serving-first path: anywhere else, a fresh one asks first (and is not an expert skip)
