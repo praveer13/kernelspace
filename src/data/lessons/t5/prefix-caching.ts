@@ -35,7 +35,7 @@ const lesson: Lesson = {
       {
         prompt: 'Explain why a prefix-affinity router needs a load guard, and what it does when the guard trips.',
         model:
-          'Routing only by longest cached prefix herds every request that shares a popular system prompt onto the one worker that holds it, until queueing costs more than the prefill it saves. The guard allows only a bounded imbalance over the least-loaded worker. If no cache owner passes it, the router picks the least-loaded worker and accepts the miss.',
+          'Routing only by longest cached prefix herds every request that shares a popular system prompt onto the one worker that holds it, until queueing costs more than the prefill it saves. The guard allows only a bounded imbalance over the least-loaded worker. If no owner passes it, the least-loaded worker wins the tie and the router accepts the miss.',
         ideas: [
           'Longest-prefix routing herds traffic onto one warm worker',
           'The guard allows only a bounded imbalance over the least-loaded worker',
@@ -163,24 +163,24 @@ Eviction operates from the leaves. Removing an internal node would invalidate ev
       type: 'code',
       filename: 'prefix_router.rs — locality with a load guard',
       lang: 'rust',
-      code: `fn choose_worker(req: &[u32], workers: &[Worker]) -> usize {
-    let min_load = workers.iter().map(Worker::load).min().unwrap_or(0);
+      code: `fn choose_worker(req: &[u32], workers: &[Worker]) -> Option<usize> {
+    // None for an empty fleet: min() has nothing to return
+    let min_load = workers.iter().map(Worker::load).min()?;
     let guard = min_load + 4; // do not herd onto one hot cache owner
 
     workers.iter()
         .enumerate()
-        .filter(|(_, w)| w.load() <= guard)
+        .filter(|(_, w)| w.load() <= guard) // the least-loaded worker always passes
         .max_by_key(|(_, w)| (w.cached_prefix_len(req), Reverse(w.load())))
+        // equal prefix, so Reverse(load) picks the least-loaded
         .map(|(i, _)| i)
-        .unwrap_or_else(|| workers.iter().enumerate()
-            .min_by_key(|(_, w)| w.load()).unwrap().0)
 }`,
-      chips: ['longest prefix first', 'bounded imbalance', 'JSQ fallback'],
+      chips: ['longest prefix first', 'bounded imbalance', 'least-loaded tie-break'],
     },
     {
       type: 'reading',
       title: 'Read it in Rust: the router',
-      lead: '`choose_worker`\'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `unwrap_or_else` runs its fallback only on `None`. The closures borrow what they read (`guard`, `workers`).',
+      lead: '`choose_worker`\'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `choose_worker` hands that `Option` back, as `min()?` does for an empty fleet. The closures borrow what they read (`guard`, `workers`).',
       variants: ['verdict.iterators-ownership', 'fix.closures-collections', 'verdict.enums-option-result', 'fix.iterators-ownership', 'verdict.closures-collections', 'fix.enums-option-result'],
       count: 3,
     },
@@ -188,7 +188,7 @@ Eviction operates from the leaves. Removing an internal node would invalidate ev
       type: 'prose',
       md: `## The cluster is part of the cache
 
-An engine-local hit is useless if the router sends the request to another worker. Round-robin scatters related chats; join-shortest-queue protects load but ignores expensive warm state. A **prefix-affinity router** scores each worker by its longest cached prefix, then applies a load guard so one popular system prompt cannot herd the whole fleet onto one GPU. When every cache-owning worker is beyond the guard, it falls back to the least-loaded worker and pays the miss deliberately.
+An engine-local hit is useless if the router sends the request to another worker. Round-robin scatters related chats; join-shortest-queue protects load but ignores expensive warm state. A **prefix-affinity router** scores each worker by its longest cached prefix, then applies a load guard so one popular system prompt cannot herd the whole fleet onto one GPU. When every cache-owning worker is beyond the guard, every worker still allowed has no cached prefix, so the tie-break on lower load picks the least-loaded one and the router pays the miss deliberately.
 
 That creates the metric pair a production scoreboard needs: **KV hit rate** (cached prompt tokens ÷ prompt tokens) and **TTFT SLO attainment**. Hit rate without latency can hide an overloaded hot worker; latency without hit rate cannot explain why identical prompts have different cost. Open the Fleet's cluster mode and run the same shared-prefix trace under round-robin, JSQ, and prefix affinity. The traffic is held constant; only the information available to the router changes.`,
     },
@@ -314,10 +314,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'A longer match means more tensors to move to the chosen worker, and the router should prefer short matches',
           ],
           correct: [1],
-          explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, then falls back to least-loaded placement.',
+          explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, and equal scores go to the least-loaded worker.',
           why: [
             'A hit reuses K/V for every layer, so the engine skips all forward work for the cached tokens, MLP included. The lesson\'s 2,048-of-2,176-token example is 94% reusable input.',
-            'Right: the goal is TTFT under load, not hit rate alone. Affinity scores locality within a bounded load imbalance, then falls back to the least-loaded worker.',
+            'Right: the goal is TTFT under load, not hit rate alone. Affinity scores locality within a bounded load imbalance, and equal scores go to the least-loaded worker.',
             'Cached K/V is immutable and refcounted, so any later request with the same prefix can map it read-only. Cross-request reuse is exactly what APC provides.',
             'Affinity routing sends the request to the worker that already holds the prefix, so no K/V moves. Preferring longer matches is the point; the risk is overload.',
           ],
