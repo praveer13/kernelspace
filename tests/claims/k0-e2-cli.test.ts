@@ -39,7 +39,7 @@ describe('gen-lesson-claims --check runs in the unit suite (K0-E2)', () => {
 })
 
 describe('the ids are collected from the readers, not typed', () => {
-  test('the computed list is the 14 ids the tip typed', () => {
+  test('the computed list is the 14 ids the tip typed, then the ids tasks added', () => {
     expect(new Set(LESSON_CLAIMS)).toEqual(
       new Set([
         'production.vllm.block-size',
@@ -56,6 +56,7 @@ describe('the ids are collected from the readers, not typed', () => {
         'serving.pagedattention.ft-request-rate',
         'serving.pagedattention.kernel-overhead-low',
         'serving.pagedattention.kernel-overhead-high',
+        'status.rust.polonius',
       ]),
     )
     expect(LESSON_CLAIMS).toEqual([...LESSON_CLAIMS].sort())
