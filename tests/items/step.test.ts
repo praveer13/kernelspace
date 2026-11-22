@@ -106,6 +106,22 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(r.cues).toEqual([])
   })
 
+  test('levels 0 and 1 end their worked steps on the one blank, and no visible step finds the answer', () => {
+    for (const v of ETA_FREE) {
+      for (const l of [0, 1] as const) {
+        for (const s of seeds.slice(0, 30)) {
+          const i = step.make(s, l, v)
+          const worked = i.prompt.worked!
+          const full = step.solution(i)
+          expect(worked.filter((w) => w.blank)).toHaveLength(1)
+          expect(worked.findIndex((w) => w.blank)).toBe(worked.length - 1)
+          expect(worked.length).toBeLessThanOrEqual(l === 0 ? full.length : full.length - 1)
+          for (const w of worked) if (!w.blank) expect(w.result?.value).not.toBe(truthOf(i))
+        }
+      }
+    }
+  })
+
   test('declares the six variants on the six KCs, each without level 2, and every answer is numeric', () => {
     expect(step.variants.map((v) => v.id)).toEqual([...ETA_FREE, ...CALIBRATED])
     expect(step.variants.map((v) => v.kcs)).toEqual([
@@ -120,8 +136,9 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     // quant-bytes also stops before level 3, so the placement walk's confirmation on t6.fp4-capacity stays with `memory`
     expect(step.variants.map((v) => v.levels)).toEqual([[0, 1, 3], [0, 1, 3], [0, 1, 3], [0, 1], [0, 1, 3], [0, 1, 3]])
     // the generator version moved with the calibrated variants (2) and with the prefill stems' wording (3, S5-10 m2 and
-    // S5-14 m3), so every stored instance of an earlier version stays itself
-    expect(step.version).toBe(3)
+    // S5-14 m3) and with the worked steps (4, K0-A6: no visible step carries the answer), so every stored instance of an
+    // earlier version stays itself
+    expect(step.version).toBe(4)
     for (const v of step.variants) {
       expect(() => step.make(1, 2, v.id)).toThrow()
       for (const l of v.levels) expect(step.make(7, l, v.id).answer.kind).toBe('numeric')
