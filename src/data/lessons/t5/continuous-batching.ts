@@ -1,4 +1,9 @@
 import type { Lesson } from '../types'
+import { claimNumber, claimRelease } from '../claims'
+
+const GAIN_LOW = claimNumber('serving.pagedattention.throughput-gain-low')
+const GAIN_HIGH = claimNumber('serving.pagedattention.throughput-gain-high')
+const VLLM_RELEASE = claimRelease('production.vllm.block-size')
 
 const lesson: Lesson = {
   id: 't5.l7',
@@ -88,12 +93,12 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
       caption: 'fig 1 — static vs continuous: the same 4 requests on one GPU',
       height: 56,
       nodes: [
-        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: [A B C D] run until LONGEST (D, 40 steps)', sub: 'A,B,C idle from step 8 on', color: '#FF5C6C' },
+        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: [A B C D] run until LONGEST (D, 40 steps)', sub: 'A idle from step 8, B from 12, C from 20', color: '#FF5C6C' },
         { id: 's2', x: 2, y: 14, w: 44, h: 7, label: '…then batch 2: [E F G H]', sub: 'queue waits a full 40-step batch' },
         { id: 'c1', x: 54, y: 4, w: 10, h: 7, label: 'it 1–8', sub: 'A B C D', color: '#3EF2A4' },
-        { id: 'c2', x: 54, y: 14, w: 10, h: 7, label: 'it 9', sub: 'D + E F join', color: '#3EF2A4' },
-        { id: 'c3', x: 54, y: 24, w: 10, h: 7, label: 'it 12', sub: 'D E F + G', color: '#3EF2A4' },
-        { id: 'c4', x: 54, y: 34, w: 10, h: 7, label: 'it 40', sub: 'D done · H in', color: '#3EF2A4' },
+        { id: 'c2', x: 54, y: 14, w: 10, h: 7, label: 'it 9', sub: 'B C D + E', color: '#3EF2A4' },
+        { id: 'c3', x: 54, y: 24, w: 10, h: 7, label: 'it 13', sub: 'C D E + F', color: '#3EF2A4' },
+        { id: 'c4', x: 54, y: 34, w: 10, h: 7, label: 'it 21', sub: 'D E F + G', color: '#3EF2A4' },
         { id: 'legend', x: 76, y: 14, w: 22, h: 20, label: 'per-iteration', sub: 'leave on finish · join on free blocks', color: '#22D3EE' },
       ],
       edges: [
@@ -103,8 +108,8 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
       ],
       steps: [
         { caption: 'Static batching: A (8 tokens) finishes at step 8 but its slot — and KV blocks — are held hostage until D finishes at step 40. GPU rows idle; waiting requests watch.', active: ['s1'] },
-        { caption: 'Continuous: after EVERY step the scheduler edits the batch. Step 9: A, B, C are gone (blocks freed instantly); E and F are admitted mid-flight.', active: ['c1', 'c2'], edges: ['c1->c2'] },
-        { caption: 'The batch is always full of *live* work: utilization tracks demand, not the longest sequence. Same GPU, same model — 2–8× goodput in real deployments (paper: up to ~24× vs naive).', active: ['c3', 'legend'], edges: ['c2->c3'] },
+        { caption: 'Continuous: after EVERY step the scheduler edits the batch. Step 9: A has gone (its blocks freed instantly) and E joins; B leaves at 12 and C at 20, and F and G take their places.', active: ['c1', 'c2'], edges: ['c1->c2'] },
+        { caption: `The batch is always full of *live* work: utilization tracks demand, not the longest sequence. Same GPU, same model: how much goodput that buys depends on how uneven the output lengths are. The paper reports ${GAIN_LOW}–${GAIN_HIGH}× at the same latency over FasterTransformer and Orca; the 2023 launch post reported much larger gains over Hugging Face Transformers.`, active: ['c3', 'legend'], edges: ['c2->c3'] },
         { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (vLLM V1 frees the victim\'s blocks and recomputes its prefill on resume, T5.L5) and resumes later — timesharing with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
       ],
       predictAt: {
@@ -152,7 +157,7 @@ Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: 
       type: 'statline',
       stats: [
         { value: '11.8 ms', label: 'mean time per output token', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, not one step, but the scale of this timesharing system\'s quantum. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },
-        { value: '2–8×', label: 'goodput gain', hint: 'Continuous vs static batching on real traffic; the paper claims up to ~24× vs naive.' },
+        { value: '2–8×', label: 'goodput gain (course estimate)', hint: `The course's own rough range for continuous vs static batching, not a measured or sourced figure. The PagedAttention paper reports ${GAIN_LOW}–${GAIN_HIGH}× at the same latency over FasterTransformer and Orca, not over static batching alone.` },
         { value: 'O(1)', label: 'slot recycle', hint: 'Finished sequence\'s blocks return to the free queue instantly — the T1 fixed-block win.' },
         { value: '1 step', label: 'preemption latency', hint: 'Eviction decisions happen between iterations, never mid-kernel.' },
       ],
@@ -165,7 +170,7 @@ Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: 
     {
       type: 'callout',
       variant: 'warning',
-      md: `Continuous batching doesn't delete the trade-offs — it moves them into policy. **Bigger running set** → better throughput, worse ITL (more KV read per step) and worse preemption risk; **smaller** → the reverse. **Preemption policy** shapes fairness: preempt the youngest (default) and long requests can starve under load (T2.L4's starvation); preempt by age and you hurt TTFT for everyone. There is no free schedule — only visible ones. Tune with goodput (T5.L3), not throughput.`,
+      md: `Continuous batching doesn't delete the trade-offs — it moves them into policy. **Bigger running set** → better throughput, worse ITL (more KV read per step) and worse preemption risk; **smaller** → the reverse. **Preemption policy** shapes fairness: under first-come-first-served, ${VLLM_RELEASE} preempts the most recently admitted request, which protects long-running requests and makes recent arrivals pay, recomputing their prefill again if the pressure lasts; preempting the oldest instead throws away the most finished work per eviction. There is no free schedule — only visible ones. Tune with goodput (T5.L3), not throughput.`,
     },
     {
       type: 'prose',
