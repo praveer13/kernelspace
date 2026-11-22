@@ -122,7 +122,7 @@ if (import.meta.main) {
   const text = render()
   if (process.argv.includes('--check')) {
     if (readFileSync(file, 'utf8') !== text) {
-      console.error('src/data/lessons/claims.generated.ts is stale; run bun scripts/gen-lesson-claims.ts')
+      console.error(`${out ?? 'src/data/lessons/claims.generated.ts'} is stale; run bun scripts/gen-lesson-claims.ts`)
       process.exit(1)
     }
   } else writeFileSync(file, text)
