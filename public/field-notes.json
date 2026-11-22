@@ -94,7 +94,7 @@
     {
       "id": "dynamo-kvbm-deprecation",
       "title": "Dynamo deprecates KVBM in favor of engine-native offload",
-      "summary": "Dynamo v1.5.0 deprecates the KV Block Manager and targets its removal for v1.6.0, pointing users at the offload paths built into the engines. The block-table, refcount and tier-placement design the course teaches still holds; a production plan should name the engine-native feature, not the Dynamo component.",
+      "summary": "Dynamo v1.5.0 deprecates the KV Block Manager and targets its removal for v1.7.0; v1.6.0 and v1.6.2 still ship it. The notes point users at the offload paths built into the engines. The block-table, refcount and tier-placement design the course teaches still holds; a production plan should name the engine-native feature, not the Dynamo component.",
       "source": "Dynamo v1.5.0 release notes",
       "href": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.5.0",
       "published": "2026-09",

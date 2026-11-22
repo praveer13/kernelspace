@@ -444,6 +444,7 @@
     ["serving.pagedattention.kernel-overhead-high","PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, high end",26,"% attention-kernel latency"],
     ["production.vllm.extensible-kv-cache","vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)","on",""],
     ["production.vllm.gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""],
+    ["status.dynamo.kvbm.removal-target","Dynamo release that KVBM (KV Block Manager) is targeted for removal in","v1.7.0",""],
     ["status.loadgen.llmperf","LLMPerf (Ray) repository status","archived 2025-12-17, read-only",""],
     ["status.loadgen.genai-perf","GenAI-Perf (NVIDIA) status","being phased out; use AIPerf",""],
     ["status.loadgen.guidellm","GuideLLM status and traffic profiles","live; recommended by the vLLM docs for production servers",""],
