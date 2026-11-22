@@ -444,6 +444,7 @@
     ["serving.pagedattention.kernel-overhead-high","PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, high end",26,"% attention-kernel latency"],
     ["production.vllm.extensible-kv-cache","vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)","on",""],
     ["production.vllm.gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""],
+    ["hw.cuda.coalesce-transaction-bytes","Bytes in one coalesced global-memory transaction",32,"B"],
     ["status.dynamo.transport","Dynamo default transport","TCP",""],
     ["status.chromium.memory-safety-share","Chromium memory-unsafe share",70,"%"],
     ["status.android.memory-safety-share","Android memory-safety share","below 20","%"],
