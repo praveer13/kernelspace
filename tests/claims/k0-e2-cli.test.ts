@@ -26,6 +26,9 @@ describe('gen-lesson-claims --check runs in the unit suite (K0-E2)', () => {
       const r = run('--check', '--out', copy)
       expect(r.code).toBe(1)
       expect(r.err).toContain('is stale')
+      // The message names the file it compared, not the default one (K0-FIX-SETUP-REST).
+      expect(r.err).toContain(copy)
+      expect(r.err).not.toContain('src/data/lessons/claims.generated.ts')
       writeFileSync(copy, text)
       expect(run('--check', '--out', copy).code).toBe(0)
     } finally {
@@ -39,32 +42,29 @@ describe('gen-lesson-claims --check runs in the unit suite (K0-E2)', () => {
 })
 
 describe('the ids are collected from the readers, not typed', () => {
-  test('the computed list is the 14 ids the tip typed, then the ids tasks added', () => {
-    expect(new Set(LESSON_CLAIMS)).toEqual(
-      new Set([
-        'production.vllm.block-size',
-        'production.vllm.extensible-kv-cache',
-        'production.vllm.gpu-memory-utilization',
-        'serving.pagedattention.paper-block-size',
-        'serving.pagedattention.fig2-vllm-token-states',
-        'synthetic.kv.paged-waste',
-        'model.kv.static-utilization-low',
-        'model.kv.static-utilization-high',
-        'model.llama3-8b.kv-bytes-per-token',
-        'serving.pagedattention.throughput-gain-low',
-        'serving.pagedattention.throughput-gain-high',
-        'serving.pagedattention.ft-request-rate',
-        'serving.pagedattention.kernel-overhead-low',
-        'serving.pagedattention.kernel-overhead-high',
-        'status.rust.polonius',
-        'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot',
-        'production.sglang.chunked-prefill-size',
-        'status.vllm.speculative-methods',
-        'status.trtllm.enable-chunked-prefill-default',
-        'hw.h100-sxm.max-warps-per-sm',
-        'status.wasi.version',
-      ]),
-    )
+  // The 14 ids the generator's hand-kept list held at f4bc03f. Each must still be collected; ids a later task's lesson read
+  // adds join the computed list without an edit here, so no lane touches a shared line to add a claim (K0-FIX-SETUP-REST).
+  const ORIGINAL = [
+    'production.vllm.block-size',
+    'production.vllm.extensible-kv-cache',
+    'production.vllm.gpu-memory-utilization',
+    'serving.pagedattention.paper-block-size',
+    'serving.pagedattention.fig2-vllm-token-states',
+    'synthetic.kv.paged-waste',
+    'model.kv.static-utilization-low',
+    'model.kv.static-utilization-high',
+    'model.llama3-8b.kv-bytes-per-token',
+    'serving.pagedattention.throughput-gain-low',
+    'serving.pagedattention.throughput-gain-high',
+    'serving.pagedattention.ft-request-rate',
+    'serving.pagedattention.kernel-overhead-low',
+    'serving.pagedattention.kernel-overhead-high',
+  ]
+
+  test('the computed list holds the 14 ids the tip typed, sorted and without repeats', () => {
+    expect(ORIGINAL).toHaveLength(14)
+    expect(LESSON_CLAIMS).toEqual(expect.arrayContaining(ORIGINAL))
+    expect(new Set(LESSON_CLAIMS).size).toBe(LESSON_CLAIMS.length)
     expect(LESSON_CLAIMS).toEqual([...LESSON_CLAIMS].sort())
   })
 
