@@ -57,7 +57,7 @@ One table can't hold 2³⁶ entries per process — that's 512 GiB of metadata. 
       type: 'prose',
       md: `## The TLB: caching the answer
 
-Notice the horror: a 4-level walk is **four extra memory reads per memory access**. Unmitigated, virtual memory would quarter your effective bandwidth. The mitigation is the **TLB** (translation lookaside buffer): a small, fast cache of recent VPN→frame translations — tens to a few thousand entries, ~1 cycle lookup. TLB hit: translation is free. TLB miss: the walk (hardware "page walker" does it, ~10–100 ns) and the entry is cached.
+Notice the horror: a 4-level walk is **four extra memory reads per memory access**. Unmitigated, virtual memory would cut your effective bandwidth to one fifth: each access is four extra reads plus the data read. The mitigation is the **TLB** (translation lookaside buffer): a small, fast cache of recent VPN→frame translations — tens to a few thousand entries, ~1 cycle lookup. TLB hit: translation is free. TLB miss: the walk (hardware "page walker" does it, ~10–100 ns) and the entry is cached.
 
 TLB reach matters: \`entries × page_size\`. With 1536 L2-TLB entries and 4 KiB pages, that's 6 MiB — smaller than your matrix from T0.L3, which is why that column walk thrashed *both* the data caches and the TLB. This is also the entire case for **huge pages** (2 MiB/1 GiB): same TLB, 512× the reach per entry. Databases and JVMs use \`-XX:+UseLargePages\`; GPU runtimes allocate HBM in huge pages for the same reason.`,
     },
@@ -132,7 +132,7 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
     {
       type: 'callout',
       variant: 'analogy',
-      md: `The JVM is a heavy virtual-memory user: the heap is one big lazily-committed \`mmap\` region (committed on touch — that's why \`-Xms\` and \`-Xmx\` matter for latency), ZGC's **colored pointers** literally store GC metadata in address bits the MMU ignores, and humongous allocations go straight to huge pages. If you've ever puzzled over VIRT vs RES in \`top\`: VIRT is the virtual address space (cheap, sparse), RES is the frames actually backed. You were reading a page table summary.`,
+      md: `The JVM is a heavy virtual-memory user: the heap is one big lazily-committed \`mmap\` region (committed on touch — that's why \`-Xms\` and \`-Xmx\` matter for latency), ZGC's **colored pointers** keep GC state in spare metadata bits of the pointer. The old non-generational ZGC mapped the heap at three virtual addresses so those bits sat outside the part of the pointer that addresses the heap; generational ZGC uses explicit code in its load and store barriers instead. Humongous allocations go straight to huge pages. If you've ever puzzled over VIRT vs RES in \`top\`: VIRT is the virtual address space (cheap, sparse), RES is the frames actually backed. You were reading a page table summary.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging is swapping. The evidence names it: "paging
     // = swapping" is one of the named misconceptions distractors should encode (community.md §2.1). The sim preset that
