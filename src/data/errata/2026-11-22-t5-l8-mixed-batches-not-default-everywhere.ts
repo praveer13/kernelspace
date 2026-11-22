@@ -11,6 +11,6 @@ export default {
   why: 'The engines\' own argument definitions: SGLang v0.5.23 sets enable_mixed_chunk to False, and TensorRT-LLM v1.4.0rc4 sets enable_chunked_prefill to False. The lesson claimed a default two of three do not have.',
   source: {
     url: 'https://github.com/sgl-project/sglang/blob/v0.5.23/python/sglang/srt/arg_groups/fields/schedule.py',
-    title: 'SGLang v0.5.23 source: srt/arg_groups/fields/schedule.py',
+    title: 'SGLang v0.5.23 schedule.py',
   },
 } satisfies Erratum
