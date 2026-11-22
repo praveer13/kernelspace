@@ -34,7 +34,7 @@ const lesson: Lesson = {
         },
         {
           kind: 'choice',
-          q: 'A profile of one worker thread shows 70% of its samples in a futex wait. What does that say about the thread?',
+          q: 'A wall-clock profile of one worker thread shows 70% of its samples in a futex wait. What does that say about the thread?',
           options: [
             'Its own code is slow, with the futex wait call a function that needs optimizing',
             'It is parked waiting on another thread, and these samples do not show which one',
@@ -64,11 +64,11 @@ A flame graph is **sampled stack traces, merged and drawn to scale**. A profiler
       md: `## The grammar: four rules
 
 1. **The x-axis is time share, not time order.** A bar's width = the fraction of samples that stack appeared in. Nothing about sequence — that's a flame *chart*, a different tool. Bars are merged and (usually) sorted alphabetically; chronological order is destroyed on purpose.
-2. **The y-axis is depth.** The bar above called the bar below. Root at the bottom (or top, in icicle mode — same data).
+2. **The y-axis is depth.** The bar below called the bar above. Root at the bottom (or top, in icicle mode — same data).
 3. **A wide bar anywhere = a suspect.** A wide *plateau* on top means the code itself is spending (self time); a wide *base* with tall towers means the cost is in the callees.
 4. **Color is (mostly) decoration.** Width is the signal. If your tool colors by module or temperature, fine — but never read meaning into hue before width.
 
-That's the whole grammar. The skill is recognizing *shapes*: the allocator plateau (wide \`free\`/\`malloc\` bars — fragmentation or churn), the lock convoy (a wide \`futex\`/\`pthread_mutex_lock\` bar sitting on your worker threads — T2.L5 in the flesh), the serde tax (wide \`serialize\`/\`parse\` bars between your business logic — T3.L2's zero-copy lesson demanding to be written), the syscall storm (thin logic towers on a fat \`read\`/\`write\` base — batching opportunity, T2.L6).`,
+That's the whole grammar. The skill is recognizing *shapes*: the allocator plateau (wide \`free\`/\`malloc\` bars — fragmentation or churn), the lock convoy (in a wall-clock profile, a wide \`futex\`/\`pthread_mutex_lock\` bar sitting on your worker threads — T2.L5 in the flesh), the serde tax (wide \`serialize\`/\`parse\` bars between your business logic — T3.L2's zero-copy lesson demanding to be written), the syscall storm (thin logic towers on a fat \`read\`/\`write\` base — batching opportunity, T2.L6).`,
     },
     {
       type: 'diagram',
@@ -122,7 +122,9 @@ cargo flamegraph --test allocator_tests     # or --example calibrate
 # → flamegraph.svg, open in a browser, click to zoom
 \`\`\`
 
-Same reflex elsewhere: **Java** → async-profiler (\`-e cpu\`, \`-f profile.html\`), **Python** → \`py-spy record -f speedscope\`, **Go** → \`pprof\` is built in. The tool changes; the reading doesn't. Sampling beats instrumentation because it needs no code changes and adds ~1% overhead — safe against production traffic, unlike the "add a timer around everything" instinct.`,
+Same reflex elsewhere: **Java** → async-profiler (\`-e cpu\`, \`-f profile.html\`), **Python** → \`py-spy record -f speedscope\`, **Go** → \`pprof\` is built in. These commands record **on-CPU** stacks, so a thread parked on a lock or on I/O takes no samples and does not appear. To see time spent waiting, take a wall-clock profile (async-profiler \`-e wall\`, py-spy \`--idle\`) or an off-CPU flame graph. On a CPU profile a lock convoy shows only as the cost of sleeping and waking (futex and scheduler frames) plus any spinning, and a CUDA or NCCL wait shows because it busy-waits.
+
+The tool changes; the reading doesn't. Sampling beats instrumentation because it needs no code changes and adds ~1% overhead — safe against production traffic, unlike the "add a timer around everything" instinct.`,
     },
     {
       type: 'callout',
@@ -165,7 +167,7 @@ The later Forge labs now put an exact **profile this** command on the all-green 
           kcs: ['t0.flame-graphs'],
         },
         {
-          q: 'You see a wide futex/mutex-wait bar across all your worker threads. The most likely story is…',
+          q: 'In a wall-clock profile (async-profiler -e wall), you see a wide futex/mutex-wait bar across all your worker threads. The most likely story is…',
           options: [
             'The cores are too slow, with threads queuing for them and spending time in kernel wait code',
             'Lock contention, with threads parked on one shared lock and forming a convoy instead of working',
@@ -174,11 +176,11 @@ The later Forge labs now put an exact **profile this** command on the all-green 
           ],
           correct: [1],
           explanation:
-            'Mutex-wait frames at the top of many towers = threads paying for a contended critical section. This is the profile-signature of the lock convoy from T2.L5 — and the argument for the lock-free structures you built in lab 04.',
+            'Mutex-wait frames at the top of many towers = threads paying for a contended critical section. This is the wall-clock profile signature of the lock convoy from T2.L5 — and the argument for the lock-free structures you built in lab 04.',
           why: [
             'A CPU that is simply slow or saturated shows threads in compute frames. A futex wait means the thread chose to sleep for a lock; it needed no core at all.',
-            'Right: mutex-wait frames atop many stacks mean threads are paying for a contended critical section. This is the T2.L5 lock convoy\'s profile signature, and the case for the lock-free structures in lab 04.',
-            'Samples are taken uniformly in time, so a wide wait bar is genuine wait time. Taking more samples would resolve it more precisely, not create it.',
+            'Right: mutex-wait frames atop many stacks mean threads are paying for a contended critical section. This is the T2.L5 lock convoy\'s wall-clock profile signature, and the case for the lock-free structures in lab 04.',
+            'A wall-clock sampler samples every thread at a fixed rate whether it runs or is parked, so a wide wait bar is genuine wait time; a CPU profile would not show the parked threads at all.',
             'Samplers run at around 99 Hz with roughly 1% overhead and do not take application locks. A stalled profiler would not appear as futex waits on your own lock.',
           ],
           kcs: ['t0.wait-bars', 't0.flame-graphs'],
@@ -247,10 +249,10 @@ The later Forge labs now put an exact **profile this** command on the all-green 
       {
         prompt: 'Name two shapes you can recognize in a flame graph, say what each means, and say what you would do about it.',
         model:
-          'A wide malloc or free plateau means allocator churn or fragmentation: reuse buffers. A wide futex or mutex bar on worker threads means a lock convoy: shrink the critical section. A fat read or write base under thin logic towers means a syscall storm: batch the I/O.',
+          'A wide malloc or free plateau means allocator churn or fragmentation: reuse buffers. In a wall-clock profile, a wide futex or mutex bar on worker threads means a lock convoy: shrink the critical section. A fat read or write base under thin logic towers means a syscall storm: batch the I/O.',
         ideas: [
           'Allocator plateau: wide malloc or free bars mean churn or fragmentation, so reuse buffers',
-          'Lock convoy: a wide futex or mutex bar on workers means threads wait on one lock, so shrink the critical section',
+          'Lock convoy: in a wall-clock profile, a wide futex or mutex bar on workers means threads wait on one lock, so shrink the critical section',
           'Syscall storm: a fat read or write base under thin logic towers means the I/O should be batched',
         ],
         kcs: ['t0.flame-graphs', 't0.wait-bars'],
