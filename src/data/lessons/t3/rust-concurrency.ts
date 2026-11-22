@@ -59,11 +59,12 @@ fn shared_counter() {
 }
 
 // 3. LOCK-FREE: atomics for single-word state (T2 rules still apply)
-static SLOTS: AtomicU64 = AtomicU64::new(0);
+static SLOTS: AtomicU64 = AtomicU64::new(8); // eight free batch slots
 fn admit() -> bool {
     SLOTS.fetch_update(Ordering::AcqRel, Ordering::Acquire,
-        |n| (n > 0).then_some(n - 1)).is_ok()   // CAS loop, no lock
-}`,
+        |n| n.checked_sub(1)).is_ok()   // CAS loop, no lock
+}
+fn release() { SLOTS.fetch_add(1, Ordering::Release); }`,
       chips: ['Send = movable', 'Sync = shareable', 'Rc is !Send on purpose'],
     },
     {
@@ -74,7 +75,7 @@ The three styles in the code are not interchangeable fashion — they map to the
 
 - **Channels** when the handoff is the point (pipeline stages, producer/consumer): ownership moves, so there's *nothing to synchronize* after the send. Contention lives in the queue itself, which std implements as a lock-free-ish structure. In serving terms: the scheduler pushing admitted requests to GPU workers.
 - **Arc<Mutex<T>>** when the critical section is long or the state is compound (a whole map): simple, correct, and the lock's sleep-on-contention is a feature. Beware the classics: lock ordering (deadlock), holding across \`.await\` (an async footgun — the guard is not Send-safe to hold across suspension in most runtimes; use \`tokio::sync::Mutex\` or drop first).
-- **Atomics** for counters and flags: cheapest, but remember T2's ordering rules — \`Relaxed\` for counters, \`AcqRel\`/\`Acquire\` when publishing. And remember T0.L4: a hot atomic is a ping-ponging cache line; shard it (the LongAdder move: \`Crossbeam\`'s sharded counters, or per-thread slots).`,
+- **Atomics** for counters and flags: cheapest, but remember T2's ordering rules — \`Relaxed\` for counters, \`AcqRel\`/\`Acquire\` when publishing. And remember T0.L4: a hot atomic is a ping-ponging cache line; shard it (the LongAdder move: per-thread counters, each padded to its own cache line with \`crossbeam_utils::CachePadded\`, or per-thread slots).`,
     },
     {
       type: 'callout',
@@ -91,7 +92,7 @@ The three styles in the code are not interchangeable fashion — they map to the
       type: 'prose',
       md: `## In the simulator
 
-The exercise wires the three architectures against the same workload and shows you where each wins: channel throughput as stages are added, mutex collapse under lock-hold-time growth, atomic counter plateauing on one cache line until sharded. The graphs are T2.L5's decision procedure, measured in Rust.`,
+The exercise wires the three architectures against the same workload and shows you where each wins: channel throughput as stages are added, mutex collapse under lock-hold-time growth, atomic counter plateauing on one cache line until sharded. The graphs are T2.L5's decision procedure as a model: three closed-form curves, not a measurement.`,
     },
     {
       type: 'exercise',
@@ -104,7 +105,7 @@ The exercise wires the three architectures against the same workload and shows y
         'Hot atomic counter, 16 threads: confirm the single-line plateau; shard it and re-measure.',
         'Attempt to send an Rc across threads in the inspector — read the exact compile error (Send violation).',
       ],
-      note: `The measured ordering matches T2 theory: channels for handoffs, mutexes for compound state, atomics for words — and the Rc experiment shows the type system doing its one job: making "accidentally shared" a compile error instead of an incident.`,
+      note: `The modelled ordering matches T2 theory: channels for handoffs, mutexes for compound state, atomics for words — and the Rc experiment shows the type system doing its one job: making "accidentally shared" a compile error instead of an incident.`,
     },
     {
       type: 'quiz',
