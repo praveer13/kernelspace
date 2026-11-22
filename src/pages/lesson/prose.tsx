@@ -20,6 +20,10 @@ interface ProseViewProps {
   compact?: boolean
 }
 
+function isFence(line: string): boolean {
+  return line.trimStart().startsWith('```')
+}
+
 export function ProseView({ md, trackColor, h2Start = 0, compact = false }: ProseViewProps) {
   const lines = md.replace(/\r/g, '').split('\n')
   const nodes: ReactNode[] = []
@@ -32,6 +36,32 @@ export function ProseView({ md, trackColor, h2Start = 0, compact = false }: Pros
 
     if (line.trim() === '') {
       i++
+      continue
+    }
+
+    // fenced block: verbatim lines up to the closing fence (or the end), no inline markup
+    if (isFence(line)) {
+      const lang = line.trim().slice(3).trim()
+      const code: string[] = []
+      i++
+      while (i < lines.length && !isFence(lines[i])) {
+        code.push(lines[i])
+        i++
+      }
+      i++ // closing fence
+      nodes.push(
+        <div
+          key={key++}
+          tabIndex={0}
+          role="region"
+          aria-label="code, scrolls sideways"
+          className="my-6 overflow-x-auto rounded-md border border-line bg-surface-1 scrollbar-slim"
+        >
+          <pre className="px-4 py-3 font-mono text-body-sm leading-[1.6] text-text-1">
+            <code data-lang={lang || undefined}>{code.join('\n')}</code>
+          </pre>
+        </div>,
+      )
       continue
     }
 
@@ -164,6 +194,7 @@ export function ProseView({ md, trackColor, h2Start = 0, compact = false }: Pros
     while (
       i < lines.length &&
       lines[i].trim() !== '' &&
+      !isFence(lines[i]) &&
       !lines[i].startsWith('## ') &&
       !lines[i].startsWith('### ') &&
       !lines[i].trimStart().startsWith('|') &&
