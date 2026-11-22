@@ -238,9 +238,9 @@ The checkpoint rule: eight items, **six right**, with at least one written or co
       type: 'prose',
       md: `## §1–3: The problem, in OS vocabulary
 
-The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, pre-allocated for the maximum possible length**.
+The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, reserved up front**: for the maximum possible length, or, in the paper's best-case Orca variant, for each request's true output length.
 
-You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). The paper measures **60–80% of KV memory wasted** in these systems. Their phrase is different, but the diagnosis is a T1.L4 fragmentation report.`,
+You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). In the paper's Figure 2, only **${USED_LOW}% to ${USED_HIGH}% of KV memory held token states** in the Orca runs it measures (Orca (Max) at the low end, Orca (Oracle) at the high end), so the rest was reserved or stranded (§1). Their phrase is different, but the diagnosis is a T1.L4 fragmentation report.`,
     },
     {
       type: 'callout',
@@ -349,7 +349,7 @@ Also note §4.6's distributed bits: for models spanning GPUs, one KV cache manag
       type: 'prose',
       md: `## Checkpoint briefing
 
-You are ready for the checkpoint when you can answer, without notes: Which wastes do §1 and §3.1 find in earlier systems, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
+You are ready for the checkpoint when you can answer, without notes: Which wastes do §1 and §3.1 find in earlier systems, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why is the block-table indirection worth its cost? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
     },
     {
       type: 'quiz',
@@ -366,7 +366,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           explanation:
             'Section 1: earlier systems "suffer from internal and external memory fragmentation" and "cannot exploit the opportunities for memory sharing". Slots over-provisioned for the maximum length are internal fragmentation; gaps between variable-size chunks are external; prompts re-copied for parallel samples are the duplication that block sharing removes. §3.1 takes the allocator apart and also counts slots reserved for tokens not generated yet.',
           why: [
-            'Misconception: the waste is leaked memory. The 60–80% is memory that is reserved or stranded, not lost: sequences free their KV on completion, and nothing here is a race or deadlock.',
+            'Misconception: the waste is leaked memory. The memory that held no token states was reserved or stranded, not lost: sequences free their KV on completion, and nothing here is a race or deadlock.',
             'Right: slots reserved for worst-case length but unused are internal fragmentation, gaps between variable-size segments are external, and re-copied shared prompts are duplication.',
             'Misconception: the waste is runtime pathology. Thrashing, false sharing and TLB misses are performance effects of access patterns; the paper measures allocation waste in how KV cache is laid out.',
             'Misconception: memory-safety bugs. Overflows and double frees are correctness defects; the paper diagnoses well-behaved allocators that simply waste space through reservation and layout.',
