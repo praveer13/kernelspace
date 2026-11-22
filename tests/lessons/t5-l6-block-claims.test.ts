@@ -27,3 +27,19 @@ describe('t5.l6 block boundary at vLLM default (K0-D13)', () => {
     expect(text).toContain("With the paper's 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens)")
   })
 })
+
+describe('t5.l6 router listing (K0-C22)', () => {
+  const listing = lesson.blocks.find((b) => b.type === 'code' && b.filename?.startsWith('prefix_router.rs'))
+  test('the listing returns an Option and has no unwrap or fallback', () => {
+    if (!listing || listing.type !== 'code') throw new Error('router listing not found')
+    expect(listing.code).toContain('-> Option<usize>')
+    expect(listing.code).not.toContain('.unwrap()')
+    expect(listing.code).not.toContain('unwrap_or_else')
+    expect(listing.chips ?? []).not.toContain('JSQ fallback')
+  })
+  test('the reading lead no longer teaches unwrap_or_else on this chain', () => {
+    const reading = lesson.blocks.find((b) => b.type === 'reading')
+    if (!reading || reading.type !== 'reading') throw new Error('reading block not found')
+    expect(reading.lead).not.toContain('unwrap_or_else')
+  })
+})
