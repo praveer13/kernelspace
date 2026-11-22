@@ -75,7 +75,7 @@ _Just enough Rust to read Dynamo’s data plane without flinching. Ownership as 
 - [T3.L3 Concurrency: Send, Sync, Channels, Atomics](https://kernelspace.naigap.com/lessons-md/t3.l3.md): The type system that makes "fearless concurrency" literal — and how to pick between message passing, locks, and lock-free.
 - [T3.L4 Async Runtime Internals: Build a Toy Executor](https://kernelspace.naigap.com/lessons-md/t3.l4.md): Wakers and polling, demystified: async/await is a state machine plus a scheduler, and you can build one in an afternoon.
 - [T3.L5 Rust + Wasm](https://kernelspace.naigap.com/lessons-md/t3.l5.md): The meta lesson: how this site's own exercises run — native-speed systems code in a sandboxed browser tab.
-- [T3.L6 Why NVIDIA Dynamo's Data Plane Is Rust](https://kernelspace.naigap.com/lessons-md/t3.l6.md): NATS messaging, backpressure, KV-aware routing — a case study in choosing Rust for the hottest path in AI infrastructure.
+- [T3.L6 Why NVIDIA Dynamo's Data Plane Is Rust](https://kernelspace.naigap.com/lessons-md/t3.l6.md): A TCP request plane, backpressure, KV-aware routing — a case study in choosing Rust for the hottest path in AI infrastructure.
 - [T3.L7 Rust, Zig, or C: The Decision Framework](https://kernelspace.naigap.com/lessons-md/t3.l7.md): T3 taught you Rust. The senior skill is knowing when NOT to reach for it — four questions that decide the language, the case studies that prove them, and the honest 2026 map of who writes what in this field.
 
 ### T4 — GPU Architecture
