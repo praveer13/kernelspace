@@ -126,7 +126,7 @@ Language interop almost always means "speak the C ABI." C's ABI is the lingua fr
     {
       type: 'callout',
       variant: 'analogy',
-      md: `The ABI is a **REST API for machine code**: argument order = register assignment, serialization = struct layout rules, versioning = \`.so\` sonames. And like REST, the failure mode is contract skew: **name mangling** is why C++ interop breaks across compilers (each mangles signatures differently), and **struct layout** drift (one side padded, one packed) is the binary equivalent of a silently changed JSON field — same bytes, different meaning, no error until production.`,
+      md: `The ABI is a **REST API for machine code**: argument order = register assignment, serialization = struct layout rules, versioning = \`.so\` sonames. And like REST, the failure mode is contract skew: **name mangling** is why C++ needs \`extern "C"\` for a stable boundary (the symbol encodes the signature, so a changed signature is a different name). On Linux, GCC and Clang follow the same Itanium C++ ABI and mangle alike, so the C++ breakage you meet is the standard library: libstdc++ against libc++, or libstdc++'s old and new \`std::string\` (the \`__cxx11\` tag in a symbol). **Struct layout** drift (one side padded, one packed) is the binary equivalent of a silently changed JSON field — same bytes, different meaning, no error until production.`,
     },
     {
       type: 'callout',
@@ -209,7 +209,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
           ],
           correct: [1],
           explanation:
-            'ctypes, JNI, Rust extern "C", CUDA host APIs — all converge on the C ABI because it is the smallest common denominator with decades of stability. C++ can\'t even interoperate with itself across compilers without extern "C" (name mangling).',
+            'ctypes, JNI, Rust extern "C", CUDA host APIs — all converge on the C ABI because it is the smallest common denominator with decades of stability. C++ has no such stable boundary: a mangled name encodes the signature, so a C++ interface needs extern "C" to be callable from another language, and C++ libraries built against different standard-library ABIs do not link cleanly.',
           why: [
             'Speed is not the reason. Languages adopt the C ABI because it is a stable common interface, and Rust or C++ code behind the same interface runs just as fast.',
             'Right: unmangled function names and plain data layouts are easy to generate and consume, and the convention has been stable for decades, so every runtime can speak it.',
