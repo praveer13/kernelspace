@@ -19,7 +19,13 @@ export function extractHeadings(blocks: ContentBlock[]): LessonHeading[] {
   const out: LessonHeading[] = []
   for (const b of blocks) {
     if (b.type !== 'prose') continue
+    let fenced = false
     for (const line of b.md.split('\n')) {
+      if (line.trimStart().startsWith('```')) {
+        fenced = !fenced
+        continue
+      }
+      if (fenced) continue
       if (line.startsWith('## ')) out.push({ id: slugify(line.slice(3)), text: line.slice(3), level: 2 })
       else if (line.startsWith('### ')) out.push({ id: slugify(line.slice(4)), text: line.slice(4), level: 3 })
     }
