@@ -7,13 +7,13 @@ const lesson: Lesson = {
   index: 2,
   title: 'Wide Expert Parallelism in Production',
   minutes: 30,
-  hook: 'EP144 means your batch is spread across 144 GPUs and every layer is a distributed transaction. DeepEP, EPLB, and dual-batch overlap are the machinery that keeps it profitable — and SGLang reproduced the whole thing on 96 H100s for you to read.',
+  hook: 'EP144 means your batch is spread across 144 GPUs and every layer is a distributed transaction. DeepEP, EPLB, and communication-computation overlap are the machinery that keeps it profitable — and SGLang reproduced the whole thing on 96 H100s for you to read.',
   exercise: 'read+quiz',
   verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
-      md: `T6.L1 gave you the problem: hot experts straggle the combine barrier, and MoE wants huge batches. **Wide EP** is the production answer: spread the experts across *many* GPUs (EP32 for prefill, EP144 for decode in DeepSeek's build), run enormous batches so expert utilization is uniform, and hide the all-to-all behind compute. This lesson is the three mechanisms that make it work — and the one public reproduction you can study line by line.
+      md: `T6.L1 gave you the problem: hot experts straggle the combine barrier, and MoE wants huge batches. **Wide EP** is the production answer: spread the experts across *many* GPUs (EP32 for prefill, EP144 for decode in the layout DeepSeek published for its V3/R1 service), run enormous batches so expert utilization is uniform, and hide the all-to-all behind compute. This lesson is the three mechanisms that make it work — and the one public reproduction you can study line by line.
 
 Why EP32 for prefill but EP144 for decode? The phases have opposite physics again (T5.L3): prefill is compute-bound — moderate EP, big per-GPU chunks, dense tensor-core work. Decode is bandwidth-bound and latency-critical — spread experts maximally (EP144), because each GPU then holds *fewer* experts and reads *less* weight per step... and because only a giant batch keeps 256 experts uniformly fed.`,
     },
@@ -21,20 +21,22 @@ Why EP32 for prefill but EP144 for decode? The phases have opposite physics agai
       type: 'prose',
       md: `## Mechanism 1: DeepEP — the dispatch/combine library
 
-The all-to-all is so central that DeepSeek open-sourced a dedicated library for it. Two modes, because the two phases want different things:
+The all-to-all is so central that DeepSeek open-sourced a dedicated library for it. This section describes the library as it first shipped, because the trade it teaches is the lasting part. That first release had two kernel sets, since the two phases want different things:
 
-- **Normal dispatch** (prefill/training): maximize bandwidth. Aggregate tokens by destination, saturate NVLink/RDMA with big transfers, tolerate microseconds of latency.
-- **Low-latency dispatch** (decode): minimize latency at smaller transfer sizes. RDMA write-with-immediate delivery, pre-registered buffers, no negotiation on the hot path — decode cannot wait for a handshake per layer.
+- **Normal kernels** (prefill/training): maximize bandwidth. Aggregate tokens by destination, forward over NVLink and RDMA with big transfers, tolerate microseconds of latency.
+- **Low-latency kernels** (decode): minimize latency at smaller transfer sizes. The README calls them "a set of low-latency kernels with pure RDMA to minimize delays", for latency-sensitive decoding.
 
-This is a recurring systems lesson: *one fabric, two protocols*. Your TCP vs QUIC instinct, your batch-vs-streaming instinct — same shape. The transport is shared; the protocol is phase-specific.`,
+**The API has moved since.** DeepEP's current README says its V2 unified "High-throughput and low-latency APIs ... into a single \`EPBuffer\` interface", and that its V2.5 release "Fully remove[d] V1". Training, prefill and decode now call the same dispatch and combine. The bandwidth-versus-latency trade did not go away; it moved inside the library, which estimates the SM and QP counts itself. Read the repository's README for the interface you would install today.
+
+This is a recurring systems lesson: *one fabric, phase-specific paths*. Your batch-vs-streaming instinct, your bulk-vs-interactive RPC instinct — same shape. The transport is shared; what you optimize depends on the phase.`,
     },
     {
       type: 'prose',
       md: `## Mechanism 2: EPLB — load balance as a packing problem
 
-The **Expert Parallel Load Balancer** treats hot experts as a bin-packing problem. Count per-expert load over a window; **replicate** the hottest experts onto a second GPU (replication, not migration — the weights are small compared to the KV); **reassign** expert→GPU placement periodically to even out. Result: no GPU is more than a few percent off the mean load, so the combine barrier costs ~the mean, not the max.
+The **Expert Parallel Load Balancer** treats hot experts as a bin-packing problem. Estimate per-expert load (the repository leaves the predictor out of scope; "a common method is to use moving average of historical statistics"); **replicate** the hottest experts as "redundant experts" onto other GPUs (replication, not migration — the weights are small compared to the KV); then **pack** the copies onto GPUs heuristically, so the combine barrier costs about the mean load, not the max.
 
-Notice what EPLB really is: **consistent hashing with live rebalancing** — your cache-tier instinct again (T3.L6, T5.L9). The differences are instructive: the "keys" are expert ids, the "nodes" are GPUs, and the rebalancing signal is token counts rather than cache misses.`,
+Notice what EPLB really is: **replication plus bin-packing, with no hashing in it**. Placement is computed from measured load, not from a hash of the expert id: that is the difference from your cache tier (T3.L6, T5.L9), where a hash fixes which node owns a key and load follows. Here load comes first and placement follows. DeepSeek's repository ships two policies: a *hierarchical* one for prefill, at a smaller expert-parallel size, that packs expert groups onto nodes first, and a *global* one for decode, at a larger size, that replicates across all experts and packs the copies onto GPUs.`,
     },
     {
       type: 'play',
@@ -43,9 +45,11 @@ Notice what EPLB really is: **consistent hashing with live rebalancing** — you
     },
     {
       type: 'prose',
-      md: `## Mechanism 3: dual-batch overlap — hide the network under compute
+      md: `## Mechanism 3: overlap — hide the network under compute
 
-Even with DeepEP, the all-to-all costs real microseconds. The fix is the oldest trick in the latency book (T2.L6): never wait. **Dual-batch overlap** splits the batch into two micro-batches and pipelines them: while micro-batch A does attention/FFN compute, micro-batch B does its dispatch/combine transfer. GPU SMs and the network are both busy, always. Latency of the all-to-all disappears *from the critical path* — not removed, hidden.
+Even with DeepEP, the all-to-all costs real microseconds. The fix is the oldest trick in the latency book (T2.L6): never wait. DeepSeek's **dual-batch overlap** splits a batch of requests into two micro-batches. In *prefill* the two run alternately: while micro-batch A computes, micro-batch B does its dispatch/combine transfer, and the cost of one hides behind the compute of the other.
+
+*Decode* is different. DeepSeek writes that "the execution durations of different stages are unbalanced", so it subdivides the attention layer into two steps and uses "a 5-stage pipeline" for the overlap. Two equal alternating halves would leave gaps when the stages are unequal. In both phases the all-to-all leaves the critical path — not removed, hidden.
 
 The same pattern appears as DualPipe in training and as "PDL" (programmatic dependent launch) in NVIDIA's decode optimizations. When you see compute and communication alternating, overlap them. When you see a barrier, ask what could have been running during it.`,
     },
@@ -67,7 +71,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Wide EP is **your sharded cache fleet with a fan-out router**, and the three mechanisms map one-to-one: DeepEP ≈ the RPC layer with separate bulk and latency paths (gRPC streaming vs unary), EPLB ≈ consistent hashing + hot-key replication (your memcached tier's hot-key problem, with GPUs), dual-batch overlap ≈ every event-loop lesson from T2.L6 — never block, interleave. The genuinely new thing is only the payload: tokens instead of requests, experts instead of shards.`,
+      md: `Wide EP is **your sharded cache fleet with a fan-out router**, and the three mechanisms map one-to-one: DeepEP ≈ the RPC layer with separate bulk and latency paths (gRPC streaming vs unary), EPLB ≈ hot-key replication plus bin-packing (your memcached tier's hot-key problem, with GPUs; the placement is computed from load, not from a hash), overlap ≈ every event-loop lesson from T2.L6 — never block, interleave. The genuinely new thing is only the payload: tokens instead of requests, experts instead of shards.`,
     },
     {
       type: 'field-note',
@@ -110,10 +114,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
           ],
           correct: [1],
           explanation:
-            'The barrier costs the MAX load unless balanced. EPLB measures per-expert load and uses replication + reassignment to flatten it — consistent hashing with live rebalancing, for experts.',
+            'The barrier costs the MAX load unless balanced. EPLB takes estimated per-expert load, duplicates the heavy experts and packs the copies onto GPUs heuristically to flatten it — a packing problem, not a hashing one.',
           why: [
             'Token dropping is a capacity-factor trick that harms quality. EPLB leaves routing untouched and changes where experts live and how many copies exist.',
-            'Right: EPLB measures per-expert load, replicates the hottest experts and reassigns placement, so the barrier costs about the mean load instead of the max.',
+            'Right: EPLB works from estimated per-expert load, replicates the hottest experts and packs the copies onto GPUs, so the barrier costs about the mean load instead of the max.',
             'Smaller batches make expert load noisier, not flatter, because uniformity comes from large-batch statistics. EPLB balances through placement and replication instead.',
             'Barrier delay comes from load skew, not faulty hardware, and rerouting tokens changes which expert answers them, which hurts quality. EPLB balances load without changing routing.',
           ],
@@ -129,30 +133,30 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
           ],
           correct: [1],
           explanation:
-            'Compute and communication alternate every layer; overlapping two micro-batches keeps both resources busy. It is T2.L6\'s never-block principle applied to a distributed forward pass.',
+            'Compute and communication alternate every layer; overlapping keeps both resources busy. In prefill DeepSeek alternates two micro-batches; in decode it splits attention into two steps and runs a 5-stage pipeline. It is T2.L6\'s never-block principle applied to a distributed forward pass.',
           why: [
             'Model co-location is a different concern. Dual-batch overlap splits one batch into two micro-batches of the same model; both halves run the same weights.',
-            'Right: while micro-batch A computes attention and FFN, micro-batch B runs its dispatch or combine, so SMs and network stay busy and the transfer leaves the critical path.',
+            'Right: in prefill, while micro-batch A computes, micro-batch B runs its dispatch or combine, so SMs and network stay busy and the transfer leaves the critical path. Decode uses a staged pipeline instead.',
             'That is large-batch load balancing (T6.L1). Dual-batch overlap keeps the same total tokens and splits them in two to overlap phases, not to enlarge the batch.',
             'Replication is EPLB\'s tool, and replicated experts still need dispatch and combine. Dual-batch overlap leaves placement alone and overlaps communication with compute.',
           ],
           kcs: ['t6.comm-overlap'],
         },
         {
-          q: 'DeepEP ships two dispatch protocols because…',
+          q: 'DeepEP\'s first release shipped separate high-throughput and low-latency kernel sets because…',
           options: [
-            'Prefill wants bandwidth from large transfers, while decode wants low latency from pre-registered buffers and no handshake',
+            'Prefill wants bandwidth from large batched transfers, while decode wants the least delay from small per-step transfers',
             'One mode moves tokens within a node over the fast local links, while the other moves them across nodes over the slower network fabric',
             'The low-latency mode replaced a buggy original, while the older mode stays for compatibility with earlier deployments',
             'Training and inference use different expert layouts, while each needs a routine matched to its weight format',
           ],
           correct: [0],
           explanation:
-            'Phase-specific protocols on a shared fabric — the same reason you use different RPC shapes for bulk vs interactive traffic. Latency-critical decode cannot afford per-layer negotiation.',
+            'Phase-specific paths on a shared fabric — the same reason you use different RPC shapes for bulk vs interactive traffic. DeepEP\'s current API has since unified the two behind one interface; the bandwidth-versus-latency trade is what stayed.',
           why: [
-            'Right: the same fabric serves two workloads. Prefill saturates links with big batched transfers; decode uses pre-registered buffers and no handshake so each layer\'s latency stays small.',
+            'Right: the same fabric serves two workloads. Prefill saturates links with big batched transfers; decode runs small transfers where each layer\'s delay matters most.',
             'The split is by phase, not by fabric tier. The modes differ in whether they optimize prefill bandwidth or decode latency, and one deployment uses both over the same cluster.',
-            'Both modes are first-class paths. The split reflects physics: large transfers amortize overheads, while decode needs registered buffers and no handshake on every layer.',
+            'Both kernel sets were first-class paths. The split reflects physics: large transfers amortize overheads, while decode needs the least delay per layer.',
             'The split is by phase, not by train versus serve. The same model dispatches differently in prefill and decode because the bandwidth and latency tradeoff differs.',
           ],
           kcs: ['t6.comm-overlap', 't6.all-to-all'],
@@ -162,7 +166,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
     {
       type: 'deepdive',
       title: 'Read the reproduction',
-      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers including the 545% margin day and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
+      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers, including the day's "cost profit margin of 545%" (theoretical revenue at R1 list prices over cost) and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
     },
   ],
   kcs: ['t6.ep-economics', 't6.expert-load-balance', 't6.comm-overlap'],
@@ -185,9 +189,9 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         prompt:
           'How does dual-batch overlap hide the all-to-all, and what does it not remove?',
         model:
-          'The batch splits into two micro-batches. While one computes attention or FFN, the other runs its dispatch or combine, so the GPUs and the network are both busy. The transfer leaves the critical path but still happens: if it takes longer than the compute it hides under, the stall returns.',
+          'In prefill the batch splits into two micro-batches: while one computes, the other runs its dispatch or combine, so the GPUs and the network are both busy. Decode uses a 5-stage pipeline with attention split in two, because its stages are unequal. The transfer leaves the critical path but still happens: if it takes longer than the compute it hides under, the stall returns.',
         ideas: [
-          'Two micro-batches alternate: one computes while the other dispatches or combines',
+          'In prefill two micro-batches alternate: one computes while the other dispatches or combines; decode uses a 5-stage pipeline',
           'The transfer is hidden behind compute, so it leaves the critical path',
           'It is hidden, not removed: a transfer longer than the compute it hides under still stalls',
         ],
