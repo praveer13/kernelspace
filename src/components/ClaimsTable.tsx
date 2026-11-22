@@ -48,15 +48,16 @@ function inOrder(groups: readonly Claim[]): Claim[] {
 }
 
 async function loadPhysicsGroups(): Promise<readonly Claim[]> {
-  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }, { KVPOOL_CLAIMS }, { PLATFORMS_CLAIMS }, { LANDSCAPE_T6_CLAIMS }, { ECONOMICS_CLAIMS }] = await Promise.all([
+  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }, { KVPOOL_CLAIMS }, { GPU_LIMITS_CLAIMS }, { PLATFORMS_CLAIMS }, { LANDSCAPE_T6_CLAIMS }, { ECONOMICS_CLAIMS }] = await Promise.all([
     import('@/data/claims/lazy/physics'),
     import('@/data/claims/lazy/ix-points'),
     import('@/data/claims/lazy/kvpool'),
+    import('@/data/claims/lazy/gpu-limits'),
     import('@/data/claims/lazy/platforms'),
     import('@/data/claims/lazy/landscape-t6'),
     import('@/data/claims/lazy/economics'),
   ])
-  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...PLATFORMS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS]
+  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS]
 }
 
 export function ClaimsTable({ className }: { className?: string }) {
