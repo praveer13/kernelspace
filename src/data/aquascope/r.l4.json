@@ -63,7 +63,7 @@
         {"line":3,"col":11,"path":"first","needs":"R","has":"RO"},
         {"line":4,"col":6,"path":"scores","needs":"RW","has":"RWO"},
         {"line":5,"col":15,"path":"scores","needs":"RW","has":"RWO"},
-        {"line":6,"col":3,"path":"all","needs":"RW","has":"RW"},
+        {"line":6,"col":3,"path":"*all","needs":"RW","has":"RW"},
         {"line":7,"col":21,"path":"scores","needs":"R","has":"RWO"}
       ]
     }

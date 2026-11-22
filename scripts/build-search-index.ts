@@ -26,8 +26,10 @@ export const INDEX_PATH = 'src/data/search-index.json'
 /**
  * The claim groups the index leaves out (S5-D36): the physics inputs and the generated per-point claims are reached from the
  * physics tab and /freshness?tab=claims, and about 150 more rows would add several KB to an index that has 757 B of headroom.
+ * `lazy/rust-lang` joined them in K0-C45: the index had 5 B of gzip headroom left, and its one claim (a dated status clause the two
+ * Polonius sentences read) costs about 33 B; it stays on /freshness?tab=claims.
  */
-export const UNINDEXED_GROUPS: readonly string[] = ['lazy/physics', 'lazy/ix-points']
+export const UNINDEXED_GROUPS: readonly string[] = ['lazy/physics', 'lazy/ix-points', 'lazy/rust-lang']
 
 /**
  * Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk

@@ -1,3 +1,4 @@
+import { claimCite } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -170,7 +171,7 @@ b[0] += 1;`,
     },
     {
       type: 'prose',
-      md: `**3. A conditional return.** The borrow from **v.first()** flows into the return value, so the checker keeps **v** at R for the rest of the function, even on the path where the **if let** failed and nothing is borrowed. The push is rejected with E0502 although no path can dangle:`,
+      md: `**3. A conditional return.** The borrow from **v.first()** flows into the return value, so the checker keeps **v** at R for the rest of the function, even on the path where the **if let** failed and nothing is borrowed. The push is rejected with E0502 on stable Rust (${claimCite('status.rust.polonius')}) although no path can dangle:`,
     },
     {
       type: 'code',

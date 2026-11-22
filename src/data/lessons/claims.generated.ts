@@ -54,6 +54,9 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 2,
     cite: "2",
   },
+  "status.rust.polonius": {
+    cite: "as of Rust 1.100.0, Nov 2026",
+  },
   "synthetic.kv.paged-waste": {
     value: 4,
     cite: "4",
