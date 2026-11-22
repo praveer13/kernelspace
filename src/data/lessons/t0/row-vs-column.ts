@@ -56,7 +56,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. One finishes in about **0.4 seconds**; the other takes **8 seconds**. Twenty times slower, and the slow one is arguably the more "natural" way to write it.
+      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. Compiled C on one desktop (a 13th-generation Core i5, gcc 14.3 with -O2) took about **0.04 seconds** for one and about **0.85 seconds** for the other: roughly twenty times slower, and the slow one is arguably the more "natural" way to write it. Those are measured times, good to about 20%; other machines differ, and the ratio is the part to trust. The simulator below is a model, not a stopwatch: it prints round figures of 0.4 seconds and 8 seconds, ten times slower than the measurement and with the same twenty-fold gap.
 
 The difference is a single loop-ordering decision: whether consecutive iterations touch consecutive *memory addresses*. This lesson makes you run that experiment yourself, then explains exactly why the hardware cares so much — cache lines, prefetchers, and the shape of 2D arrays in memory. It is the first time in the course you will feel a 20× penalty with your own hands, and it will not be the last.`,
     },
@@ -87,19 +87,19 @@ A = np.random.rand(8192, 8192)   # row-major ("C order")
 def row_sum(A):
     total = 0.0
     for i in range(A.shape[0]):
-        for j in range(A.shape[1]):
-            total += A[i, j]        # consecutive addresses
+        total += A[i, :].sum()      # one row: 64 KiB of consecutive addresses
     return total
 
 def col_sum(A):
     total = 0.0
     for j in range(A.shape[1]):
-        for i in range(A.shape[0]):
-            total += A[i, j]        # 64 KiB stride — cache killer
+        total += A[:, j].sum()      # one column: 8192 loads, 64 KiB apart
     return total
 
-# (in practice: A.sum() — vectorized, sequential, ~100x faster
-#  than either interpreted loop; the benchmark sim uses C-speed loops)`,
+# Each call does its sum inside numpy's C loop, so the interpreter adds only
+# 8192 calls per walk and the memory order decides the time. A per-element
+# A[i, j] loop would bury the gap under interpreter overhead.
+# In practice: A.sum() does the whole matrix in one sequential pass.`,
         },
         {
           label: 'Java',
