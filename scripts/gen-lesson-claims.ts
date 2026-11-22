@@ -1,31 +1,98 @@
 /**
  * Writes src/data/lessons/claims.generated.ts: the claim values lesson modules read while they evaluate (K0-Z2 fix round).
  * A lesson reads them from this snapshot, so the lessons registry depends on no claims chunk and awaits nothing.
- * Run `bun scripts/gen-lesson-claims.ts` after a claim in LESSON_CLAIMS changes; `--check` exits 1 when the file is stale.
- * tests/claims/lesson-claims.test.ts holds the same check, and that every id a lesson reads is listed here.
+ * The ids are collected from the readers (claimNumber, claimCite, claimRelease under src/data/lessons/ and in any file that
+ * imports the reader), so no list is kept by hand. Run `bun scripts/gen-lesson-claims.ts` after a claim or a read changes;
+ * `--check` exits 1 when the file is stale; `--out <path>` points the check or the write at another file.
+ * tests/claims/k0-e2-cli.test.ts runs the command in the unit suite.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { claimNumber, getClaim } from '../src/data/claims'
+import '../src/data/claims/all'
 import { claimCite, claimRelease } from '../src/data/claims/cite'
-import '../src/data/claims/lazy/kvpool'
 
-/** Every id a lesson module reads through ../claims. Add the id here, then regenerate. */
-export const LESSON_CLAIMS = [
-  'production.vllm.block-size',
-  'production.vllm.extensible-kv-cache',
-  'production.vllm.gpu-memory-utilization',
-  'serving.pagedattention.paper-block-size',
-  'serving.pagedattention.fig2-vllm-token-states',
-  'synthetic.kv.paged-waste',
-  'model.kv.static-utilization-low',
-  'model.kv.static-utilization-high',
-  'model.llama3-8b.kv-bytes-per-token',
-  'serving.pagedattention.throughput-gain-low',
-  'serving.pagedattention.throughput-gain-high',
-  'serving.pagedattention.ft-request-rate',
-  'serving.pagedattention.kernel-overhead-low',
-  'serving.pagedattention.kernel-overhead-high',
-]
+const SRC = fileURLToPath(new URL('../src/', import.meta.url))
+const LESSONS = `${SRC}data/lessons/`
+
+function tsFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((f) => {
+    const p = `${dir}${f}`
+    return statSync(p).isDirectory() ? tsFiles(`${p}/`) : /\.tsx?$/.test(p) ? [p] : []
+  })
+}
+
+/** The module specifiers of one file: static imports, side-effect imports, re-exports and import(). */
+function specifiers(src: string): string[] {
+  return [...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]!)
+}
+
+/** A '@/' or relative specifier as an absolute path without extension; null for a package. */
+function targetOf(file: string, spec: string): string | null {
+  if (spec.startsWith('@/')) return `${SRC}${spec.slice(2)}`
+  if (spec.startsWith('.')) return new URL(spec, `file://${file}`).pathname
+  return null
+}
+
+function isClaimsPath(target: string): boolean {
+  return target === `${SRC}data/claims` || target.startsWith(`${SRC}data/claims/`) || target.startsWith(`${SRC}data/claims.`)
+}
+
+/** The file a path stands for: the path itself, then .ts, .tsx, /index.ts, /index.tsx; null when none exists. */
+function resolveFile(target: string): string | null {
+  for (const c of [target, `${target}.ts`, `${target}.tsx`, `${target}/index.ts`, `${target}/index.tsx`]) {
+    if (existsSync(c) && statSync(c).isFile()) return c
+  }
+  return null
+}
+
+/** The specifiers of one file that land in src/data/claims, read from that file alone. */
+export function claimImports(file: string, src: string): string[] {
+  return specifiers(src).filter((spec) => {
+    const t = targetOf(file, spec)
+    return t !== null && isClaimsPath(t)
+  })
+}
+
+/**
+ * Every path from a file under src/data/lessons/ to src/data/claims, through modules outside src/data/lessons/ too.
+ * Depth first with a visited set; a module inside src/data/lessons/ is scanned as a lesson file of its own.
+ * Each result reads "importer -> specifier" with the importer relative to src/.
+ */
+export function claimPathsFrom(entry: string, visited: Set<string> = new Set()): string[] {
+  if (visited.has(entry)) return []
+  visited.add(entry)
+  const found: string[] = []
+  for (const spec of specifiers(readFileSync(entry, 'utf8'))) {
+    const t = targetOf(entry, spec)
+    if (t === null) continue
+    if (isClaimsPath(t)) {
+      found.push(`${entry.slice(SRC.length)} -> ${spec}`)
+      continue
+    }
+    const next = resolveFile(t)
+    if (next && !next.startsWith(LESSONS)) found.push(...claimPathsFrom(next, visited))
+  }
+  return found
+}
+
+/** The ids read as claimNumber('<id>'), claimCite('<id>') or claimRelease('<id>') in the lessons and in every importer of the reader. */
+export function lessonClaimReads(): { ids: string[]; files: string[] } {
+  const reader = `${LESSONS}claims`
+  const files = tsFiles(SRC).filter((f) => {
+    if (f.endsWith('/lessons/claims.ts') || f.endsWith('claims.generated.ts')) return false
+    if (f.startsWith(LESSONS)) return true
+    return specifiers(readFileSync(f, 'utf8')).some((spec) => targetOf(f, spec) === reader)
+  })
+  const ids = new Set<string>()
+  for (const f of files) {
+    for (const m of readFileSync(f, 'utf8').matchAll(/claim(?:Number|Cite|Release)\(\s*'([^']+)'/g)) ids.add(m[1]!)
+  }
+  return { ids: [...ids].sort(), files }
+}
+
+/** Every id a lesson, or a file that imports ../claims, reads. Collected from the readers; nothing is typed here. */
+export const LESSON_CLAIMS: string[] = lessonClaimReads().ids
 
 export const OUT = new URL('../src/data/lessons/claims.generated.ts', import.meta.url)
 
@@ -45,11 +112,18 @@ function claimCite_(id: string): string {
 }
 
 if (import.meta.main) {
+  const at = process.argv.indexOf('--out')
+  const out = at >= 0 ? process.argv[at + 1] : undefined
+  if (at >= 0 && !out) {
+    console.error('--out needs a path')
+    process.exit(2)
+  }
+  const file = out ?? OUT
   const text = render()
   if (process.argv.includes('--check')) {
-    if (readFileSync(OUT, 'utf8') !== text) {
+    if (readFileSync(file, 'utf8') !== text) {
       console.error('src/data/lessons/claims.generated.ts is stale; run bun scripts/gen-lesson-claims.ts')
       process.exit(1)
     }
-  } else writeFileSync(OUT, text)
+  } else writeFileSync(file, text)
 }

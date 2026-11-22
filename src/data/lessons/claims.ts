@@ -6,13 +6,13 @@
  * for three claims chunks (and fail with them). The snapshot is plain data: no import, no await. tests/claims/lesson-claims.test.ts
  * fails when it drifts from the registry or when a lesson reads an id it does not hold.
  *
- * A lesson that reads a new claim: add the id to LESSON_CLAIMS in scripts/gen-lesson-claims.ts and run the script.
+ * A lesson that reads a new claim: read it through this module and run `bun scripts/gen-lesson-claims.ts`; the script collects the ids.
  */
 import { LESSON_CLAIM_VALUES } from './claims.generated'
 
 function row(id: string) {
   const r = Object.hasOwn(LESSON_CLAIM_VALUES, id) ? LESSON_CLAIM_VALUES[id] : undefined
-  if (!r) throw new Error(`lesson claim ${id} is not in claims.generated.ts; add it to scripts/gen-lesson-claims.ts and run it`)
+  if (!r) throw new Error(`lesson claim ${id} is not in claims.generated.ts; read it through this module and run bun scripts/gen-lesson-claims.ts`)
   return r
 }
 
