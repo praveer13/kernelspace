@@ -10,6 +10,7 @@ import { LAZY_GROUP_HOMES, lazyGroupFor } from '@/data/claims/homes'
 import { FIELD_CLAIMS } from '@/data/claims/lazy/field'
 import { IX_POINT_CLAIMS } from '@/data/claims/lazy/ix-points'
 import { ECONOMICS_CLAIMS } from '@/data/claims/lazy/economics'
+import { ENGINES_STATUS_CLAIMS } from '@/data/claims/lazy/engines-status'
 import { KVPOOL_CLAIMS } from '@/data/claims/lazy/kvpool'
 import { GPU_LIMITS_CLAIMS } from '@/data/claims/lazy/gpu-limits'
 import { LANDSCAPE_T6_CLAIMS } from '@/data/claims/lazy/landscape-t6'
@@ -190,7 +191,7 @@ describe('the full registry (all.ts)', () => {
     const eager = [...HARDWARE_CLAIMS, ...MODEL_CLAIMS, ...PRICE_CLAIMS, ...PRODUCTION_CLAIMS, ...ENGINE_CLAIMS, ...SERVING_CLAIMS, ...ZOO_CLAIMS]
     const held = new Set(ids(eager))
     // a claim an earlier group holds is skipped, as registerClaims skips it
-    const lazy = ids([...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS, ...FIELD_CLAIMS, ...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS, ...RUST_LANG_CLAIMS]).filter((id, i, all) => all.indexOf(id) === i && !held.has(id))
+    const lazy = ids([...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS, ...FIELD_CLAIMS, ...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...ENGINES_STATUS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS, ...RUST_LANG_CLAIMS]).filter((id, i, all) => all.indexOf(id) === i && !held.has(id))
     expect(ids(everything.ALL_CLAIMS.slice(0, eager.length))).toEqual(ids(CLAIMS.slice(0, eager.length)))
     expect(ids(everything.ALL_CLAIMS.slice(eager.length))).toEqual(lazy)
     // a group imported by all.ts but left out of ALL_CLAIMS registers into CLAIMS, so the two sets differ

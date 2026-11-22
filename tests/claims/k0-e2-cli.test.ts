@@ -58,6 +58,8 @@ describe('the ids are collected from the readers, not typed', () => {
         'serving.pagedattention.kernel-overhead-high',
         'status.rust.polonius',
         'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot',
+        'production.sglang.chunked-prefill-size',
+        'status.vllm.speculative-methods',
       ]),
     )
     expect(LESSON_CLAIMS).toEqual([...LESSON_CLAIMS].sort())
