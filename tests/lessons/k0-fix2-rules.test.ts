@@ -66,7 +66,7 @@ describe("the block-table exercise's sweep text follows the sim", () => {
   })
 
   test('the lesson names the slider range, read from no claim', () => {
-    expect(lessonText('t5.l5')).toContain(`Predict the tail waste at ${hi}-token blocks for a 48-token prompt, then sweep block size ${lo} → ${hi}: name what a ${hi}-token block saves and what it costs.`)
+    expect(lessonText('t5.l5')).toContain(`Predict the tail waste at ${hi}-token blocks for a 40-token prompt, then sweep block size ${lo} → ${hi}: name what a ${hi}-token block saves and what it costs.`)
     const line = read('src/data/lessons/t5/pagedattention-deep-dive.ts')
       .split('\n')
       .find((l) => l.includes('Predict the tail waste'))
