@@ -36,3 +36,27 @@ describe('t4.l4 occupancy example: 128 registers/thread, 100 KiB shared/block, 6
     expect(src).not.toContain('128 registers/thread and 100 KiB shared/block might fit only 4')
   })
 })
+
+describe('t4.l7 spiral item: the same example, with the key naming shared memory', () => {
+  const src = readFileSync('src/data/lessons/t4/quantization.ts', 'utf8')
+
+  test('the stem states the example whose resident warps the claims give as four', () => {
+    expect(src).toContain('only four warps resident on each multiprocessor')
+    expect(src).toContain('128 registers each, and its blocks of 64 threads use 100 KiB of shared memory each')
+    expect(Math.floor(smemKiB() / 100) * (64 / 32)).toBe(4)
+    expect(Math.floor(regs() / (128 * 32))).toBe(16)
+  })
+
+  test('the key names shared memory, and no longer blames registers', () => {
+    expect(src).toContain("'Use less shared memory per block, with more blocks then fitting to cover each wait'")
+    expect(src).toContain('here shared memory, lets more warps hide the wait')
+    expect(src).not.toContain('registers cap how many warps fit')
+    expect(src).not.toContain('here registers, lets more warps')
+  })
+
+  test('the stat hint says one GPU instead of two (140 GB over 80 GB per GPU rounds up to 2)', () => {
+    expect(src).toContain('One GPU instead of two.')
+    expect(Math.ceil(140 / (getClaim('hw.h100-sxm.hbm-capacity').value as number))).toBe(2)
+    expect(Math.ceil(35 / (getClaim('hw.h100-sxm.hbm-capacity').value as number))).toBe(1)
+  })
+})
