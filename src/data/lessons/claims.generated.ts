@@ -16,6 +16,11 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 131072,
     cite: "131072",
   },
+  "production.sglang.chunked-prefill-size": {
+    value: 8192,
+    cite: "8,192 tokens/chunk as of SGLang v0.5.23, read 2026-11-21",
+    release: "SGLang v0.5.23",
+  },
   "production.vllm.block-size": {
     value: 64,
     cite: "64 tokens/block as of vLLM v0.34.0, read 2026-11-21",
@@ -60,6 +65,14 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   },
   "status.rust.polonius": {
     cite: "as of Rust 1.100.0, Nov 2026",
+  },
+  "status.trtllm.enable-chunked-prefill-default": {
+    cite: "False as of NVIDIA/TensorRT-LLM v1.4.0rc4, read 2026-11-22",
+    release: "NVIDIA/TensorRT-LLM v1.4.0rc4",
+  },
+  "status.vllm.speculative-methods": {
+    cite: "EAGLE, MTP, draft, n-gram, suffix as of vLLM v0.34.0, read 2026-11-22",
+    release: "vLLM v0.34.0",
   },
   "synthetic.kv.paged-waste": {
     value: 4,
