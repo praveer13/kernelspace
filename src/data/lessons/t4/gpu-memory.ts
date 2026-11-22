@@ -83,8 +83,8 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       type: 'statline',
       stats: [
         { value: '256 KiB', label: 'registers / SM', hint: '64K × 32-bit registers per SM on H100 — the fastest memory on the chip.' },
-        { value: '228 KiB', label: 'shared mem / SM', hint: 'Programmer-managed SRAM per SM (H100); ~20–30× faster than HBM; block-scoped.' },
-        { value: '~50 MiB', label: 'L2 (H100)', hint: 'Shared across SMs; the KV cache\'s second home.' },
+        { value: '228 KiB', label: 'shared mem / SM', hint: 'Programmer-managed SRAM per SM (H100); about 6× HBM in this course\'s simulator, an order of magnitude on an A100; block-scoped.' },
+        { value: '~50 MiB', label: 'L2 (H100)', hint: 'Shared across SMs; a cache for the kernel running now, too small to hold weights or KV between steps.' },
         { value: '80 GB · 3.35 TB/s', label: 'HBM3 (H100)', hint: 'Where weights and KV cache live; the wall decode runs into.' },
       ],
     },
@@ -94,9 +94,9 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
 
 **Registers** (~256 KiB per SM, 64K 32-bit registers): per-thread, zero-latency-ish, allocated at compile time. Run out and the compiler *spills* to local memory — which is secretly HBM, so spills are silent bandwidth leaks. (T1's stack, but the spill goes to the slow tier.)
 
-**Shared memory / SRAM** (~228 KiB per SM on H100, configurable split with L1): the signature GPU feature. A block of threads (up to 1024) shares this scratchpad *explicitly*: the kernel loads a tile from HBM into shared memory, synchronizes the block, then computes from SRAM at ~20–30× HBM's per-SM bandwidth. Every fast kernel you've heard of — tiled matmul, FlashAttention — is a choreography of this staging.
+**Shared memory / SRAM** (~228 KiB per SM on H100, configurable split with L1): the signature GPU feature. A block of threads (up to 1024) shares this scratchpad *explicitly*: the kernel loads a tile from HBM into shared memory, synchronizes the block, then computes from SRAM at several times HBM's bandwidth. The FlashAttention paper puts an A100's SRAM at about 19 TB/s against 1.5–2.0 TB/s of HBM, an order of magnitude, and the gap narrows on the H100: this course's simulator uses 20 TB/s, about 6× the H100's HBM, as a teaching constant, because NVIDIA publishes no per-SM figure for the H100. Every fast kernel you've heard of — tiled matmul, FlashAttention — is a choreography of this staging.
 
-**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM, and deeply relevant to serving: hot KV blocks and hot weights can live here between steps.
+**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM. At ~50 MiB it holds none of a 16 GB weight stream between decode steps and little of a serving KV cache, so it earns its keep inside one kernel, where tiles that neighbouring blocks share (T4.L6's launch order) are read from HBM once.
 
 **HBM** (80 GB at 3.35 TB/s on H100): stacked DRAM sitting on the same package as the die — 5× the bandwidth of server DDR, at datacenter prices. This is where a 70B model's weights (140 GB in FP16 → 2 GPUs) and every sequence's KV cache live. When T5 says "the KV cache dominates HBM," this is the number being dominated.`,
     },
@@ -121,7 +121,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       ],
       steps: [
         { caption: 'Each SM owns registers and shared memory outright — other SMs can\'t see them. Fast because local; small because SRAM.', active: ['sm0', 'sm1', 'sm2'] },
-        { caption: 'L2 sits between every SM and HBM: hot weights/KV blocks get second chances here. Cross-SM communication (atomics, block cooperation) also flows through it.', active: ['l2'], edges: ['sm0->l2', 'l2->hbm'] },
+        { caption: 'L2 sits between every SM and HBM: tiles that neighbouring blocks share get a second read here, within one kernel. Cross-SM communication (atomics, block cooperation) also flows through it.', active: ['l2'], edges: ['sm0->l2', 'l2->hbm'] },
         { caption: 'HBM: the 80 GB main stage. Weights stream from here every forward pass; the KV cache grows here every decode step. 3.35 TB/s sounds like a lot until 16 GB of weights must move per token.', active: ['hbm'], edges: ['l2->hbm'] },
         { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is where KV offload and model streaming go, and V0 could use it as a swap tier for preempted sequences (V1 recomputes instead; T2.L3). Offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
       ],
