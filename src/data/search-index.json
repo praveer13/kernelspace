@@ -449,6 +449,7 @@
 [0,"status.dynamo.transport","Dynamo default transport","TCP",""],
 [7,"chromium.memory-safety-share","Chromium memory-unsafe share",70,"%"],
 [7,"android.memory-safety-share","Android memory-safety share","below 20","%"],
+[7,"wasi.version","WASI 0.3 release (native async)","WASI 0.3.0, shipped 2026-06-11",""],
 [7,"vllm.speculative-methods","vLLM spec-decode methods","EAGLE, MTP, draft, n-gram, suffix",""],
 [7,"trtllm.enable-chunked-prefill-default","TensorRT-LLM chunked prefill default","False",""],
 [7,"dynamo.kvbm.removal-target","Dynamo release that KVBM (KV Block Manager) is targeted for removal in","v1.7.0",""],

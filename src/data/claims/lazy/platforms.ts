@@ -55,6 +55,21 @@ export const PLATFORMS_CLAIMS: Claim[] = [
     boundary:
       'Google says the data covers first-party and third-party code changes to the Android platform across C, C++, Java, Kotlin and Rust, published before the end of 2025, with the 90-day patch window leaving results very likely close to final. It is the platform total, not a measurement of Rust alone.',
   },
+  {
+    id: 'status.wasi.version',
+    kind: 'status',
+    value: 'WASI 0.3.0, shipped 2026-06-11',
+    label: 'WASI 0.3 release (native async)',
+    source: {
+      url: 'https://wasi.dev/roadmap',
+      title: 'WASI.dev Roadmap',
+      quote: 'WASI 0.3.0 was an exception to the release train, shipping on June 11, 2026 following a WASI Subgroup vote.',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary:
+      'The roadmap lists 0.3.1 as shipped on August 11, 2026 and says "WASI 0.3 adds native async support to the Component Model", with async func, stream<T> and future<T>. The Wasm 3.0 standard (webassembly.org news, published September 17, 2025) lists "Garbage collection" among its features. The roadmap calls its dates provisional.',
+  },
 ]
 
 registerClaims(PLATFORMS_CLAIMS)

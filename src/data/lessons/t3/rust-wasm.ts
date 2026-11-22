@@ -1,3 +1,4 @@
+import { claimCite } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -73,7 +74,7 @@ This course's simulators obey it: the allocator/VM/roofline cores run entirely i
     {
       type: 'callout',
       variant: 'info',
-      md: `Server-side Wasm is the reason to care beyond this course: **WASI** gives modules a POSIX-ish syscall surface; **wasmtime** runs them with µs cold starts (no OS process, no container); Cloudflare Workers, Fastly Compute, and Fermyon Spin sell it as the post-container isolation unit; Envoy/Postgres/Kafka use it for **safe plugins** — untrusted extension code that can't segfault the host. If you build a platform that runs customer code, Wasm is the sandbox your security team will actually approve.`,
+      md: `Server-side Wasm is the reason to care beyond this course: **WASI** began as a POSIX-like call list (preview 1); since 0.2 it is typed interfaces on the Component Model, and 0.3 adds native async (${claimCite('status.wasi.version')}); **wasmtime** runs them with µs cold starts (no OS process, no container); Cloudflare Workers, Fastly Compute, and Fermyon Spin sell it as the post-container isolation unit; Envoy/Postgres/Kafka use it for **safe plugins** — untrusted extension code that can't segfault the host. If you build a platform that runs customer code, Wasm is the sandbox your security team will actually approve.`,
     },
     {
       type: 'prose',
@@ -114,7 +115,7 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
           ],
           correct: [1],
           explanation:
-            'GC languages must ship a runtime into the module (or wait for WasmGC); Rust\'s runtime is nearly nothing. Same code, native and browser — that\'s how this site\'s simulators run identical logic everywhere.',
+            'GC languages must ship a runtime into the module (or use Wasm GC, part of Wasm 3.0); Rust\'s runtime is nearly nothing. Same code, native and browser — that\'s how this site\'s simulators run identical logic everywhere.',
           why: [
             'Rust targets Wasm through LLVM, the same backend C and C++ use. There is no special codegen path; the advantage is having no runtime to ship, not a faster backend.',
             'Right: with no collector or runtime to embed, a Rust library compiles to wasm32 with small shims, and wasm-bindgen generates the JavaScript glue.',

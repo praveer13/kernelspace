@@ -62,6 +62,7 @@ describe('the ids are collected from the readers, not typed', () => {
         'status.vllm.speculative-methods',
         'status.trtllm.enable-chunked-prefill-default',
         'hw.h100-sxm.max-warps-per-sm',
+        'status.wasi.version',
       ]),
     )
     expect(LESSON_CLAIMS).toEqual([...LESSON_CLAIMS].sort())
