@@ -314,7 +314,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         'Predict how many blocks stay free when beam C forks from B, then fork it: the prefix blocks gain a reference and memory is paid once.',
         'Predict how many tokens of KV the copy-on-write copies when B writes into the shared block, then diverge B at L2.',
         'Predict how many blocks preempting seq A returns to the free queue, then drive the free queue to zero and preempt it: compare swap-to-CPU (the V0 option) with recompute (all V1 does).',
-        `Predict the tail waste at ${SIM_BLOCK}-token blocks for a 48-token prompt, then sweep block size 4 → ${SIM_BLOCK}: name what a ${SIM_BLOCK}-token block saves and what it costs.`,
+        `Predict the tail waste at ${SIM_BLOCK}-token blocks for a 40-token prompt, then sweep block size 4 → ${SIM_BLOCK}: name what a ${SIM_BLOCK}-token block saves and what it costs.`,
       ],
       note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class's worth of logic that doubled the industry's effective GPU capacity.`,
     },

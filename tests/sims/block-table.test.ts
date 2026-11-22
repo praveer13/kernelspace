@@ -15,7 +15,10 @@ import { SimHostContext, createFinishedStore, createObservationBus, gradePredict
 import type { SimHostInternal } from '../../src/lib/sims/host'
 import {
   BLOCK_SIZE,
+  DIVERGE_AT,
   INITIAL_POOL,
+  PROMPT_BLOCKS,
+  PROMPT_TOKENS,
   NEW_REQUEST_BLOCKS,
   OBSERVE,
   PHONE_MODELS,
@@ -111,16 +114,17 @@ describe('the four outcome tasks', () => {
     }
   })
 
-  test('the answers are 7 blocks, 16 tokens, 0 blocks and 16 tokens, and the obvious wrong answers miss', () => {
+  test('the answers are 7 blocks, 8 tokens, 0 blocks and 24 tokens, and the obvious wrong answers miss', () => {
     expect(grade('blk.share', 7, 7)?.ok).toBe(true)
     expect(grade('blk.share', 4, 7)?.ok).toBe(false) // thought the fork copies the prompt
-    expect(grade('blk.cow', 16, 16)?.ok).toBe(true)
-    expect(grade('blk.cow', 48, 16)?.ok).toBe(false) // thought the whole prefix is copied
-    expect(grade('blk.cow', 1, 16)?.ok).toBe(false) // thought only the written token is copied
+    expect(grade('blk.cow', 8, 8)?.ok).toBe(true)
+    expect(grade('blk.cow', 40, 8)?.ok).toBe(false) // thought the whole prefix is copied
+    expect(grade('blk.cow', 1, 8)?.ok).toBe(false) // thought only the written token is copied
+    expect(grade('blk.cow', 16, 8)?.ok).toBe(false) // thought a whole block is copied
     expect(grade('blk.preempt', 0, 0)?.ok).toBe(true)
     expect(grade('blk.preempt', 3, 0)?.ok).toBe(false) // thought A's three blocks come back
-    expect(grade('blk.sweep', 16, 16)?.ok).toBe(true)
-    expect(grade('blk.sweep', 0, 16)?.ok).toBe(false) // 48 is a multiple of 16, not of 64
+    expect(grade('blk.sweep', 24, 24)?.ok).toBe(true)
+    expect(grade('blk.sweep', 0, 24)?.ok).toBe(false) // 40 is a multiple of 8, not of 64
   })
 })
 
@@ -152,12 +156,12 @@ describe('the pool model', () => {
     expect(again.state).toBe(out.state)
   })
 
-  test('copy-on-write copies one block: B gets a private copy, the original goes from 3 owners to 2', () => {
+  test('copy-on-write copies the partly filled tail block: B gets a private copy, the original goes from 3 owners to 2', () => {
     const forked = forkBeam(initialState()).state
     const out = divergeB(forked, 5)
     expect(out.kind).toBe('copied')
     if (out.kind !== 'copied') return
-    expect(out.tokens).toBe(BLOCK_SIZE)
+    expect(out.tokens).toBe(PROMPT_TOKENS % BLOCK_SIZE)
     expect([out.from, out.to]).toEqual([2, 3])
     expect(out.state.pool[2]).toMatchObject({ refcount: 2, seqs: ['A', 'C'] })
     expect(out.state.pool[3]).toMatchObject({ refcount: 1, seqs: ['B'], copiedFrom: 2, copiedAt: 5 })
@@ -244,17 +248,32 @@ describe('the pool model', () => {
     expect(resizePool(same, INITIAL_POOL).state).toBe(same)
   })
 
-  test('the sweep: 48 tokens leave no waste at 4, 8 and 16, and 16 slots unused at 32 and 64', () => {
+  test('the prompt is a whole number of blocks, the last one partly filled, and copy-on-write copies exactly that tail', () => {
+    expect(Number.isInteger(PROMPT_BLOCKS)).toBe(true)
+    expect(PROMPT_BLOCKS).toBe(Math.ceil(PROMPT_TOKENS / BLOCK_SIZE))
+    expect(DIVERGE_AT).toBe(PROMPT_BLOCKS - 1)
+    const tail = PROMPT_TOKENS % BLOCK_SIZE
+    expect(tail).toBeGreaterThan(0)
+    expect(PHONE_MODELS.cow().actual).toBe(tail)
+    const forked = forkBeam(initialState()).state
+    const out = divergeB(forked, 1)
+    expect(out.kind === 'copied' && out.tokens).toBe(PROMPT_TOKENS - DIVERGE_AT * BLOCK_SIZE)
+    // the prompt's block count is whole for every length: a plain division gives 2.5 at 40 tokens
+    for (let n = 1; n <= 200; n++) expect(Number.isInteger(Math.ceil(n / BLOCK_SIZE))).toBe(true)
+    expect(PROMPT_TOKENS / BLOCK_SIZE).not.toBe(PROMPT_BLOCKS)
+  })
+
+  test('the sweep: 40 tokens leave no waste at 4 and 8, 8 slots unused at 16, and 24 at 32 and 64', () => {
     expect(SWEEP.map((r) => [r.size, r.entries, r.tailWaste])).toEqual([
-      [4, 12, 0],
-      [8, 6, 0],
-      [16, 3, 0],
-      [32, 2, 16],
-      [64, 1, 16],
+      [4, 10, 0],
+      [8, 5, 0],
+      [16, 3, 8],
+      [32, 2, 24],
+      [64, 1, 24],
     ])
     expect(SWEEP_SIZES).toEqual(SWEEP.map((r) => r.size))
-    expect(sweepRow(64)).toMatchObject({ wastePct: 33.3, overheadBytes: 8 })
-    expect(sweepRow(4).overheadBytes).toBe(96)
+    expect(sweepRow(64)).toMatchObject({ wastePct: 60, overheadBytes: 8 })
+    expect(sweepRow(4).overheadBytes).toBe(80)
   })
 })
 
@@ -324,12 +343,12 @@ describe('the explorer reports what each task asks about', () => {
     await page.unmount()
   })
 
-  test('diverge B after the fork: one 16-token block is copied, once, and B\'s block is a copy of P2', async () => {
+  test('diverge B after the fork: one partly filled 8-token block is copied, once, and B\'s block is a copy of P2', async () => {
     const { page, seen } = await mountExplorer()
     await dom.press(button(page.container, 'fork beam from B'))
     await dom.press(button(page.container, 'diverge B at L2'))
     expect(seen.map((o) => o.key)).toEqual(['blk.share-free', 'blk.cow-copied'])
-    expect(seen[1]).toEqual({ key: 'blk.cow-copied', value: 16, unit: 'tokens' })
+    expect(seen[1]).toEqual({ key: 'blk.cow-copied', value: 8, unit: 'tokens' })
     expect(page.container.textContent).toContain('copy of P2')
     // the second write finds the block private: no second reading
     await dom.press(button(page.container, 'diverge B at L2'))
@@ -377,7 +396,7 @@ describe('the explorer reports what each task asks about', () => {
       thumb?.focus()
       thumb?.dispatchEvent(new MiniEvent('keydown', { bubbles: true, cancelable: true, key: 'End' }))
     })
-    expect(seen).toEqual([{ key: 'blk.sweep-tail-64', value: 16, unit: 'tokens' }])
+    expect(seen).toEqual([{ key: 'blk.sweep-tail-64', value: 24, unit: 'tokens' }])
     expect(page.container.textContent).toContain('64 tokens')
     expect(thumb?.getAttribute('aria-valuenow')).toBe('4')
     expect(thumb?.getAttribute('aria-valuetext')).toBe('64 tokens')

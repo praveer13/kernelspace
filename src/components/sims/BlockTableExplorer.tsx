@@ -129,7 +129,7 @@ export default function BlockTableExplorer() {
     tickRef.current = 0
     setRenderTick(0)
     clear()
-    log(0, 'RESET', 'block-table explorer rebooted — 48-token prompt shared by seq A and B', 'op')
+    log(0, 'RESET', 'block-table explorer rebooted — 40-token prompt shared by seq A and B', 'op')
     setShareVerified(false)
   }, [clear, log])
 
@@ -158,7 +158,7 @@ export default function BlockTableExplorer() {
       bump(),
       'SHARE',
       paidOnce
-        ? 'A+B share 48 tokens in 3 physical blocks — rc=2, memory paid once'
+        ? 'A+B share 40 tokens in 3 physical blocks — rc=2, memory paid once'
         : 'shared-prefix invariant is not currently satisfied; reset A+B and inspect again',
       paidOnce ? 'ok' : 'err',
     )
@@ -409,9 +409,9 @@ export default function BlockTableExplorer() {
 
           {!embed && (
             <p className="mt-4 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">
-              two 48-token prompts map to the same three physical blocks. refcount tracks how many
+              two 40-token prompts map to the same three physical blocks. refcount tracks how many
               sequences share each block; a write to a shared block triggers copy-on-write, copying
-              exactly one 16-token block to a free entry.
+              exactly the one partly filled tail block (8 of its 16 slots) to a free entry.
             </p>
           )}
 
@@ -554,7 +554,7 @@ export default function BlockTableExplorer() {
               onClick={verifySharedPrompt}
               className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-accent font-display text-[14px] font-semibold text-accent-foreground transition-all hover:-translate-y-px active:scale-[.98]"
             >
-              verify 48-token sharing
+              verify 40-token sharing
             </button>
             {shareVerified && (
               <p className="font-mono text-[10px] text-accent">
