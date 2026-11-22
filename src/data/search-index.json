@@ -22,7 +22,7 @@
 ["t1.l3","How malloc Works: Build a Toy Allocator","Free lists, splitting, coalescing — the highest-ROI…",["The contract and the slab","The two operations that matter","Placement policy is a research field in one function","From bytes to blocks"]],
 ["t1.l4","Fragmentation: Internal vs External","Why fixed-size blocks win — the physics that foreshadows…",["Internal fragmentation: waste inside the box","External fragmentation: waste between the boxes","The fixed-block maneuver","Measuring it in the wild"]],
 ["t1.l5","Compiling, Linking & the ABI","From source to a running process: the toolchain, symbol…",["The pipeline, stage by stage","The ABI: the calling contract","Why a serving engineer cares"]],
-["t1.l6","Rust Ownership as the Answer","Every pain from this track — use-after-free, double-free,…",["One owner, exactly one free","What it costs, honestly","The through-line"]],
+["t1.l6","Rust Ownership as the Answer","Use-after-free, double-free and data races from this track…",["One owner, exactly one free","What it costs, honestly","The through-line"]],
 ["t2.l1","Processes, Threads & Context Switches","Watch a context switch burn cycles — what the OS saves,…",["What a context switch actually does","The alternatives the industry built","In the simulator"]],
 ["t2.l2","Virtual Memory, Deeply","Page tables, TLB, page faults, mmap — walk an address…",["Translation: pages, frames, and the walk","The TLB: caching the answer","Page faults are a mechanism, not an error","In the simulator"]],
 ["t2.l3","Swapping & Eviction Policies","LRU, LFU, Clock — how the OS decides what to sacrifice, why…",["The candidate policies","Thrashing: when eviction becomes the workload","The vLLM footnote you are now ready for"]],

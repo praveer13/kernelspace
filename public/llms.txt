@@ -52,7 +52,7 @@ _What a function call really is, what a segfault really means, and why allocator
 - [T1.L3 How malloc Works: Build a Toy Allocator](https://kernelspace.naigap.com/lessons-md/t1.l3.md): Free lists, splitting, coalescing — the highest-ROI exercise in the course: KV-cache managers are fancy allocators.
 - [T1.L4 Fragmentation: Internal vs External](https://kernelspace.naigap.com/lessons-md/t1.l4.md): Why fixed-size blocks win — the physics that foreshadows PagedAttention's entire design.
 - [T1.L5 Compiling, Linking & the ABI](https://kernelspace.naigap.com/lessons-md/t1.l5.md): From source to a running process: the toolchain, symbol resolution, and the contract that lets strangers' code call yours.
-- [T1.L6 Rust Ownership as the Answer](https://kernelspace.naigap.com/lessons-md/t1.l6.md): Every pain from this track — use-after-free, double-free, leaks, races — solved by the compiler, before your code ever runs.
+- [T1.L6 Rust Ownership as the Answer](https://kernelspace.naigap.com/lessons-md/t1.l6.md): Use-after-free, double-free and data races from this track are rejected by the compiler before your code ever runs; out-of-bounds reads become run-time panics.
 
 ### T2 — OS & Concurrency
 
