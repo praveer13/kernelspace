@@ -967,30 +967,30 @@
       "kind": "benchmark",
       "value": 20.4,
       "unit": "%",
-      "label": "KV cache memory holding real token states, worst existing system",
+      "label": "KV cache memory holding real token states, Orca (Max) in Figure 2",
       "source": {
-        "url": "https://arxiv.org/abs/2309.06180",
+        "url": "https://arxiv.org/html/2309.06180v1",
         "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
         "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 180,
-      "boundary": "2023 systems that pre-allocate the maximum length per request (FasterTransformer, Orca), on the paper's workloads."
+      "boundary": "Section 1 calls these the existing systems; the figure it points to (Figure 2) holds the Orca variants of the paper's own reimplementation, averaged over the experiment of section 6.2. This end is Orca (Max), which reserves the model's maximum sequence length for every request; the other end is Orca (Oracle), which is told each request's true output length, so even an exact reservation strands memory. Not FasterTransformer, and not Orca as deployed."
     },
     {
       "id": "model.kv.static-utilization-high",
       "kind": "benchmark",
       "value": 38.2,
       "unit": "%",
-      "label": "KV cache memory holding real token states, best existing system",
+      "label": "KV cache memory holding real token states, Orca (Oracle) in Figure 2",
       "source": {
-        "url": "https://arxiv.org/abs/2309.06180",
+        "url": "https://arxiv.org/html/2309.06180v1",
         "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
         "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 180,
-      "boundary": "The other end of the range in model.kv.static-utilization-low."
+      "boundary": "The other end of the range in model.kv.static-utilization-low: Orca (Oracle), the variant told each request's true output length."
     },
     {
       "id": "model.kv.static-utilization",
