@@ -34,6 +34,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
+import { isWidgetKeyTarget } from '@/lib/sims/host'
 import { selectTrackPct, useProgress } from '@/lib/progress'
 import type { LessonStatus } from '@/lib/progress'
 import { MINUTES, localDateKey, selectRings } from '@/lib/economy'
@@ -406,7 +407,7 @@ function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
-    ['← / →', 'previous / next lesson'],
+    ['← / →', 'previous / next lesson (not while a control has focus)'],
     ['j / k', 'next / previous section'],
     ['e', 'jump to exercise'],
     ['m', 'jump to the ticket, or Up Next'],
@@ -914,8 +915,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   /* keyboard shortcuts (lesson.md §6) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (e.defaultPrevented || isWidgetKeyTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       switch (e.key) {
         case 'ArrowLeft':

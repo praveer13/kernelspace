@@ -631,3 +631,37 @@ export const ANNOUNCE_MIN_GAP_MS = 1000
 export function announceDelay(lastAt: number | null, now: number, gapMs: number = ANNOUNCE_MIN_GAP_MS): number {
   return lastAt === null ? 0 : Math.max(0, lastAt + gapMs - now)
 }
+
+/**
+ * Key guard, kept in this module because the lesson and the sims already share its chunk (a module of its own
+ * becomes a chunk of its own, and the entry's preload map grows by its name). Which keyboard targets own their keys. A page-level shortcut (the lesson's arrows, j, k, e, m and ?; the simulator
+ * transport's Space, arrow and r) must stand aside when the focus is in a control that has its own key handling: a
+ * field, a slider thumb, a radio, an option, or anything inside an exercise, a play, a scheduler queue or a choice.
+ * Plain buttons are not listed: a finished diagram hands its arrows back to the page on purpose.
+ */
+export const WIDGET_KEY_SELECTOR = [
+  'input',
+  'textarea',
+  'select',
+  '[contenteditable=""]',
+  '[contenteditable="true"]',
+  '[contenteditable="plaintext-only"]',
+  '[role="slider"]',
+  '[role="spinbutton"]',
+  '[role="radio"]',
+  '[role="radiogroup"]',
+  '[role="listbox"]',
+  '[role="option"]',
+  '[role="tab"]',
+  '[role="textbox"]',
+  '[data-exercise]',
+  '[data-block="play"]',
+  '[data-queue]',
+  '[data-ks-option]',
+].join(', ')
+
+/** True when `el` is, or sits inside, a control that owns its keys. Null and non-elements are not. */
+export function isWidgetKeyTarget(el: unknown): boolean {
+  const node = el as { closest?: (s: string) => unknown } | null
+  return !!node && typeof node.closest === 'function' && node.closest(WIDGET_KEY_SELECTOR) !== null
+}
