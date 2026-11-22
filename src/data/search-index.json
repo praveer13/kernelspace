@@ -100,7 +100,7 @@
     ["t0.false-sharing","False sharing","diagnose false sharing between…","t0.l4","false-sharing-the-line-you-did-not-know-you-were-sharing",[]],
     ["t0.runtime-costs","What a managed runtime costs","name what the JVM or CPython…","t0.l5","the-contract-your-runtime-signs-for-you",[]],
     ["t0.flame-graphs","Reading a flame graph","read a flame graph: width is…","t0.l6","the-grammar-four-rules",[]],
-    ["t0.wait-bars","Wait bars and stragglers","tell a wide wait bar from slow…","t0.l6","what-you-ll-hunt-in-this-field-specifically",[]],
+    ["t0.wait-bars","Wait bars and stragglers","read wait bars in a wall-clock…","t0.l6","what-you-ll-hunt-in-this-field-specifically",[]],
     ["t1.stack-frames","Stack frames and calls","draw the frame a call pushes…","t1.l1","the-stack-memory-with-a-discipline",[]],
     ["t1.stack-vs-heap","Stack versus heap lifetimes","place a value on the stack or…","t1.l1","the-heap-memory-without-a-curfew",[]],
     ["t1.pointers","Pointers and pointer arithmetic","compute where p + n points for…","t1.l2","the-four-operations-that-s-all-of-it",[]],
