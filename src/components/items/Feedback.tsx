@@ -2,13 +2,13 @@
  * Feedback: the verdict and what explains it (docs/specs/wave-1.md §6.8, §16.2). The verdict sits in an
  * `aria-live="polite"` region that is in the DOM before it has anything to say, so the change is
  * announced. Below it, the why of the picked option and of the key (choice), the diagnosis (numeric and
- * estimate), the explanation (authored questions) and the steps, collapsed. Every state carries an icon
+ * estimate), the explanation (authored questions; left out when the key's why already says it) and the steps, collapsed. Every state carries an icon
  * and words, never colour alone.
  */
 import { Check, ChevronDown, X } from 'lucide-react'
 import type { RefObject } from 'react'
 import { formatNumber } from '@/lib/items/units'
-import { OPTION_LETTERS, type PlayView } from '@/lib/items/play'
+import { explanationToPrint, OPTION_LETTERS, type PlayView } from '@/lib/items/play'
 import type { Grade, SolutionStep } from '@/lib/items/types'
 import { cn } from '@/lib/utils'
 import { StepList } from './PromptView'
@@ -38,6 +38,7 @@ function verdictLine(view: PlayView, grade: Grade): string {
 }
 
 export default function Feedback({ view, grade, picks, deferred, steps, stepsOpen, onToggleSteps, toggleRef, idBase }: FeedbackProps) {
+  const explanation = explanationToPrint(view)
   const hasSteps = grade !== null && !deferred && !!steps && steps.length > 0
   return (
     <div className="space-y-3">
@@ -65,8 +66,8 @@ export default function Feedback({ view, grade, picks, deferred, steps, stepsOpe
             </p>
           )}
           {view.kind === 'choice' && <Whys view={view} picks={picks} />}
-          {view.explanation && (
-            <p className={cn('rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2', grade.ok ? 'border-accent' : 'border-amber')}>{view.explanation}</p>
+          {explanation && (
+            <p className={cn('rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2', grade.ok ? 'border-accent' : 'border-amber')}>{explanation}</p>
           )}
           {hasSteps && (
             <div>
