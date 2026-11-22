@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { ALL_LESSONS } from '@/data/lessons'
-import { claimCite } from '@/data/lessons/claims'
+import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber, fractionText } from '@/data/lessons/claims'
 import { getClaim } from '@/data/claims'
+import { VLLM_PIN } from '@/data/claims/engines'
 import '@/data/claims/lazy/kvpool'
+import { mixRange } from '@/data/lessons/pagedMix'
 
 function strings(v: unknown, out: string[] = []): string[] {
   if (typeof v === 'string') out.push(v)
@@ -16,7 +18,9 @@ const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 
 
 describe('the closing learner check, fix round 2', () => {
   test('a claim read in prose names its release and read date and does not say today or now', () => {
-    expect(claimCite('production.vllm.block-size')).toBe('64 tokens/block as of vLLM v0.34.0, read 2026-11-21')
+    // K0-FIX3: built from the pin and the claim, so the next re-pin moves it with no hand edit
+    const c = getClaim('production.vllm.block-size')
+    expect(claimCite('production.vllm.block-size')).toBe(`${c.value} ${c.unit} as of vLLM ${VLLM_PIN.ref}, read ${c.verifiedAt}`)
     const t5 = text('t5.l5')
     expect(t5).not.toMatch(/default today|default now|as vLLM's default now/)
     expect(text('t1.l4')).not.toMatch(/default now/)
@@ -26,18 +30,21 @@ describe('the closing learner check, fix round 2', () => {
 
   test('the extensible-cache sentence does not date the feature from the pin', () => {
     expect(text('t5.l5')).not.toContain('Since vLLM')
-    expect(text('t5.l5')).toContain('At vLLM v0.34.0, vLLM reserves')
+    expect(text('t5.l5')).toContain(`At vLLM ${VLLM_PIN.ref}, vLLM reserves`)
   })
 
-  test('no literal 0.92 in t5.l5, and the util default is written 1.0', () => {
-    expect(text('t5.l5')).not.toContain('0.92')
-    expect(text('t5.l5')).toContain('defaults to 1.0 with it on')
+  test('no typed estimate-sized default in t5.l5, and the util default is the claim value as the claim gives it', () => {
+    const util = claimNumber('production.vllm.gpu-memory-utilization')
+    if (util !== 0.92) expect(text('t5.l5')).not.toContain('0.92')
+    expect(text('t5.l5')).toContain(`defaults to ${fractionText(util)} with it on`)
   })
 
   test("t5.l5 says what the erratum's after says: CUDA, ROCm and --block-size", () => {
     const t = text('t5.l5')
     expect(t).toContain('on CUDA')
-    expect(t).toContain('ROCm keeps 16')
+    // K0-FIX3 (B1): no claim holds ROCm's block size, so the lesson words it without a number, as t1.l4 does
+    expect(t).not.toMatch(/ROCm[^.;\n]{0,60}?\b(?:keeps|uses)\s+\d/)
+    expect(t).toContain(ENGINE_BLOCK_SCOPE)
     expect(t).toContain('--block-size')
   })
 
@@ -57,10 +64,12 @@ describe('the closing learner check, fix round 2', () => {
   })
 
   test('the t1.l4 chip names its block size in its label', () => {
-    expect(src('src/data/lessons/t1/fragmentation.ts')).toContain("label: 'KV waste at 16-token blocks (course estimate)'")
+    const paper = claimNumber('serving.pagedattention.paper-block-size')
+    expect(text('t1.l4')).toContain(`KV waste, mixed batch at the paper's ${paper}-token blocks (course estimate)`)
+    expect(src('src/data/lessons/t1/fragmentation.ts')).toContain("label: `KV waste, mixed batch at the paper's ${PAPER_BLOCK}-token blocks (course estimate)`")
   })
 
   test('t5.l5 gives the batch lengths beside the 8.1%', () => {
-    expect(text('t5.l5')).toContain('eight sequences (190 to 455 tokens)')
+    expect(text('t5.l5')).toContain(`eight sequences (${mixRange()} tokens)`)
   })
 })

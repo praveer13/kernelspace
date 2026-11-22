@@ -50,3 +50,41 @@ describe('the lessons read their claims from a generated snapshot (K0-Z2 fix)', 
     expect(() => lessonClaims.claimNumber('constructor')).toThrow()
   })
 })
+
+/**
+ * K0-FIX3 (R9): a lesson reaches the claims registry by no path at all. Every import specifier under src/data/lessons/
+ * ('@/...', relative, or a dynamic import()) is resolved, and none may land in src/data/claims/. The snapshot's generator,
+ * scripts/gen-lesson-claims.ts, is the one module that reads the registry for the lessons, and it lives outside.
+ */
+const SRC = new URL('../../src/', import.meta.url).pathname
+export function claimImports(file: string, src: string): string[] {
+  const specs = [...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]!)
+  return specs.filter((spec) => {
+    let target: string
+    if (spec.startsWith('@/')) target = `${SRC}${spec.slice(2)}`
+    else if (spec.startsWith('.')) target = new URL(spec, `file://${file}`).pathname
+    else return false
+    return target === `${SRC}data/claims` || target.startsWith(`${SRC}data/claims/`) || target.startsWith(`${SRC}data/claims.`)
+  })
+}
+
+describe('no lesson module imports src/data/claims by any path', () => {
+  test('the resolver catches an alias, a relative path and a dynamic import', () => {
+    const at = `${root}t1/probe.ts`
+    // the rule this replaces matched only the alias, so a relative path into src/data/claims passed it
+    expect("import { claimCite } from '../../claims/cite'").not.toMatch(/from '@\/data\/claims/)
+    expect(claimImports(at, "import { claimNumber } from '@/data/claims'")).toHaveLength(1)
+    expect(claimImports(at, "import { claimCite } from '../../claims/cite'")).toHaveLength(1)
+    expect(claimImports(at, "import '../../claims/lazy/kvpool'")).toHaveLength(1)
+    expect(claimImports(at, "const m = await import('../../claims')")).toHaveLength(1)
+    expect(claimImports(`${root}claims.ts`, "import { X } from '../claims/index'")).toHaveLength(1)
+    expect(claimImports(at, "import { claimNumber } from '../claims'")).toEqual([])
+    expect(claimImports(at, "import type { Lesson } from '../types'")).toEqual([])
+  })
+
+  test('every file under src/data/lessons, the reader and its snapshot included', () => {
+    const found: string[] = []
+    for (const f of files(root)) for (const spec of claimImports(f, readFileSync(f, 'utf8'))) found.push(`${f.slice(root.length)}: ${spec}`)
+    expect(found).toEqual([])
+  })
+})

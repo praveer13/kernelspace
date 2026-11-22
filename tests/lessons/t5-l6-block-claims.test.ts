@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { claimNumber } from '@/data/claims'
-import { claimRelease } from '@/data/claims/cite'
+import { claimCite } from '@/data/claims/cite'
 import { ALL_LESSONS } from '@/data/lessons'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't5.l6')
@@ -18,9 +18,9 @@ const blocks = Math.floor(130 / n)
 
 describe('t5.l6 block boundary at vLLM default (K0-D13)', () => {
   test('the text holds floor(130/n) blocks, their tokens and the n - 1 unshared tail for the claim value', () => {
-    expect(text).toContain(`default of ${n} tokens per block the same 130 tokens give ${blocks} blocks (${blocks * n} tokens)`)
+    expect(text).toContain(`At ${n} tokens per block the same 130 tokens give ${blocks} blocks (${blocks * n} tokens)`)
     expect(text).toContain(`up to ${n - 1} matching tokens`)
-    expect(text).toContain(claimRelease('production.vllm.block-size'))
+    expect(text).toContain(`vLLM's default on CUDA is ${claimCite('production.vllm.block-size')}`)
   })
 
   test('the 16-token setup stays as the worked case', () => {

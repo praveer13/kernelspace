@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { claimNumber } from '@/data/claims'
 import { claimRelease } from '@/data/claims/cite'
 import { ALL_LESSONS } from '@/data/lessons'
+import { fractionText } from '@/data/lessons/claims'
+import { wasteStory } from '@/data/lessons/pagedMix'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't5.l5')
 if (!lesson) throw new Error('t5.l5 not found')
@@ -36,15 +38,15 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
   test('the pool sentence names where N comes from, with both pool claims', () => {
     expect(text).toContain('N is what is left of the GPU after the weights and warmup')
     expect(text).toContain(claimRelease('production.vllm.extensible-kv-cache'))
-    expect(text).toContain(`defaults to ${claimNumber('production.vllm.gpu-memory-utilization').toFixed(1)} with it on`)
+    expect(text).toContain(`defaults to ${fractionText(claimNumber('production.vllm.gpu-memory-utilization'))} with it on`)
   })
 
   test("<4% is not called the paper's figure", () => {
     expect(text).not.toContain('**<4%**')
     expect(text).toContain('near-zero waste in the paper')
     expect(text).toContain('20.4%–38.2%')
-    expect(text).toContain("1.4% at the paper's 16-token blocks (under 4%) and 8.1% at vLLM's 64")
-    expect(text).toContain("is not in the paper's text")
+    expect(text).toContain(wasteStory())
+    expect(text).toContain("is the course's estimate, not the paper's")
     expect(text).not.toContain('does not report')
   })
 

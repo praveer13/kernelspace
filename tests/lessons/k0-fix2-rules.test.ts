@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { getClaim } from '@/data/claims'
-import { claimCite } from '@/data/lessons/claims'
+import { ENGINE_BLOCK_SCOPE, claimCite } from '@/data/lessons/claims'
 import '@/data/claims/lazy/kvpool'
 import { ALL_LESSONS } from '@/data/lessons'
 import { MIX, mixRange } from '@/data/lessons/pagedMix'
@@ -34,7 +34,7 @@ describe('t5.l5 types no number or date without a claim', () => {
 
   test("the estimate-sized fallback of gpu_memory_utilization is not typed (no claim's value holds it)", () => {
     expect(text).not.toContain('0.92')
-    expect(text).toContain('with it on (a lower default, set in the same file, applies where the cache is sized from an estimate instead)')
+    expect(text).toContain('with it on; with it off, the cache is sized from an estimate and a lower default applies')
   })
 
   test('the extensible KV cache is stated at the release it was read at, not as arriving there', () => {
@@ -45,8 +45,8 @@ describe('t5.l5 types no number or date without a claim', () => {
 
 describe("vLLM's default carries the erratum's qualifier where t5.l5's and t1.l4's prose states it", () => {
   for (const [id, words] of [
-    ['t5.l5', `vLLM's default on CUDA is ${cite}; ROCm keeps`],
-    ['t1.l4', `vLLM's default on CUDA is ${cite} (ROCm's paged attention keeps its own size, and an explicit \`--block-size\` wins)`],
+    ['t5.l5', `vLLM's default on CUDA is ${cite} (${ENGINE_BLOCK_SCOPE})`],
+    ['t1.l4', `vLLM's default on CUDA is ${cite} (${ENGINE_BLOCK_SCOPE})`],
   ] as const) {
     test(id, () => {
       expect(lessonText(id)).toContain(words)
@@ -85,6 +85,9 @@ describe('the mixed batch is typed once', () => {
     expect(mixRange()).toBe(`${Math.min(...MIX)} to ${Math.max(...MIX)}`)
     expect(lessonText('t1.l4')).toContain(`eight sequences (${mixRange()} tokens)`)
     expect(read('src/data/lessons/t1/fragmentation.ts')).not.toMatch(/\(\d+ to \d+ tokens\)/)
+    // K0-FIX3 (R6): t5.l5 reads the range from the mix too
+    expect(lessonText('t5.l5')).toContain(`eight sequences (${mixRange()} tokens)`)
+    expect(read('src/data/lessons/t5/pagedattention-deep-dive.ts')).not.toMatch(/\(\d+ to \d+ tokens\)/)
   })
 })
 

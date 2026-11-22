@@ -14,7 +14,10 @@ describe('paged-waste erratum matches the paper (arXiv 2309.06180v1, Figure 2)',
   test('the erratum does not say Figure 2 is unread', () => {
     const all = JSON.stringify(erratum)
     expect(all).not.toContain('Figure 2 is not read')
-    expect(all).toContain('96.3%')
+    // K0-FIX3: Figure 2's vLLM bar is the claim serving.pagedattention.fig2-vllm-token-states, rendered by the lessons;
+    // the erratum names the figure and says what it is, and types no number for it
+    expect(all).toContain('Figure 2')
+    expect(all).not.toContain('96.3')
   })
 })
 

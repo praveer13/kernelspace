@@ -18,4 +18,12 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 16,
     cite: "16",
   },
+  "serving.pagedattention.fig2-vllm-token-states": {
+    value: 96.3,
+    cite: "96.3",
+  },
+  "synthetic.kv.paged-waste": {
+    value: 4,
+    cite: "4",
+  },
 }
