@@ -62,6 +62,18 @@ async function loadPhysicsGroups(): Promise<readonly Claim[]> {
   return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...ENGINES_STATUS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS, ...RUST_LANG_CLAIMS]
 }
 
+/**
+ * Below sm the rows stack and the header row is sr-only, so each stacked field carries its column's name where a sighted
+ * reader sees it. Hidden from sm up (the header row is visible there) and from assistive tech (which reads the header).
+ */
+function Caption({ children }: { children: string }) {
+  return (
+    <span aria-hidden="true" className="mr-2 inline-block w-[9ch] text-[10px] text-text-3 sm:hidden">
+      {children}
+    </span>
+  )
+}
+
 export function ClaimsTable({ className }: { className?: string }) {
   const [now] = useState(() => new Date())
   const [late, setLate] = useState<readonly Claim[] | 'loading' | 'failed'>('loading')
@@ -119,9 +131,16 @@ export function ClaimsTable({ className }: { className?: string }) {
                     <div className="mt-1 break-words text-[10px] text-amber">Discrepancy: {claim.discrepancy}</div>
                   )}
                 </td>
-                <td className="whitespace-nowrap p-2.5 text-accent max-sm:block max-sm:whitespace-normal max-sm:break-words max-sm:p-0 max-sm:py-0.5">{formatClaimValue(claim)}</td>
-                <td className={cn('p-2.5 max-sm:block max-sm:p-0 max-sm:py-0.5', claim.kind === 'synthetic' ? 'text-amber' : 'text-text-3')}>{claim.kind}</td>
+                <td className="whitespace-nowrap p-2.5 text-accent max-sm:block max-sm:whitespace-normal max-sm:break-words max-sm:p-0 max-sm:py-0.5">
+                  <Caption>value</Caption>
+                  {formatClaimValue(claim)}
+                </td>
+                <td className={cn('p-2.5 max-sm:block max-sm:p-0 max-sm:py-0.5', claim.kind === 'synthetic' ? 'text-amber' : 'text-text-3')}>
+                  <Caption>kind</Caption>
+                  {claim.kind}
+                </td>
                 <td className="p-2.5 max-sm:block max-sm:break-words max-sm:p-0 max-sm:py-0.5">
+                  <Caption>source</Caption>
                   {claim.source ? (
                     <a
                       href={claim.source.url}
@@ -138,8 +157,12 @@ export function ClaimsTable({ className }: { className?: string }) {
                   )}
                   {claim.source?.quote && <q className="mt-1 block text-[10px] text-text-3">{claim.source.quote}</q>}
                 </td>
-                <td className="whitespace-nowrap p-2.5 text-text-3 max-sm:block max-sm:p-0 max-sm:py-0.5">{claim.verifiedAt}</td>
+                <td className="whitespace-nowrap p-2.5 text-text-3 max-sm:block max-sm:p-0 max-sm:py-0.5">
+                  <Caption>verified</Caption>
+                  {claim.verifiedAt}
+                </td>
                 <td className={cn('whitespace-nowrap p-2.5 max-sm:block max-sm:p-0 max-sm:py-0.5', stale ? 'text-amber' : 'text-text-3')}>
+                  <Caption>status</Caption>
                   {stale ? `stale since ${stale}` : `fresh · ${claim.ttlDays} d`}
                 </td>
               </tr>
