@@ -1,6 +1,7 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
 import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
+import { fig2Rest, kernelCostStory, throughputStory } from '../pagedMix'
 
 // The paper's block size and vLLM's default at the pinned release are two claims; this lesson reads each from the snapshot.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
@@ -10,6 +11,11 @@ const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-st
 // Section 1 of the paper: the share of KV memory holding token states in earlier systems, two claims.
 const USED_LOW = claimNumber('model.kv.static-utilization-low')
 const USED_HIGH = claimNumber('model.kv.static-utilization-high')
+// The paper's abstract and Section 7.1: the throughput range and the block-table kernel's extra latency, four claims.
+const GAIN_LOW = claimNumber('serving.pagedattention.throughput-gain-low')
+const GAIN_HIGH = claimNumber('serving.pagedattention.throughput-gain-high')
+const KERNEL_LOW = claimNumber('serving.pagedattention.kernel-overhead-low')
+const KERNEL_HIGH = claimNumber('serving.pagedattention.kernel-overhead-high')
 
 /**
  * Spiral items (spec §8.6): authored questions on earlier T0-T2 KCs, drawn by the t2.l7 checkpoint beside the
@@ -230,7 +236,7 @@ You already know this bug — you built it in T1. Contiguous, worst-case, per-cl
     {
       type: 'callout',
       variant: 'isomorphism',
-      md: `Read the paper's Figure 2 (the average share of KV cache memory in each state during its §6.2 experiment) next to your T1 fragmentation simulator output. Its legend has four parts: token states, reservation, internal frag., and external frag. & others. §3.1 is the allocator autopsy: slots reserved for tokens not generated yet, internal fragmentation from over-provisioning for the maximum length, and external fragmentation "from the memory allocator like the buddy allocator". The earlier systems' bars are mostly waste; vLLM's is ${FIG2_TOKEN_STATES}% token states.`,
+      md: `Read the paper's Figure 2 (the average share of KV cache memory in each state during its §6.2 experiment) next to your T1 fragmentation simulator output. Its legend has four parts: token states, reservation, internal frag., and external frag. & others. §3.1 is the allocator autopsy: slots reserved for tokens not generated yet, internal fragmentation from over-provisioning for the maximum length, and external fragmentation "from the memory allocator like the buddy allocator". The earlier systems' bars are mostly waste; vLLM's is ${FIG2_TOKEN_STATES}% token states. ${fig2Rest()}`,
     },
     {
       type: 'prose',
@@ -321,7 +327,7 @@ On preemption the paper evaluates two policies that should give you déjà vu: *
       type: 'prose',
       md: `## §5–6: The kernel and the numbers
 
-One level down: the paper contributes a CUDA kernel that performs attention *through* the block table — gathering K/V from scattered physical blocks instead of assuming contiguity. That indirection costs something (block-table lookups, non-unit strides), and the paper's engineering is keeping that cost near zero against a **2–4× throughput** win from fitting 2–4× more sequences per GPU. Headline results (A100, OPT/LLaMA models, real traces): vLLM delivers up to **~24× FasterTransformer and ~3.5× Orca** in throughput, and — the number that sold the field — it serves the same traffic on a fraction of the GPUs by reclaiming the 60–80% wasted KV memory.
+One level down: the paper contributes a CUDA kernel that performs attention *through* the block table — gathering K/V from scattered physical blocks instead of assuming contiguity. ${kernelCostStory()} ${throughputStory()} The memory comes back from the earlier systems, where only ${USED_LOW}% to ${USED_HIGH}% of KV cache memory held token states (§1).
 
 Also note §4.6's distributed bits: for models spanning GPUs, one KV cache manager in the central scheduler serves every worker. Each step the scheduler broadcasts the block tables, and each worker stores only its own attention heads' share of every block — one page table shared by every process, like threads in one address space, consistent with everything above.`,
     },
@@ -372,7 +378,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
             'The fixed-block maneuver from T1.L4: any free block fits any sequence (no external fragmentation), and waste is ≤ block_size−1 tokens in the tail — the same physics as OS page frames.',
           why: [
             'Misconception: compression fixes waste. FP8 shrinks the bytes per token, but a worst-case reservation shrinks proportionally; the unused fraction stays the same, and PagedAttention does not require it.',
-            'Right: any free block fits any sequence, so no gaps are stranded, and each sequence wastes at most the unfilled part of one block (up to 15 tokens at the paper\'s block size of 16).',
+            `Right: any free block fits any sequence, so no gaps are stranded, and each sequence wastes at most the unfilled part of one block (up to ${PAPER_BLOCK - 1} tokens at the paper's block size of ${PAPER_BLOCK}).`,
             'Misconception: eviction does the work. Offload helps under pressure, but waste comes from how memory is reserved and laid out; the bound holds without any swapping.',
             'Misconception: more free HBM means less waste. Extra headroom is capacity, not efficiency; the waste fraction is defined by the allocation scheme, and weights sit in a separate region.',
           ],
@@ -429,10 +435,10 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           ],
           correct: [1],
           explanation:
-            'Decode is memory-capacity- and bandwidth-bound: reclaiming 60–80% of KV space multiplies batch size, which multiplies throughput. A few extra index loads per block are noise against that win — the MMU trade, reprised.',
+            `Decode is memory-capacity- and bandwidth-bound: the KV space paging reclaims grows the batch, and the batch grows throughput (${GAIN_LOW}–${GAIN_HIGH}× in the paper's evaluation). The index loads are not free: the paper measures ${KERNEL_LOW}–${KERNEL_HIGH}% higher attention-kernel latency (§7.1), confined to the attention operator. The MMU trade, reprised.`,
           why: [
             'Misconception: the table is free to read. It is a normal global-memory structure, small enough to cache well but not pinned, and each lookup is a real load rather than a one-cycle event.',
-            'Right: decode is limited by KV capacity and bandwidth, so reclaiming 60–80% of KV space grows the batch and throughput. A few index loads per block are small against that win.',
+            `Right: decode is limited by KV capacity and bandwidth, so reclaimed KV space grows the batch and the throughput. The index loads cost ${KERNEL_LOW}–${KERNEL_HIGH}% in the attention kernel alone (§7.1), small against that win.`,
             'Misconception: the cost is fully hidden. Overlap helps some, but the lookups are real work in a bandwidth-bound kernel; the case rests on the throughput gain exceeding the overhead.',
             'Misconception: hardware does the translation. The GPU\'s MMU maps virtual to physical for the whole allocation; the block table is a software indirection the attention kernel walks itself.',
           ],

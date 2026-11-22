@@ -16,6 +16,8 @@ import { createElement } from 'react'
 import TwinPanel, { twinPlayable, twinResponse } from '../../src/components/forge/TwinPanel'
 import { getClaim, staleSince } from '../../src/data/claims'
 import '../../src/data/claims/lazy/twins'
+// The release comes from the pin; tests/claims/pin.test.ts is the one place that types it (K0-FIX4).
+import { SGLANG_PIN } from '../../src/data/claims/engines'
 import { FORGE_LABS } from '../../src/data/labs'
 import { findTwin, loadTwin, twinFileUrl, twinItemId, twinLabIds, twinProblems, TWIN_ITEMS_PER_LAB, type TwinModule } from '../../src/data/twins'
 import { gradeItem, playView, resultFor } from '../../src/lib/items/play'
@@ -159,8 +161,8 @@ describe('twinProblems', () => {
   })
 
   test('the file link reads the claim’s pinned ref', () => {
-    expect(twinFileUrl({ repo: 'sgl-project/sglang', ref: 'v0.5.23' }, 'a/b.rs')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.23/a/b.rs')
-    expect(claim.pin).toEqual({ repo: 'sgl-project/sglang', ref: 'v0.5.23' })
+    expect(twinFileUrl(SGLANG_PIN, 'a/b.rs')).toBe(`https://github.com/${SGLANG_PIN.repo}/blob/${SGLANG_PIN.ref}/a/b.rs`)
+    expect(claim.pin).toEqual({ repo: SGLANG_PIN.repo, ref: SGLANG_PIN.ref })
     expect(claim.ttlDays).toBe(60)
   })
 })
@@ -258,11 +260,11 @@ describe('a done lab with a twin', () => {
     expect(root.querySelector('h2')!.textContent).toBe('the production twin')
     expect(root.querySelector('[data-twin-line]')!.textContent).toBe(FIXTURE.youWrote)
     const link = root.querySelector('[data-twin-source] a')!
-    expect(link.getAttribute('href')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.23/fixture/tree.rs')
+    expect(link.getAttribute('href')).toBe(`https://github.com/${SGLANG_PIN.repo}/blob/${SGLANG_PIN.ref}/fixture/tree.rs`)
     expect(link.getAttribute('rel')).toContain('noopener')
     expect(link.textContent).toContain('fixture/tree.rs')
-    expect(link.textContent).toContain('sgl-project/sglang@v0.5.23')
-    expect(root.querySelector('[data-twin-pin]')!.textContent).toBe('pinned at sgl-project/sglang@v0.5.23')
+    expect(link.textContent).toContain(`${SGLANG_PIN.repo}@${SGLANG_PIN.ref}`)
+    expect(root.querySelector('[data-twin-pin]')!.textContent).toBe(`pinned at ${SGLANG_PIN.repo}@${SGLANG_PIN.ref}`)
     expect(root.querySelector('[data-twin-verified]')!.textContent).toBe(`checked ${claim.verifiedAt}`)
     expect(root.querySelector('[data-twin-stale]')).toBeNull()
     expect(root.textContent).toContain('match_prefix, insert and evict')

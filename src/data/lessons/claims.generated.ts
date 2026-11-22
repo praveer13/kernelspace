@@ -34,4 +34,28 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 38.2,
     cite: "38.2",
   },
+  "model.llama3-8b.kv-bytes-per-token": {
+    value: 131072,
+    cite: "131072",
+  },
+  "serving.pagedattention.throughput-gain-low": {
+    value: 2,
+    cite: "2",
+  },
+  "serving.pagedattention.throughput-gain-high": {
+    value: 4,
+    cite: "4",
+  },
+  "serving.pagedattention.ft-request-rate": {
+    value: 22,
+    cite: "22",
+  },
+  "serving.pagedattention.kernel-overhead-low": {
+    value: 20,
+    cite: "20",
+  },
+  "serving.pagedattention.kernel-overhead-high": {
+    value: 26,
+    cite: "26",
+  },
 }

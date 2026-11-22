@@ -6,6 +6,7 @@ import { ALL_CLAIMS } from '@/data/claims/all'
 import '@/data/claims/lazy/kvpool'
 import { ALL_LESSONS } from '@/data/lessons'
 import { PAIRS } from '@/data/glossary'
+import * as pagedMix from '@/data/lessons/pagedMix'
 
 /**
  * K0-D23. vLLM's default KV block size moved from 16 to 64 at v0.34.0 and the course said 16 in nine places, because prose
@@ -150,8 +151,16 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
  * The paper's words are "near-zero waste" and its Figure 2 is one experiment's average (K0-FIX3); under 4% is the course's
  * estimate, so a sentence is excused only when its 4% clause says so (K0-FIX3B: a disclaimer in another clause,
  * 'the course estimate agrees', excuses nothing). 'percent' counts as '%'.
+ * K0-FIX4: 'four percent' counts too, and a sentence names the paper by its figure, its authors or its venue as well as by
+ * the word: 'Figure 2 shows under 4% waste for vLLM.', 'PagedAttention cuts waste to below 4%, per Kwon et al.', 'The
+ * authors measured waste under four percent.' all present the bound as the paper's.
  */
-const FOUR_PERCENT = /(<\s?4\s?(?:%|percent\b)|\b(?:under|below|less than|at most|capped at)\s+4\s?(?:%|percent\b))/i
+const FOUR = String.raw`(?:4\s?(?:%|percent\b|per cent\b)|four(?:\s|-)(?:percent|per cent)\b)`
+const FOUR_PERCENT = new RegExp(String.raw`(<\s?${FOUR}|\b(?:under|below|less than|at most|capped at)\s+${FOUR})`, 'i')
+/** Words that name the paper: the word itself, its Figure 2, its first author, its authors, its venue. */
+const NAMES_PAPER = /\b(?:paper|fig(?:ure|\.)?\s*2|kwon|authors|sosp)\b/i
+/** Abbreviations whose period does not end a sentence ('Fig. 2', 'Kwon et al. report'). */
+const unbreak = (s: string) => s.replace(/\b(Fig|al|e\.g|i\.e)\.\s+/g, '$1\u00a0')
 /** The clauses of a sentence: split at ';', ',', ':' and dashes; a parenthesis stays with the clause it follows. */
 const clauses = (s: string) => s.split(/\s*[;,:\u2014\u2013]\s+|\s*;\s*/).filter(Boolean)
 const DISCLAIMS = /(course'?s (?:own )?estimate|course estimate|not in (?:the|its) (?:paper|text)|not in the paper.s text)/i
@@ -188,8 +197,8 @@ export function typedDefaults(text: string, n: number, paper = PAPER): string[] 
 
 export function fourPercentAsPaper(text: string): string[] {
   const bad: string[] = []
-  for (const s of sentences(text)) {
-    if (!FOUR_PERCENT.test(s) || !/\bpaper/i.test(s)) continue
+  for (const s of sentences(unbreak(text))) {
+    if (!FOUR_PERCENT.test(s) || !NAMES_PAPER.test(s)) continue
     // Excused only when every clause that gives the 4% carries the disclaimer itself.
     if (clauses(s).filter((c) => FOUR_PERCENT.test(c)).every((c) => DISCLAIMS.test(c))) continue
     bad.push(s.trim())
@@ -429,5 +438,24 @@ describe("'<4%' is the course's estimate, never presented as the paper's figure"
     for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
     expect(fourPercentAsPaper("Under 4% KV waste is the course's estimate, not a figure from the PagedAttention paper.")).toEqual([])
     expect(fourPercentAsPaper("The course estimate is under 4 percent; the paper's words are near-zero waste.")).toEqual([])
+  })
+
+  test('K0-FIX4: the paper is named by its Figure 2, its authors or its venue, and "four percent" counts', () => {
+    // The last confirmation's three probes returned [] on the guard of K0-FIX3B, which needed the literal word "paper".
+    const bad = [
+      'Figure 2 shows under 4% waste for vLLM.',
+      'PagedAttention cuts waste to below 4%, per Kwon et al.',
+      'The authors measured waste under four percent.',
+      'Fig. 2 puts vLLM under 4% waste.',
+      'Kwon et al. report waste below 4%.',
+      'At SOSP 2023, vLLM showed waste under four per cent.',
+    ]
+    for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
+    // What Figure 2 does imply, said as the lessons and the erratum say it, passes; so do the course's own words.
+    const fig2Rest = (pagedMix as Record<string, unknown>).fig2Rest as (() => string) | undefined
+    expect(fig2Rest).toBeFunction()
+    expect(fourPercentAsPaper(fig2Rest!())).toEqual([])
+    expect(fourPercentAsPaper(pagedMix.wasteStory())).toEqual([])
+    expect(fourPercentAsPaper("Figure 2 is one experiment's average; under four percent is the course's estimate.")).toEqual([])
   })
 })

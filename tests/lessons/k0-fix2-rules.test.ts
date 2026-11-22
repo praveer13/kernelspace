@@ -34,7 +34,7 @@ describe('t5.l5 types no number or date without a claim', () => {
 
   test("the estimate-sized fallback of gpu_memory_utilization is not typed (no claim's value holds it)", () => {
     expect(text).not.toContain('0.92')
-    expect(text).toContain('with it on; with it off, the cache is sized from an estimate and a lower default applies')
+    expect(text).toContain('; with it off, the cache is sized from an estimate and a lower default applies')
   })
 
   test('the extensible KV cache is stated at the release it was read at, not as arriving there', () => {

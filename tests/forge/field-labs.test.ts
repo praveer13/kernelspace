@@ -100,7 +100,9 @@ describe('the commands are pinned claims', () => {
       const expected = c.id.startsWith('field.burstgpt.fetch') || c.id.includes('mean-') ? BURSTGPT_PIN : VLLM_PIN
       expect(c.pin, c.id).toEqual(expected)
     }
-    expect(VLLM_PIN).toEqual({ repo: 'vllm-project/vllm', ref: 'v0.34.0' })
+    // The release the In-production claims read; tests/claims/pin.test.ts is the one place that types it (K0-FIX4).
+    expect(VLLM_PIN).toEqual(getClaim('production.vllm.block-size').pin)
+    expect(VLLM_PIN.repo).toBe('vllm-project/vllm')
   })
 
   test('commands carry a 60-day TTL, so the labs show "stale since" when the engine moves', () => {

@@ -47,6 +47,94 @@ export const KVPOOL_CLAIMS: Claim[] = [
     boundary:
       'An average over one experiment (§6.2, basic sampling), not a bound for every workload. The bar\'s other segments (Reservation, Internal frag., External frag. & Others) carry no labels. The text gives no waste figure for vLLM; its words are "near-zero waste".',
   },
+  // K0-FIX4: the paper's headline throughput, its largest request-rate figure, and the measured cost of the block-table
+  // indirection. t2.l7 had typed "~24× FasterTransformer and ~3.5× Orca", which the paper does not say.
+  {
+    id: 'serving.pagedattention.throughput-gain-low',
+    kind: 'benchmark',
+    value: 2,
+    unit: '× throughput',
+    label: 'PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, low end',
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), abstract',
+      quote:
+        'Our evaluations show that vLLM improves the throughput of popular LLMs by 2-4× with the same level of latency compared to the state-of-the-art systems, such as FasterTransformer and Orca.',
+      row: 'Abstract',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary:
+      "The paper's 2023 evaluation (§6: OPT and LLaMA models on A100 GPUs, workloads synthesized from ShareGPT and Alpaca) against FasterTransformer and Orca; not a gain over any engine today.",
+  },
+  {
+    id: 'serving.pagedattention.throughput-gain-high',
+    kind: 'benchmark',
+    value: 4,
+    unit: '× throughput',
+    label: 'PagedAttention paper (SOSP 2023): throughput gain over FasterTransformer and Orca at the same latency, high end',
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), abstract',
+      quote:
+        'Our evaluations show that vLLM improves the throughput of popular LLMs by 2-4× with the same level of latency compared to the state-of-the-art systems, such as FasterTransformer and Orca.',
+      row: 'Abstract',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary: 'The other end of the range in serving.pagedattention.throughput-gain-low.',
+  },
+  {
+    id: 'serving.pagedattention.ft-request-rate',
+    kind: 'benchmark',
+    value: 22,
+    unit: '× request rate',
+    label: "PagedAttention paper (SOSP 2023): vLLM's highest sustained request rate against FasterTransformer, at similar latency",
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 6.2',
+      quote:
+        'Compared to FasterTransformer, vLLM can sustain up to 22× higher request rates, as FasterTransformer does not utilize a fine-grained scheduling mechanism and inefficiently manages the memory like Orca (Max).',
+      row: 'Section 6.2, Basic Sampling',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary:
+      "An upper end ('up to') over the §6.2 basic-sampling runs. The paper gives two causes, scheduling as well as memory, so it is not a measure of paging alone.",
+  },
+  {
+    id: 'serving.pagedattention.kernel-overhead-low',
+    kind: 'benchmark',
+    value: 20,
+    unit: '% attention-kernel latency',
+    label: "PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, low end",
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 7.1',
+      quote: 'As shown in Fig. 18(a), this leads to 20–26% higher attention kernel latency, compared to the highly-optimized FasterTransformer implementation.',
+      row: 'Section 7.1, Kernel Microbenchmark',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary:
+      'The attention kernel alone, in a microbenchmark; the paper adds that the overhead "only affects the attention operator but not the other operators in the model, such as Linear".',
+  },
+  {
+    id: 'serving.pagedattention.kernel-overhead-high',
+    kind: 'benchmark',
+    value: 26,
+    unit: '% attention-kernel latency',
+    label: "PagedAttention paper (SOSP 2023): the block-table kernel's extra attention latency over FasterTransformer's kernel, high end",
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Section 7.1',
+      quote: 'As shown in Fig. 18(a), this leads to 20–26% higher attention kernel latency, compared to the highly-optimized FasterTransformer implementation.',
+      row: 'Section 7.1, Kernel Microbenchmark',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary: 'The other end of the range in serving.pagedattention.kernel-overhead-low.',
+  },
   {
     id: 'production.vllm.extensible-kv-cache',
     kind: 'status',

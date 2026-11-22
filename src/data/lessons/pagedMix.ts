@@ -29,5 +29,32 @@ export function wasteStory(): string {
   const engine = claimNumber('production.vllm.block-size')
   const fig2 = claimNumber('serving.pagedattention.fig2-vllm-token-states')
   const bound = claimNumber('synthetic.kv.paged-waste')
-  return `The paper's Figure 2 labels vLLM's bar ${fig2}% token states: an average over one experiment (§6.2), not a bound. "Under ${bound}%" is the course's estimate, not the paper's, and it holds only where blocks are small next to the sequences: the course's mixed batch of eight sequences (${mixRange()} tokens) wastes ${mixWastePct(paper)}% at the paper's ${paper}-token blocks and ${mixWastePct(engine)}% at vLLM's default of ${engine}.`
+  return `The paper's Figure 2 labels vLLM's bar ${fig2}% token states: an average over one experiment (§6.2), not a bound. ${fig2Rest()} "Under ${bound}%" is the course's estimate, not the paper's, and it holds only where blocks are small next to the sequences: the course's mixed batch of eight sequences (${mixRange()} tokens) wastes ${mixWastePct(paper)}% at the paper's ${paper}-token blocks and ${mixWastePct(engine)}% at vLLM's default of ${engine}.`
+}
+
+/**
+ * What Figure 2 implies for vLLM, in the words wasteStory(), t2.l7's Figure 2 callout and the paged-waste erratum share
+ * (K0-FIX4): the rest of the 100% that the claim's token-states bar leaves, in that one experiment. Computed from the claim.
+ */
+export function fig2Rest(): string {
+  const rest = (100 - claimNumber('serving.pagedattention.fig2-vllm-token-states')).toFixed(1)
+  return `So by Figure 2, about ${rest}% of vLLM's KV memory held something other than token states in that experiment.`
+}
+
+/**
+ * What the block-table indirection costs, as the paper measures it (§7.1) and as its authors weigh it: t2.l7 and t5.l5
+ * give it in these words (K0-FIX4). Both ends of the range are claims.
+ */
+export function kernelCostStory(): string {
+  const lo = claimNumber('serving.pagedattention.kernel-overhead-low')
+  const hi = claimNumber('serving.pagedattention.kernel-overhead-high')
+  return `The paper measures what the indirection costs (§7.1): ${lo}–${hi}% higher attention-kernel latency than FasterTransformer's kernel, from reading the block table, extra branches and variable sequence lengths. The authors call the overhead small because it touches only the attention operator, not the model's other operators such as the linear layers, and vLLM still outperforms FasterTransformer end to end (§6).`
+}
+
+/** The paper's headline throughput and its largest request-rate figure (abstract, §6.2), every number a claim (K0-FIX4). */
+export function throughputStory(): string {
+  const lo = claimNumber('serving.pagedattention.throughput-gain-low')
+  const hi = claimNumber('serving.pagedattention.throughput-gain-high')
+  const ft = claimNumber('serving.pagedattention.ft-request-rate')
+  return `In the paper's evaluation (§6: OPT and LLaMA models on A100 GPUs, workloads synthesized from ShareGPT and Alpaca), vLLM improves throughput ${lo}–${hi}× at the same level of latency over FasterTransformer and Orca (abstract), because the memory it frees lets it batch more requests. Its largest figure is against FasterTransformer, which lacks fine-grained scheduling and manages memory like Orca (Max): up to ${ft}× higher request rates (§6.2).`
 }

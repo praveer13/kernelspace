@@ -673,7 +673,7 @@ export default function BlockTableExplorer() {
 
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
               larger blocks amortize table-entry overhead but increase tail waste. vLLM&apos;s default
-              is <ClaimValue id="production.vllm.block-size" />; this pool uses 16, the paper&apos;s size.
+              is <ClaimValue id="production.vllm.block-size" />; this pool uses {BLOCK_SIZE}, the paper&apos;s size.
             </p>
           </ControlGroup>
         </aside>
