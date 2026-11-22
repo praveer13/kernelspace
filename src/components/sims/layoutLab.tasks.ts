@@ -18,7 +18,7 @@ export const LAYOUT_TASKS: SimTask[] = [
   },
   {
     id: 't-layout-pad',
-    text: 'Enable 64-byte padding and rerun: same code, 10–50× throughput',
+    text: 'Enable 64-byte padding and rerun: same code, several times the throughput (5–8× in the run measured for this lesson)',
     xp: 60,
   },
 ]
