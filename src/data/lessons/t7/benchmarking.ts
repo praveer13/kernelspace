@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **LLMPerf** (Ray's reference load generator), **GenAI-Perf** (NVIDIA's Triton analyzer), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. The methodology below is what separates them from a blog screenshot.`,
+      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **GuideLLM** (in the vLLM project; the vLLM docs recommend it for production servers; traffic profiles from synchronous and concurrent through constant and Poisson to a rate sweep), **AIPerf** (NVIDIA's replacement for GenAI-Perf, which is being phased out: concurrency and request-rate modes, constant, Poisson and gamma arrivals, trace replay including BurstGPT, goodput against an SLO), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. Older posts still cite two tools you should skip: LLMPerf (Ray's load generator) was archived and made read-only in December 2025, and GenAI-Perf (NVIDIA's earlier analyzer) is being phased out in favor of AIPerf (status read 2026-11-21). The methodology below is what separates them from a blog screenshot.`,
     },
     {
       type: 'prose',
@@ -41,7 +41,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         { value: '4 rules', label: 'traffic, warmup, samples, identical stacks', hint: 'The whole methodology. Most published numbers break rule 1 or 4.' },
         { value: 'nightly', label: 'InferenceX cadence', hint: 'SemiAnalysis open benchmark: vLLM/SGLang/TRT-LLM, NVIDIA + AMD, nightly.' },
         { value: 'hundreds', label: 'requests per load step', hint: 'Below that, your p95 is a rumor.' },
-        { value: '2 harnesses', label: 'LLMPerf + GenAI-Perf', hint: 'The two load generators worth knowing by name.' },
+        { value: '2 harnesses', label: 'GuideLLM + AIPerf', hint: 'The two live load generators worth knowing by name. LLMPerf is archived and GenAI-Perf is being phased out.' },
       ],
     },
     {
@@ -168,7 +168,7 @@ To correct the number, take the flaw out and ask whether production's load queue
     {
       type: 'deepdive',
       title: 'A benchmarking report you can write today',
-      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and LLMPerf adds the rest. This document is a portfolio artifact (§6 of the plan).`,
+      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and GuideLLM or AIPerf adds the rest. This document is a portfolio artifact (§6 of the plan).`,
     },
   ],
   kcs: ['t7.goodput-curve', 't7.benchmark-hygiene'],
