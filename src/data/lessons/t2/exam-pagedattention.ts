@@ -404,7 +404,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           ],
           correct: [1],
           explanation:
-            'Shared blocks are read-only across branches; when one branch generates into a shared block, the manager copies it (COW) and decrements the source refcount. The paper\'s Figure 4 is the fork() diagram.',
+            'Shared blocks are read-only across branches; when one branch generates into a shared block, the manager copies it (COW) and decrements the source refcount. The paper\'s Figure 8 ("Parallel sampling example") is the fork() diagram; Figure 4 is the system overview.',
           why: [
             'Misconception: mirroring. RAID duplicates everything for fault tolerance, which is the duplication waste PagedAttention removes; branches share blocks until they diverge.',
             'Right: branches reference the same physical prompt blocks with a refcount. When one generates into a shared block, the manager copies just that block, as fork() COW copies a page.',
@@ -415,7 +415,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           miss: ['t2.sharing-is-mirroring', '', 't2.sharing-is-readonly', 't2.sharing-is-serialised-appends'],
         },
         {
-          q: 'The swap-vs-recompute preemption debate in §4 mirrors the OS choice between…',
+          q: 'The swap-vs-recompute preemption debate in §4.5 mirrors the OS choice between…',
           options: [
             'Eager versus lazy page allocation, reserving the frames at process start against faulting each page in on its first touch',
             'Swapping anonymous pages to disk versus dropping clean file-backed pages for a later re-read, trading bandwidth against recompute',
