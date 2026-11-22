@@ -86,7 +86,7 @@ Strip the marketing off the HotSpot JVM and you find a memory manager, a schedul
 
 CPython's model is simpler and more brutal. Every object carries a **reference count**; when it hits zero, the object is freed immediately, in place. That is deterministic reclamation without a tracing GC (a cyclic-detecting GC handles the rare reference cycles). The cost: *every assignment everywhere must maintain counts* — an invisible tax on all pointer traffic, and the reason CPython objects are chubby heap allocations rather than tightly packed values.
 
-Then there is the **GIL** — the global interpreter lock. One big mutex ensuring only one thread executes Python bytecode at a time. It exists precisely because reference counts must stay consistent: fine-grained locking or atomics on every object were measured to slow single-threaded code by double-digit percentages, so the language chose one big lock instead. You will meet this exact decision again in T2 as the *big kernel lock* trade-off, and again in T5 when you see why Python-based serving stacks keep the hot data plane out of Python entirely.`,
+Then there is the **GIL** — the global interpreter lock. One big mutex ensuring only one thread executes Python bytecode at a time. It exists precisely because reference counts must stay consistent: fine-grained locking or atomics on every object were measured to slow single-threaded code by double-digit percentages, so the language chose one big lock instead. You met this exact decision in the first lesson of this tier as the *big kernel lock* trade-off, and you will meet it again in T5, where serving stacks keep Python for the scheduling loop (vLLM's per-step scheduler is Python) and put the GPU kernels and the byte-moving paths, such as KV transfer and network I/O, in C++, CUDA or Rust.`,
     },
     {
       type: 'callout',
@@ -228,7 +228,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
           kcs: ['t0.idea-reuse'],
         },
         {
-          q: 'Why do LLM serving stacks keep Python out of the hot data plane?',
+          q: 'Why do LLM serving stacks write the byte-moving data path in C++, Rust or CUDA instead of Python?',
           options: [
             'Python has no CUDA bindings, forcing every GPU call to be written in C++ or Rust from the very start',
             'GC pauses and GIL contention cost too much when moving GB per token under tight latency budgets',
@@ -237,10 +237,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
           ],
           correct: [1],
           explanation:
-            'The managed-runtime contract costs exactly what decode cannot spare: unpredictable pauses, pointer-chasing layouts, serialized threads. Orchestration stays in Python; the byte-moving plane drops to C++/Rust/CUDA — Dynamo being the clean recent example.',
+            'The managed-runtime contract costs exactly what decode cannot spare: unpredictable pauses, pointer-chasing layouts, serialized threads. Scheduling can stay in Python (the vLLM per-step scheduler is); the GPU kernels and the byte-moving plane drop to C++/Rust/CUDA — Dynamo being the clean recent example.',
           why: [
-            'PyTorch and CUDA Python bindings call the GPU from Python daily. Orchestration, tokenization and scheduling stay in Python; the problem is runtime cost in the byte-moving plane.',
-            'Right: the managed-runtime contract costs what decode cannot spare, namely unpredictable pauses, pointer-chasing layouts, serialized threads. Orchestration stays in Python; byte-moving drops to C++, Rust and CUDA.',
+            'PyTorch and CUDA Python bindings call the GPU from Python daily. Orchestration, tokenization and scheduling can stay in Python; the problem is runtime cost in the byte-moving plane.',
+            'Right: the managed-runtime contract costs what decode cannot spare, namely unpredictable pauses, pointer-chasing layouts, serialized threads. Scheduling can stay in Python; byte-moving drops to C++, Rust and CUDA.',
             'The GPU does the heavy math in CUDA kernels, so Python adds per-launch overhead, not per-FLOP slowdown. Python is kept out for tail latency and data movement, not a blanket 100x penalty.',
             'asyncio and similar libraries overlap I/O fine in most services. The limit is interpreter and GIL cost under heavy concurrency, not missing async syntax.',
           ],
@@ -254,7 +254,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
     form: 'ticket',
     cr: [
       {
-        prompt: 'Explain why CPython has a GIL, and name the T2 trade-off it matches.',
+        prompt: 'Explain why CPython has a GIL, and name the operating-system trade-off from the first lesson of this tier that it matches.',
         model:
           'Every CPython object carries a reference count that every assignment updates. Making each update safe with atomics or per-object locks slowed single-threaded code, so CPython chose one global lock: one thread runs bytecode at a time. It is the big kernel lock trade-off: simple and cheap, but threads cannot run Python in parallel.',
         ideas: [
