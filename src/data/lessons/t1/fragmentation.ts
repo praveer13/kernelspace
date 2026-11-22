@@ -9,6 +9,9 @@ const ENGINE_CITE = claimCite('production.vllm.block-size')
 // The paper's Figure 2 bar for vLLM, and the course's own waste estimate (the chip): two claims, never typed.
 const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-states')
 const WASTE_ESTIMATE = claimNumber('synthetic.kv.paged-waste')
+// Section 1 of the paper: the share of KV memory holding token states in earlier systems, two claims.
+const USED_LOW = claimNumber('model.kv.static-utilization-low')
+const USED_HIGH = claimNumber('model.kv.static-utilization-high')
 /** Blocks a sequence of `tokens` occupies at `block` tokens each, and the slots left unused in its tail. */
 const blocksFor = (tokens: number, block: number) => Math.ceil(tokens / block)
 const tailWaste = (tokens: number, block: number) => blocksFor(tokens, block) * block - tokens
@@ -177,7 +180,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
 - **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
 - **Database buffer pools** — everything is an 8 KiB page, full stop.
-- **vLLM KV blocks** — every block in the pool holds the same number of tokens. The 2023 paper used ${PAPER_BLOCK}; vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}). A 300-token sequence needs ⌈300/${PAPER_BLOCK}⌉ = ${blocksFor(300, PAPER_BLOCK)} blocks at the paper's ${PAPER_BLOCK}, with ${tailWaste(300, PAPER_BLOCK)} slots wasted, and ⌈300/${ENGINE_BLOCK}⌉ = ${blocksFor(300, ENGINE_BLOCK)} blocks at ${ENGINE_BLOCK}, with ${tailWaste(300, ENGINE_BLOCK)} slots wasted. Waste is at most block_size − 1 tokens of KV in the tail, which is arithmetic. The paper's words are near-zero waste. ${wasteStory()} Before this, engines reserved *contiguous* KV per sequence sized to max length: the paper's profiling found only 20.4% to 38.2% of KV cache memory holding token states. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
+- **vLLM KV blocks** — every block in the pool holds the same number of tokens. The 2023 paper used ${PAPER_BLOCK}; vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}). A 300-token sequence needs ⌈300/${PAPER_BLOCK}⌉ = ${blocksFor(300, PAPER_BLOCK)} blocks at the paper's ${PAPER_BLOCK}, with ${tailWaste(300, PAPER_BLOCK)} slots wasted, and ⌈300/${ENGINE_BLOCK}⌉ = ${blocksFor(300, ENGINE_BLOCK)} blocks at ${ENGINE_BLOCK}, with ${tailWaste(300, ENGINE_BLOCK)} slots wasted. Waste is at most block_size − 1 tokens of KV in the tail, which is arithmetic. The paper's words are near-zero waste. ${wasteStory()} Before this, engines reserved *contiguous* KV per sequence sized to max length: the paper's profiling found only ${USED_LOW}% to ${USED_HIGH}% of KV cache memory holding token states. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
     },
     {
       type: 'callout',
@@ -367,7 +370,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
           ],
           correct: [1],
           explanation:
-            'The paper\'s claim is near-zero waste: paging KV into fixed blocks caps waste at the tail (≤ block_size−1 tokens per sequence) — versus only 20.4% to 38.2% of KV cache memory holding token states in the systems before PagedAttention.',
+            `The paper's claim is near-zero waste: paging KV into fixed blocks caps waste at the tail (≤ block_size−1 tokens per sequence) — versus only ${USED_LOW}% to ${USED_HIGH}% of KV cache memory holding token states in the systems before PagedAttention.`,
           why: [
             'Quantization shrinks bytes per token but not the reserved-but-unused share. A contiguous max-length reservation wastes the same fraction whatever the precision.',
             'Right: blocks are allocated on demand, so the only unused space is the unfilled tail block, at most block_size minus 1 tokens per sequence.',

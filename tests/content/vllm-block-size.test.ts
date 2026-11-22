@@ -29,6 +29,33 @@ const PAPER_AFTER_BREAKS = /\bvLLM\b|\bengine|\band\b|\bboth\b|\bsee\b|\bcf\b|\b
  * as vLLM's default right after it with no 'and' or 'against' between ('16 tokens is vLLM's default, as the paper chose';
  * not '16-token blocks and 8.1% at vLLM's default of 64'). Such a number is vLLM's default whatever paper it also names.
  */
+/**
+ * K0-FIX3B: a default word anywhere in the sentence with vLLM, and nothing that sets the two apart ('and', 'against', 'versus',
+ * 'vs', 'but', 'while', 'whereas', 'unlike', ';' or a dash) between the number, the default word and the engine's name:
+ * 'The paper's 16 remains vLLM's default block.', 'vLLM still ships the paper's 16 as its default.', '16 tokens, the paper's
+ * choice, is what vLLM uses by default.', 'The default in vLLM is the paper's 16.'
+ */
+const DEFAULT_WORD = /\bdefault(?:s|ed)?\b/gi
+const SETS_APART = /\b(?:and|against|versus|vs|but|while|whereas|unlike)\b|;|\u2014/i
+/** A default bound to a number of its own: 'vLLM's default of 64', 'vLLM's default is 64 tokens/block'. */
+const DEFAULT_BOUND = /^default(?:s|ed)?(?:\s+(?:block\s+)?(?:size\s+)?)?(?:\s*(?:of|is|to|=|:)\s*(?:now\s+|today\s+)?)(\d+)/i
+function defaultInSentence(masked: string, i: number, len: number): boolean {
+  const own = masked.slice(i, i + len)
+  const engines = [...masked.matchAll(/\bvLLM\b/g)].map((m) => m.index ?? 0)
+  const defaults = [...masked.matchAll(DEFAULT_WORD)]
+    .map((m) => m.index ?? 0)
+    .filter((d) => {
+      const bound = DEFAULT_BOUND.exec(masked.slice(d))
+      return !bound || bound[1] === own
+    })
+  for (const v of engines)
+    for (const d of defaults) {
+      const from = Math.min(i, v, d)
+      const to = Math.max(i + len, v + 4, d + 7)
+      if (!SETS_APART.test(masked.slice(from, to))) return true
+    }
+  return false
+}
 const VLLM_DEFAULT_BEFORE = /\bvLLM\b(?!['’]?s?\s+paper)[^;:\u2014]{0,60}\b(?:defaults?|default(?:ed)?|keeps|sets|uses)\b[^;:\u2014]*$/i
 const VLLM_DEFAULT_AFTER = /^(?:(?!\b(?:and|but|while|against|versus|vs)\b)[^;:\u2014,])*?\bvLLM['’]?s?\s+(?:own\s+)?default\b/i
 /** 'vLLM's 64': the engine's possessive right before the number reads as its default. */
@@ -94,17 +121,23 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
     const asFlag = tokens && /--block-size/i.test(masked)
     // "the paper's 16 against vLLM's 64": the engine's possessive names its default (K0-FIX3).
     const asPossessive = VLLM_POSSESSIVE.test(before) && !OTHER_UNIT.test(after)
-    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary && !asAside && !asFlag && !asPossessive) continue
+    // A number the sentence attributes to the paper is a candidate too when the same sentence gives it as vLLM's default
+    // (K0-FIX3B: 'The paper's 16 remains vLLM's default block.').
+    const pb = PAPER_BEFORE.exec(masked.slice(0, i))
+    const pa = PAPER_AFTER.exec(after)
+    const named = (pb !== null && !PAPER_BEFORE_BREAKS.test(pb[1] ?? '')) || (pa !== null && !PAPER_AFTER_BREAKS.test(pa[1] ?? ''))
+    // ...as long as it counts tokens or blocks, not something else ('the paper's 8 GPUs').
+    const countsOther = !tokens && (OTHER_UNIT.test(after) || /^\s+(?!(?:as|is|was|remains|in|from|per|blocks?|by|tokens?)\b)[a-z]/i.test(after))
+    // The paper's number, unless the sentence gives it as vLLM's default, before it, right after it, or anywhere in the
+    // sentence with nothing setting the default apart from the number.
+    const asVllmDefault =
+      VLLM_DEFAULT_BEFORE.test(masked.slice(0, i)) || VLLM_DEFAULT_AFTER.test(after.slice(0, 40)) || defaultInSentence(masked, i, len)
+    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary && !asAside && !asFlag && !asPossessive && !(named && asVllmDefault && !countsOther)) continue
     const cut = (c: string, from: number, dir: 'back' | 'fwd') => (dir === 'back' ? masked.lastIndexOf(c, from) : masked.indexOf(c, from))
     const start = Math.max(...[',', ';', ':', '—', '('].map((c) => cut(c, i, 'back')))
     const ends = [',', ';', ':', '—', ')'].map((c) => cut(c, i, 'fwd')).filter((x) => x >= 0)
     const end = ends.length ? Math.min(...ends) : masked.length
     const clause = sentence.slice(start + 1, end)
-    const pb = PAPER_BEFORE.exec(masked.slice(0, i))
-    const pa = PAPER_AFTER.exec(after)
-    const named = (pb !== null && !PAPER_BEFORE_BREAKS.test(pb[1] ?? '')) || (pa !== null && !PAPER_AFTER_BREAKS.test(pa[1] ?? ''))
-    // The paper's number, unless the sentence gives it as vLLM's default, before it or right after it.
-    const asVllmDefault = VLLM_DEFAULT_BEFORE.test(masked.slice(0, i)) || VLLM_DEFAULT_AFTER.test(after.slice(0, 40))
     const paper = named && !asVllmDefault
     const oldRelease = OLD_RELEASE.test(clause.replace(NOT_VLLM_RELEASE, ''))
     out.push({ n: Number(m[1]), clause, paper, oldRelease })
@@ -115,9 +148,12 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
 /**
  * '<4%' presented as the paper's figure: a sentence that names the paper and the 4% bound without calling it the course's.
  * The paper's words are "near-zero waste" and its Figure 2 is one experiment's average (K0-FIX3); under 4% is the course's
- * estimate, so a sentence is excused only when it says so.
+ * estimate, so a sentence is excused only when its 4% clause says so (K0-FIX3B: a disclaimer in another clause,
+ * 'the course estimate agrees', excuses nothing). 'percent' counts as '%'.
  */
-const FOUR_PERCENT = /(<\s?4\s?%|\b(?:under|below|less than|at most|capped at)\s+4\s?%)/i
+const FOUR_PERCENT = /(<\s?4\s?(?:%|percent\b)|\b(?:under|below|less than|at most|capped at)\s+4\s?(?:%|percent\b))/i
+/** The clauses of a sentence: split at ';', ',', ':' and dashes; a parenthesis stays with the clause it follows. */
+const clauses = (s: string) => s.split(/\s*[;,:\u2014\u2013]\s+|\s*;\s*/).filter(Boolean)
 const DISCLAIMS = /(course'?s (?:own )?estimate|course estimate|not in (?:the|its) (?:paper|text)|not in the paper.s text)/i
 
 const PAPER = claimNumber('serving.pagedattention.paper-block-size')
@@ -153,7 +189,10 @@ export function typedDefaults(text: string, n: number, paper = PAPER): string[] 
 export function fourPercentAsPaper(text: string): string[] {
   const bad: string[] = []
   for (const s of sentences(text)) {
-    if (FOUR_PERCENT.test(s) && /\bpaper/i.test(s) && !DISCLAIMS.test(s)) bad.push(s.trim())
+    if (!FOUR_PERCENT.test(s) || !/\bpaper/i.test(s)) continue
+    // Excused only when every clause that gives the 4% carries the disclaimer itself.
+    if (clauses(s).filter((c) => FOUR_PERCENT.test(c)).every((c) => DISCLAIMS.test(c))) continue
+    bad.push(s.trim())
   }
   return bad
 }
@@ -177,6 +216,9 @@ for (const f of taskFiles) {
 const EXTRA_SOURCES = [
   'src/components/sims/AllocatorSim.tsx',
   'src/components/sims/BlockTableExplorer.tsx',
+  // K0-FIX3B: the KV simulator and the home page's story carry block-size and waste text this pull request changed.
+  'src/components/sims/KvCacheSim.tsx',
+  'src/components/home/ScrollStory.tsx',
   'src/data/plays.ts',
   'src/data/twins',
   'src/data/forge',
@@ -193,28 +235,54 @@ function sourceFiles(path: string): string[] {
     .map((e) => `${path}/${relative(full, `${e.parentPath}/${e.name}`)}`)
 }
 
+/**
+ * K0-FIX3B: every erratum module, read as data. Its `before` is left out: it quotes what the course taught, which is the
+ * wrong statement the erratum corrects, by design.
+ */
+const errataDir = `${root}src/data/errata/`
+const errataSurfaces: Array<[string, string]> = []
+/** Errata another erratum supersedes: the superseder corrects them, so their typed number is dated history. */
+const SUPERSEDED = new Set<string>()
+for (const f of readdirSync(errataDir).filter((x) => /^\d.*\.ts$/.test(x)).sort()) {
+  const e = ((await import(`${errataDir}${f}`)) as { default: Record<string, unknown> & { supersedes?: string } }).default
+  errataSurfaces.push([`src/data/errata/${f}`, strings({ ...e, before: '' }).join('\n')])
+  if (e.supersedes) SUPERSEDED.add(`src/data/errata/${e.supersedes}.ts`)
+}
+
 const surfaces: Array<[string, string]> = [
   ...ALL_LESSONS.map((l): [string, string] => [l.id, strings(l).join('\n')]),
   ['glossary', strings(PAIRS).join('\n')],
   ...taskLists.map(([id, v]): [string, string] => [id, strings(v).join('\n')]),
   ['claims', ALL_CLAIMS.map((c) => [c.label, c.boundary, c.discrepancy ?? ''].join('\n')).join('\n')],
   ...EXTRA_SOURCES.flatMap(sourceFiles).map((f): [string, string] => [f, prose(f, readFileSync(`${root}${f}`, 'utf8'))]),
+  ...errataSurfaces,
 ]
 
 const N = claimNumber('production.vllm.block-size')
 
 describe('no learner-facing text types vLLM default block size', () => {
-  test('the scan covers lessons, the glossary, sim task lists and both sim components', () => {
+  test('the scan covers lessons, the glossary, sim task lists, the sim components, the home story and the errata', () => {
     expect(ALL_LESSONS.length).toBeGreaterThan(50)
     expect(taskLists.map(([id]) => id)).toContain('blockTableExplorer.tasks.ts:BLOCK_TABLE_EXPLORER_TASKS')
     expect(surfaces.length).toBeGreaterThan(ALL_LESSONS.length + 1 + taskLists.length + 2)
-    expect(surfaces.map(([id]) => id)).toEqual(expect.arrayContaining(['claims', 'src/components/sims/AllocatorSim.tsx', 'src/data/plays.ts']))
+    const ids = surfaces.map(([id]) => id)
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'claims',
+        'src/components/sims/AllocatorSim.tsx',
+        'src/data/plays.ts',
+        'src/components/sims/KvCacheSim.tsx',
+        'src/components/home/ScrollStory.tsx',
+        'src/data/errata/2026-11-21-paged-waste-not-the-papers-figure.ts',
+        'src/data/errata/2026-11-21-vllm-default-block-size-64.ts',
+      ]),
+    )
   })
 
   test('every surface passes the typed-default rule', () => {
     const found: string[] = []
     for (const [id, text] of surfaces) {
-      if (WHITELIST[id]) continue
+      if (WHITELIST[id] || SUPERSEDED.has(id)) continue
       for (const s of typedDefaults(text, N)) found.push(`${id}: ${s.slice(0, 160)}`)
     }
     expect(found).toEqual([])
@@ -285,10 +353,28 @@ describe('no learner-facing text types vLLM default block size', () => {
     expect(typedDefaults("wastes 1.4% at the paper's 16-token blocks and 8.1% at vLLM's default of 64.", 64)).toEqual([])
   })
 
+  test("K0-FIX3B: five more shapes of the paper's 16 given as vLLM's default fire", () => {
+    const asDefault = [
+      "The paper's 16 remains vLLM's default block.",
+      "vLLM still ships the paper's 16 as its default.",
+      "16 tokens, the paper's choice, is what vLLM uses by default.",
+      'The default in vLLM is the paper\'s 16.',
+      "vLLM adopted the paper's 16 as its default block size.",
+      // The paper's own sentence, undated: in present tense it gives 16 as vLLM's default today (it was a 'form the course
+      // keeps' until K0-FIX3B; the course quotes it only in a claim's source quote, which the scan does not read).
+      'vLLM sets its default block size as 16 (the 2023 paper, section 7.2).',
+    ]
+    for (const t of asDefault) expect(typedDefaults(t, 64), t).toHaveLength(1)
+    // A separator between the paper's number and vLLM's default still excuses it.
+    expect(typedDefaults("The paper chose 16, against vLLM's default of 64.", 64)).toEqual([])
+    expect(typedDefaults("The paper's 16 versus vLLM's default of 64.", 64)).toEqual([])
+    // A paper number that no sentence calls a default stays out of the scan.
+    expect(typedDefaults("The paper's 8 GPUs ran vLLM with its default scheduler.", 64)).toEqual([])
+  })
+
   test('the forms the course keeps do not fire', () => {
     const ok = [
       "The paper's default was 16 tokens per block.",
-      'vLLM sets its default block size as 16 (the 2023 paper, section 7.2).',
       'vLLM v0.33.0 defaulted to 16 tokens per block.',
       "vLLM's default is 64 tokens per block (v0.34.0).",
       "ROCm keeps 16, and an explicit --block-size wins over vLLM's default of 64.",
@@ -332,5 +418,16 @@ describe("'<4%' is the course's estimate, never presented as the paper's figure"
     expect(fourPercentAsPaper('Waste capped at <4% in the paper.').length).toBe(1)
     expect(fourPercentAsPaper('The course estimate is under 4%, a figure the paper does not report.')).toEqual([])
     expect(fourPercentAsPaper('Waste under 4% for a mixed batch.')).toEqual([])
+  })
+
+  test('K0-FIX3B: a disclaimer counts only in the 4% clause, and percent counts as %', () => {
+    const bad = [
+      "The paper's Figure 2 gives vLLM <4% waste; the course estimate agrees.",
+      "Figure 2 of the paper shows waste under 4%, not the course estimate's 8%.",
+      'The paper reports under 4 percent waste.',
+    ]
+    for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
+    expect(fourPercentAsPaper("Under 4% KV waste is the course's estimate, not a figure from the PagedAttention paper.")).toEqual([])
+    expect(fourPercentAsPaper("The course estimate is under 4 percent; the paper's words are near-zero waste.")).toEqual([])
   })
 })

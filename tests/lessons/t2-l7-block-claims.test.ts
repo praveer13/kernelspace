@@ -21,6 +21,6 @@ describe('t2.l7 block-size and waste claims (K0-D16)', () => {
   test("<4% is gone, and the paper's own words are quoted instead", () => {
     expect(text).not.toContain('<4%')
     expect(text).toContain('near-zero waste')
-    expect(text).toContain('20.4% to 38.2%')
+    expect(text).toContain(`${claimNumber('model.kv.static-utilization-low')}% to ${claimNumber('model.kv.static-utilization-high')}%`)
   })
 })
