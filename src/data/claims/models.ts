@@ -495,7 +495,7 @@ export const MODEL_CLAIMS: Claim[] = [
     verifiedAt: '2026-10-05',
     ttlDays: 365,
     boundary:
-      'No source for this exact figure: a round upper bound. The paper reports "near-zero waste"; the tail averages half a block per sequence: at vLLM\'s default block (production.vllm.block-size) about 3% at the calculator\'s shortest context of 1,024 tokens, and far less beyond.',
+      'The course\'s estimate, not the paper\'s: a sequence strands half a block on average, so the share grows with block size and falls with length. The calculator books it flat and shows that mean tail at vLLM\'s default (production.vllm.block-size). The lessons\' mixed batch (pagedMix.ts) is under it at the paper\'s block, over it at vLLM\'s. The paper says "near-zero waste"; Figure 2: serving.pagedattention.fig2-vllm-token-states.',
   },
   {
     id: 'synthetic.kv.runtime-overhead',

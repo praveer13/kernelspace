@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { claimNumber, getClaim } from '@/data/claims'
 import { ALL_LESSONS } from '@/data/lessons'
+import { mixWastePct } from '@/data/lessons/pagedMix'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't1.l4')
 if (!lesson) throw new Error('t1.l4 not found')
@@ -42,16 +43,19 @@ describe('t1.l4 block-size claims (K0-D14)', () => {
     for (const s of all) expect(s).not.toMatch(/headline/i)
     const chip = lesson.blocks.find((b) => b.type === 'statline')
     if (chip?.type !== 'statline') throw new Error('no statline block')
-    const waste = chip.stats.find((x) => x.value === '<4%')
+    const waste = chip.stats.find((x) => x.value === `<${claimNumber('synthetic.kv.paged-waste')}%`)
     expect(waste?.label).toContain('course estimate')
-    expect(waste?.hint).toContain('is not in the paper\'s text')
+    expect(waste?.hint).toContain("The paper's words are near-zero waste")
   })
 
-  test("the mixed-batch waste names its block size and is computed for both: 1.4% at 16, 8.1% at 64", () => {
+  test('the mixed-batch waste names its block size and is computed for both (1.4% at 16, 8.1% at 64 today)', () => {
     const text = all.join('\n')
-    expect(text).toContain("1.4% at the paper's 16-token blocks (under 4%) and 8.1% at vLLM's 64")
+    const paper = claimNumber('serving.pagedattention.paper-block-size')
+    const engine = claimNumber('production.vllm.block-size')
+    const both = `${mixWastePct(paper)}% at the paper's ${paper}-token blocks and ${mixWastePct(engine)}% at vLLM's default of ${engine}`
+    expect(text).toContain(both)
     expect(text).not.toMatch(/a figure the paper does not report|came from the course/)
-    expect(JSON.stringify(ALL_LESSONS.find((l) => l.id === 't5.l5'))).toContain("1.4% at the paper's 16-token blocks (under 4%) and 8.1% at vLLM's 64")
+    expect(JSON.stringify(ALL_LESSONS.find((l) => l.id === 't5.l5'))).toContain(both)
   })
 
   test('no string types vLLM default as 16', () => {

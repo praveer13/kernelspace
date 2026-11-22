@@ -1,10 +1,12 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
-import { claimCite, claimNumber } from '../claims'
+import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
 
-// The paper's block size and vLLM's default today are two claims; this lesson reads each from the registry.
+// The paper's block size and vLLM's default at the pinned release are two claims; this lesson reads each from the snapshot.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE_CITE = claimCite('production.vllm.block-size')
+// Figure 2 of the paper: the share of vLLM's KV cache memory holding token states, a claim.
+const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-states')
 
 /**
  * Spiral items (spec §8.6): authored questions on earlier T0-T2 KCs, drawn by the t2.l7 checkpoint beside the
@@ -225,7 +227,7 @@ You already know this bug — you built it in T1. Contiguous, worst-case, per-cl
     {
       type: 'callout',
       variant: 'isomorphism',
-      md: `Read the paper's Figure 2 (memory waste breakdown) next to your T1 fragmentation simulator output: "reserved-but-unused" is internal fragmentation from worst-case allocation; "unusable gaps" is external fragmentation from variable sizes. The paper never says "allocator," but §2 is an allocator autopsy.`,
+      md: `Read the paper's Figure 2 (the average share of KV cache memory in each state during its §6.2 experiment) next to your T1 fragmentation simulator output. Its legend has four parts: token states, reservation, internal frag., and external frag. & others. §3.1 is the allocator autopsy: slots reserved for tokens not generated yet, internal fragmentation from over-provisioning for the maximum length, and external fragmentation "from the memory allocator like the buddy allocator". The earlier systems' bars are mostly waste; vLLM's is ${FIG2_TOKEN_STATES}% token states.`,
     },
     {
       type: 'prose',
@@ -249,7 +251,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           osLine: 'Fixed 4 KiB units of virtual/physical memory; any frame backs any page.',
           llm: 'KV block',
           llmLine: `Fixed-size token units (${PAPER_BLOCK} in the paper) of logical/physical KV; any physical block serves any sequence.`,
-          breaks: `A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (${PAPER_BLOCK} tokens in the paper, vLLM's default is ${ENGINE_CITE}) whose byte size depends on the model's layers, heads and dtype.`,
+          breaks: `A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice whose byte size depends on the model's layers, heads and dtype, and whose token count was ${PAPER_BLOCK} in the paper. vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}).`,
           work: {
             backgrounds: ['backend', 'jvm'],
             os: 'connection pool',
@@ -329,13 +331,13 @@ Also note §5's distributed bits: for models spanning GPUs, the block manager is
       type: 'prose',
       md: `## Checkpoint briefing
 
-You are ready for the checkpoint when you can answer, without notes: What three wastes does §2 diagnose, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
+You are ready for the checkpoint when you can answer, without notes: Which wastes do §1 and §3.1 find in earlier systems, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
     },
     {
       type: 'quiz',
       questions: [
         {
-          q: 'The three KV-memory wastes the paper diagnoses in prior systems map to which allocator phenomena?',
+          q: 'Section 1 of the paper gives two reasons earlier systems waste KV memory. In allocator terms, which wastes do they come to?',
           options: [
             'Memory leaks from unfreed sequences, data races on shared KV tensors, and deadlocks between the scheduler and the KV allocator under load',
             'Internal fragmentation from worst-case reservation, external fragmentation from variable segments, and duplicated KV prefixes',
@@ -344,7 +346,7 @@ You are ready for the checkpoint when you can answer, without notes: What three 
           ],
           correct: [1],
           explanation:
-            'Reserved-but-unused slots are internal fragmentation; unusable gaps between variable-size segments are external; re-copied prompts for parallel samples are duplication that page-style sharing eliminates. §2 is an allocator autopsy.',
+            'Section 1: earlier systems "suffer from internal and external memory fragmentation" and "cannot exploit the opportunities for memory sharing". Slots over-provisioned for the maximum length are internal fragmentation; gaps between variable-size chunks are external; prompts re-copied for parallel samples are the duplication that block sharing removes. §3.1 takes the allocator apart and also counts slots reserved for tokens not generated yet.',
           why: [
             'Misconception: the waste is leaked memory. The 60–80% is memory that is reserved or stranded, not lost: sequences free their KV on completion, and nothing here is a race or deadlock.',
             'Right: slots reserved for worst-case length but unused are internal fragmentation, gaps between variable-size segments are external, and re-copied shared prompts are duplication.',

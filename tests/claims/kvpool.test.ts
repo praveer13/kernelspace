@@ -32,9 +32,10 @@ describe('lazy/kvpool', () => {
     expect(c.source?.url).toContain(`/${VLLM_PIN.ref}/vllm/config/cache.py`)
   })
 
-  test('the group holds exactly these three claims', () => {
+  test('the group holds exactly these four claims', () => {
     expect(KVPOOL_CLAIMS.map((c) => c.id)).toEqual([
       'serving.pagedattention.paper-block-size',
+      'serving.pagedattention.fig2-vllm-token-states',
       'production.vllm.extensible-kv-cache',
       'production.vllm.gpu-memory-utilization',
     ])

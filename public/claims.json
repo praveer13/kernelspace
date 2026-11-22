@@ -1017,7 +1017,7 @@
       "label": "KV calculator: memory lost to PagedAttention block rounding (course stand-in)",
       "verifiedAt": "2026-10-05",
       "ttlDays": 365,
-      "boundary": "No source for this exact figure: a round upper bound. The paper reports \"near-zero waste\"; the tail averages half a block per sequence: at vLLM's default block (production.vllm.block-size) about 3% at the calculator's shortest context of 1,024 tokens, and far less beyond."
+      "boundary": "The course's estimate, not the paper's: a sequence strands half a block on average, so the share grows with block size and falls with length. The calculator books it flat and shows that mean tail at vLLM's default (production.vllm.block-size). The lessons' mixed batch (pagedMix.ts) is under it at the paper's block, over it at vLLM's. The paper says \"near-zero waste\"; Figure 2: serving.pagedattention.fig2-vllm-token-states."
     },
     {
       "id": "synthetic.kv.runtime-overhead",
@@ -1490,7 +1490,7 @@
       },
       "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 before v0.34.0 (its release notes: \"was 16\").",
+      "boundary": "When --block-size is not given. The v0.34.0 release notes: \"Backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size still wins.\" cache.py also has mamba_block_size. 16 before v0.34.0 (release notes: \"was 16\").",
       "discrepancy": "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size)."
     },
     {
@@ -6614,7 +6614,23 @@
       },
       "verifiedAt": "2026-11-21",
       "ttlDays": 365,
-      "boundary": "The 2023 paper's choice after a sweep in which 16 to 128 did best on ShareGPT and 16 or 32 on Alpaca. production.vllm.block-size is the engine's default today."
+      "boundary": "The 2023 paper's choice after a sweep in which 16 to 128 did best on ShareGPT and 16 or 32 on Alpaca. production.vllm.block-size is the engine's default at its pinned release."
+    },
+    {
+      "id": "serving.pagedattention.fig2-vllm-token-states",
+      "kind": "benchmark",
+      "value": 96.3,
+      "unit": "% of KV cache memory",
+      "label": "PagedAttention paper (SOSP 2023), Figure 2: share of vLLM's KV cache memory holding token states",
+      "source": {
+        "url": "https://arxiv.org/html/2309.06180v1",
+        "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Figure 2",
+        "quote": "Average percentage of memory wastes in different LLM serving systems during the experiment in §6.2.",
+        "row": "Figure 2 (Section 1), the vLLM bar: its Token states segment is labelled 96.3"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 180,
+      "boundary": "An average over one experiment (§6.2, basic sampling), not a bound for every workload. The bar's other segments (Reservation, Internal frag., External frag. & Others) carry no labels. The text gives no waste figure for vLLM; its words are \"near-zero waste\"."
     },
     {
       "id": "production.vllm.extensible-kv-cache",

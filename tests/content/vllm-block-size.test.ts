@@ -9,8 +9,9 @@ import { PAIRS } from '@/data/glossary'
 
 /**
  * K0-D23. vLLM's default KV block size moved from 16 to 64 at v0.34.0 and the course said 16 in nine places, because prose
- * never read the claim. No learner-facing string may type vLLM's default as a number that is not the claim's value, unless
- * the sentence names the paper (the 2023 figure) or v0.10.2 (the benchmark's pin).
+ * never read the claim. No learner-facing string may type vLLM's default as a number that is not the claim's value. A number
+ * is excused only when it is attributed to the paper and not to vLLM's default (K0-FIX3: "the paper's 16", "16 in the 2023
+ * paper", never "vLLM defaults to 16, the paper's choice"), or when its clause names a vLLM release before v0.34.0.
  */
 
 /**
@@ -22,6 +23,16 @@ const PAPER_BEFORE = /\b(?:paper|2023)\b([^;:\u2014()]{0,40})$/i
 const PAPER_BEFORE_BREAKS = /\bvLLM\b|\bengine|\band\b|\bunlike\b|\bboth\b|\bnow\b|\btoday\b/i
 const PAPER_AFTER = /^([^;:\u2014)]{0,60}?)\b(?:paper|2023)\b/i
 const PAPER_AFTER_BREAKS = /\bvLLM\b|\bengine|\band\b|\bboth\b|\bsee\b|\bcf\b|\blike\b/i
+/**
+ * The number given as vLLM's default (K0-FIX3): the engine named with a default verb before the number, in the same stretch
+ * of the sentence ('vLLM defaults to 16, the paper's choice', 'Today vLLM keeps the paper's 16 as its default'), or named
+ * as vLLM's default right after it with no 'and' or 'against' between ('16 tokens is vLLM's default, as the paper chose';
+ * not '16-token blocks and 8.1% at vLLM's default of 64'). Such a number is vLLM's default whatever paper it also names.
+ */
+const VLLM_DEFAULT_BEFORE = /\bvLLM\b(?!['’]?s?\s+paper)[^;:\u2014]{0,60}\b(?:defaults?|default(?:ed)?|keeps|sets|uses)\b[^;:\u2014]*$/i
+const VLLM_DEFAULT_AFTER = /^(?:(?!\b(?:and|but|while|against|versus|vs)\b)[^;:\u2014,])*?\bvLLM['’]?s?\s+(?:own\s+)?default\b/i
+/** 'vLLM's 64': the engine's possessive right before the number reads as its default. */
+const VLLM_POSSESSIVE = /\bvLLM['’]s\s+$/i
 /**
  * A vLLM release old enough to carry the paper's 16, in the number's clause: v0.10.2 (the benchmark's pin) or anything
  * through v0.33.x. An SGLang release is not vLLM's, and 'since v0.1' says the number still holds.
@@ -81,7 +92,9 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
     const asAside = tokens && /\bblock\s+(?:is|size)\b[^.()]{0,40}\(\s*$/i.test(before)
     // 'Unless --block-size is passed, each block is 16 tokens': the flag's unset value.
     const asFlag = tokens && /--block-size/i.test(masked)
-    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary && !asAside && !asFlag) continue
+    // "the paper's 16 against vLLM's 64": the engine's possessive names its default (K0-FIX3).
+    const asPossessive = VLLM_POSSESSIVE.test(before) && !OTHER_UNIT.test(after)
+    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary && !asAside && !asFlag && !asPossessive) continue
     const cut = (c: string, from: number, dir: 'back' | 'fwd') => (dir === 'back' ? masked.lastIndexOf(c, from) : masked.indexOf(c, from))
     const start = Math.max(...[',', ';', ':', '—', '('].map((c) => cut(c, i, 'back')))
     const ends = [',', ';', ':', '—', ')'].map((c) => cut(c, i, 'fwd')).filter((x) => x >= 0)
@@ -89,16 +102,23 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
     const clause = sentence.slice(start + 1, end)
     const pb = PAPER_BEFORE.exec(masked.slice(0, i))
     const pa = PAPER_AFTER.exec(after)
-    const paper = (pb !== null && !PAPER_BEFORE_BREAKS.test(pb[1] ?? '')) || (pa !== null && !PAPER_AFTER_BREAKS.test(pa[1] ?? ''))
+    const named = (pb !== null && !PAPER_BEFORE_BREAKS.test(pb[1] ?? '')) || (pa !== null && !PAPER_AFTER_BREAKS.test(pa[1] ?? ''))
+    // The paper's number, unless the sentence gives it as vLLM's default, before it or right after it.
+    const asVllmDefault = VLLM_DEFAULT_BEFORE.test(masked.slice(0, i)) || VLLM_DEFAULT_AFTER.test(after.slice(0, 40))
+    const paper = named && !asVllmDefault
     const oldRelease = OLD_RELEASE.test(clause.replace(NOT_VLLM_RELEASE, ''))
     out.push({ n: Number(m[1]), clause, paper, oldRelease })
   }
   return out
 }
 
-/** '<4%' presented as the paper's figure: a sentence that names the paper and the 4% bound and does not disclaim it. */
+/**
+ * '<4%' presented as the paper's figure: a sentence that names the paper and the 4% bound without calling it the course's.
+ * The paper's words are "near-zero waste" and its Figure 2 is one experiment's average (K0-FIX3); under 4% is the course's
+ * estimate, so a sentence is excused only when it says so.
+ */
 const FOUR_PERCENT = /(<\s?4\s?%|\b(?:under|below|less than|at most|capped at)\s+4\s?%)/i
-const DISCLAIMS = /(does not report|do not report|not report|never the paper|not a figure|not the paper|not in (?:the|its) (?:paper|text)|not in the paper.s text|course'?s (?:own )?estimate|course estimate)/i
+const DISCLAIMS = /(course'?s (?:own )?estimate|course estimate|not in (?:the|its) (?:paper|text)|not in the paper.s text)/i
 
 const PAPER = claimNumber('serving.pagedattention.paper-block-size')
 
@@ -246,6 +266,25 @@ describe('no learner-facing text types vLLM default block size', () => {
     expect(typedDefaults(joinMarkup(jsx), 64).length).toBe(1)
   })
 
+  test("K0-FIX3: the paper's number given as vLLM's default fires, and \"vLLM's <n>\" reads as the default", () => {
+    // The closing check's six shapes passed the old exemption, which excused any number next to the word paper.
+    const asDefault = [
+      "vLLM's default block size is 16 tokens, as in the paper.",
+      "vLLM defaults to 16, the paper's choice.",
+      "vLLM's default is still 16 tokens per block from the 2023 paper.",
+      "vLLM's default block size is 16 tokens (as the paper chose).",
+      "Today vLLM keeps the paper's 16 as its default.",
+      "vLLM's default block size, 16 tokens, comes from the paper.",
+      "16 tokens is vLLM's default, as the paper chose.",
+    ]
+    for (const t of asDefault) expect(typedDefaults(t, 64), t).toHaveLength(1)
+    // t1.l4's exercise note typed vLLM's default as "vLLM's 64": at the next re-pin it must fire
+    expect(typedDefaults("remember this when T5 weighs the paper's 16 against vLLM's 64.", 128)).toHaveLength(1)
+    expect(typedDefaults("remember this when T5 weighs the paper's 16 against vLLM's default of 64.", 128)).toHaveLength(1)
+    expect(typedDefaults("remember this when T5 weighs the paper's 16 against vLLM's default of 64.", 64)).toEqual([])
+    expect(typedDefaults("wastes 1.4% at the paper's 16-token blocks and 8.1% at vLLM's default of 64.", 64)).toEqual([])
+  })
+
   test('the forms the course keeps do not fire', () => {
     const ok = [
       "The paper's default was 16 tokens per block.",
@@ -278,7 +317,7 @@ describe('no learner-facing text types vLLM default block size', () => {
   })
 })
 
-describe("'<4%' is never the paper's figure", () => {
+describe("'<4%' is the course's estimate, never presented as the paper's figure", () => {
   test('no surface calls it the paper figure or headline', () => {
     const found: string[] = []
     for (const [id, text] of surfaces) {

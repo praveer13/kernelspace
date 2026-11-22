@@ -3,10 +3,12 @@ import { readdirSync } from 'node:fs'
 import { ALL_LESSONS } from '@/data/lessons'
 import type { Erratum } from '@/data/errata/schema'
 import { claimNumber } from '@/data/lessons/claims'
-import { mixWastePct } from '@/data/lessons/pagedMix'
+import { mixWastePct, wasteStory } from '@/data/lessons/pagedMix'
 
 const PAPER = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE = claimNumber('production.vllm.block-size')
+const FIG2 = claimNumber('serving.pagedattention.fig2-vllm-token-states')
+const BOUND = claimNumber('synthetic.kv.paged-waste')
 
 // The closing browser check of k0-repin: what a learner reads on the rendered pages.
 
@@ -34,20 +36,22 @@ describe('the mixed-batch estimate names one figure per block size', () => {
     test(`${id}: no dangling "under 4%" between the two block sizes`, () => {
       const t = text(id)
       // 1.4% and 8.1% today (36 of 2,624 and 228 of 2,816 slots, recomputed by hand by the closing check).
-      expect(t).toContain(`${mixWastePct(PAPER)}% at the paper's ${PAPER}-token blocks (under 4%) and ${mixWastePct(ENGINE)}% at vLLM's ${ENGINE}`)
+      expect(t).toContain(`${mixWastePct(PAPER)}% at the paper's ${PAPER}-token blocks and ${mixWastePct(ENGINE)}% at vLLM's default of ${ENGINE}`)
+      expect(t).toContain(wasteStory())
       expect(t).not.toMatch(/blocks, under 4%, and/)
     })
   }
 })
 
-describe("'<4%' is tied to the paper's Figure 2, as the paged-waste erratum's after says", () => {
+describe("'<4%' is the course's estimate and Figure 2 is one experiment's average, as the paged-waste erratum's after says", () => {
   for (const id of ['t1.l4', 't5.l5']) {
-    test(`${id}: says the text never prints it and Figure 2 shows vLLM under 4%, for one experiment`, () => {
+    test(`${id}: gives Figure 2's vLLM bar from its claim, as one experiment's average, and calls under 4% the course's`, () => {
       const t = text(id)
-      expect(t).toContain(`"<4%" is not in the paper's text, though its Figure 2 shows vLLM with under 4% of KV memory not holding token states, in one experiment`)
+      expect(t).toContain(`The paper's Figure 2 labels vLLM's bar ${FIG2}% token states: an average over one experiment (§6.2), not a bound.`)
+      expect(t).toContain(`"Under ${BOUND}%" is the course's estimate, not the paper's`)
     })
   }
   test("t1.l4's chip hint names Figure 2 too", () => {
-    expect(text('t1.l4')).toContain("its Figure 2 puts vLLM's waste under 4% in one experiment")
+    expect(text('t1.l4')).toContain(`its Figure 2 labels vLLM's bar ${FIG2}% token states, in one experiment`)
   })
 })

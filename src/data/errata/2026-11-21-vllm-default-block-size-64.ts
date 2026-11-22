@@ -9,7 +9,7 @@ export default {
   before:
     'The lessons said vLLM uses a default of 16 tokens per block, and the block-table simulator task asked learners to locate why 16 is the default.',
   after:
-    'vLLM v0.34.0 (2026-11-16) made 64 the default on CUDA; ROCm paged attention keeps 16 and an explicit --block-size wins. 16 was the paper\'s. The lessons now read the default from the claims registry.',
+    'vLLM v0.34.0 (2026-11-16) made 64 the default on CUDA; ROCm\'s paged-attention backend keeps its own size, and an explicit --block-size overrides either. 16 was the paper\'s. The lessons now read the default from the claims registry.',
   why: 'Bigger blocks cut bookkeeping per token but leave longer unshared tails and coarser prefix hits. One claim now feeds every place that states the default.',
   supersedes: '2026-10-05-t5-l5-block-size-16-is-a-default',
   source: {

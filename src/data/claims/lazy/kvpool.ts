@@ -28,7 +28,24 @@ export const KVPOOL_CLAIMS: Claim[] = [
     verifiedAt: '2026-11-21',
     ttlDays: 365,
     boundary:
-      "The 2023 paper's choice after a sweep in which 16 to 128 did best on ShareGPT and 16 or 32 on Alpaca. production.vllm.block-size is the engine's default today.",
+      "The 2023 paper's choice after a sweep in which 16 to 128 did best on ShareGPT and 16 or 32 on Alpaca. production.vllm.block-size is the engine's default at its pinned release.",
+  },
+  {
+    id: 'serving.pagedattention.fig2-vllm-token-states',
+    kind: 'benchmark',
+    value: 96.3,
+    unit: '% of KV cache memory',
+    label: "PagedAttention paper (SOSP 2023), Figure 2: share of vLLM's KV cache memory holding token states",
+    source: {
+      url: 'https://arxiv.org/html/2309.06180v1',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1), Figure 2',
+      quote: 'Average percentage of memory wastes in different LLM serving systems during the experiment in §6.2.',
+      row: 'Figure 2 (Section 1), the vLLM bar: its Token states segment is labelled 96.3',
+    },
+    verifiedAt: '2026-11-21',
+    ttlDays: 180,
+    boundary:
+      'An average over one experiment (§6.2, basic sampling), not a bound for every workload. The bar\'s other segments (Reservation, Internal frag., External frag. & Others) carry no labels. The text gives no waste figure for vLLM; its words are "near-zero waste".',
   },
   {
     id: 'production.vllm.extensible-kv-cache',

@@ -16,6 +16,18 @@ function row(id: string) {
   return r
 }
 
+/**
+ * The words every lesson puts beside vLLM's default block, the first time it states it (K0-FIX3). They follow the claim's
+ * boundary and the v0.34.0 release notes ("Backends with a preferred block size still override it (ROCm paged attention
+ * keeps 16), and an explicit --block-size still wins"); they name no number, because no claim holds ROCm's.
+ */
+export const ENGINE_BLOCK_SCOPE = "ROCm's paged-attention backend keeps its own size, and an explicit `--block-size` overrides either"
+
+/** A fraction as its claim gives it: 0.92 stays 0.92, and a whole number keeps one decimal (1 is written 1.0). */
+export function fractionText(v: number): string {
+  return Number.isInteger(v) ? v.toFixed(1) : String(v)
+}
+
 /** A numeric claim's value. */
 export function claimNumber(id: string): number {
   const { value } = row(id)
