@@ -112,7 +112,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       steps: [
         { caption: 'Left of the ridge, the bandwidth slope rules: performance is AI × 3.35 TB/s, period. The ALUs are starved.', active: ['slope'] },
         { caption: 'Right of the ridge, the flat roof: you\'re doing enough math per byte that FLOPs, not bandwidth, are the binding constraint.', active: ['roof'] },
-        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: ~5 ms/token is physics, not engineering.', active: ['decode'] },
+        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: at batch 1 on an H100 a token takes at least about 5 ms, and engineering can only add to that.', active: ['decode'] },
         { caption: 'PREFILL and big-batch matmul live at the roof: each weight participates in hundreds of MACs (batch × seq), AI ≈ 100–1000+. This is why prefill and decode have different economics, metrics (TTFT vs ITL), and optimizations.', active: ['prefill'] },
       ],
       predictAt: {
@@ -149,7 +149,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
 
 **Decode, batch 1, 8B FP16 model.** Per token: \`~2 FLOPs × 8e9 params = 16 GFLOPs\` of math against \`~16 GB\` of weight reads (plus KV). AI ≈ 1 FLOP/byte — *300× below* the ridge. Attainable rate = \`3.35 TB/s ÷ 16 GB ≈ 200 tokens/s\` — the ALUs could do the math in microseconds; the memory system takes 5 ms. **This is the entire economics of chat inference.** And now the levers announce themselves: **batching** (N sequences share each weight read → AI × N → the single most important throughput lever), **quantization** (FP8/INT4 cuts bytes per weight 2–4× → directly multiplies the rate, T4.L7), **speculative decoding** (verify K drafted tokens per weight read → AI × K, T5.L8).
 
-**Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len × (params/bytes) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
+**Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len FLOP/byte at FP16 (2 × seq_len FLOPs per 2-byte weight, the parameter count cancels) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
     },
     {
       type: 'callout',
@@ -315,7 +315,7 @@ The simulator is a live roofline: predict and place each row of the B200 table, 
           ],
           correct: [1],
           explanation:
-            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode — the physics floor behind the 5 ms/token number.',
+            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode — the bandwidth floor behind the at-least-about-5 ms per token at batch 1.',
           why: [
             'Peak applies only above the ridge, near 295 FLOP/byte. Below it attainable performance is AI × bandwidth, and AI = 1 is far below.',
             'Right: the ridge is about 295 FLOP/byte, so AI = 1 sits far left on the slope. Attainable is AI × bandwidth, a fraction of one percent of peak.',
