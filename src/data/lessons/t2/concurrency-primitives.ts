@@ -61,7 +61,7 @@ fn bump_cas() {
         {
           label: 'Java',
           lang: 'java',
-          code: `// 1. synchronized: monitor lock, JVM may bias/thin-lock it
+          code: `// 1. synchronized: monitor lock (thin lock, inflating to a heavyweight monitor under contention)
 synchronized (lock) { counter++; }
 
 // 2. AtomicLong: CAS in a loop, userspace only
@@ -154,7 +154,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
         'Switch to per-thread striped counters (the LongAdder move): watch throughput scale with cores.',
         'Replay the ABA trace in the queue inspector; then enable tagged pointers and re-run.',
       ],
-      note: `Three durable lessons: uncontended everything is fast (measure only under contention); contention on one cache line is the real enemy (stripe, pad, or shard); and CAS correctness is about *history*, not just values — hence version tags.`,
+      note: `The contention lab is a model, not a measurement: its numbers show the shape of contention, not how fast these primitives run on your machine. Three durable lessons: uncontended everything is fast (measure only under contention); contention on one cache line is the real enemy (stripe, pad, or shard); and CAS correctness is about *history*, not just values — hence version tags.`,
     },
     {
       type: 'quiz',
