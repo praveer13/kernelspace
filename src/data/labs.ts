@@ -473,7 +473,7 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
       { id: 'ordering_choice', label: 'classify counter vs publication orderings' },
     ],
     brief: [
-      'The checks run on one thread, so they verify outcomes on one thread, plus one check that asks you to name the ordering for each use; they do not see which Ordering you put in an atomic call, and the lab 04 stress test on x86-64 may not either. Write the protocol down: Relaxed for an independent ticket, Release to publish, Acquire to observe.',
+      'The checks run on one thread: they verify the value each call leaves, and one check asks you to name the ordering for each use. None of them sees which Ordering you pass to an atomic call, and on x86-64 lab 04\'s stress test may not either. Write the protocol down: Relaxed for an independent ticket, Release to publish, Acquire to observe.',
       'R10 is required readiness for MPMC queue lab 04. Do not start the lock-free queue until compare-exchange failure and success orderings make sense.',
     ],
   },

@@ -70,6 +70,15 @@ describe('R10 brief and lib.rs agree', () => {
     expect(b).toContain('name the ordering for each use')
     expect(b).not.toContain('also inspect the ordering choices')
   })
+  test('the brief denies that any check sees the Ordering, and never claims one does', () => {
+    const b = lab.brief[0]
+    expect(b).toMatch(/\b(?:do not|does not|None of them) sees? which Ordering\b/)
+    // Any sentence where a check inspects, reads, checks, sees or verifies the Ordering must carry a negation.
+    const affirm = /\b(?:[Ii]nspect|[Rr]ead|[Cc]heck|[Ss]ee|[Vv]erif)\w*\b[^.:;]*?\b(?:which|the|your) Ordering\b/
+    for (const s of b.split(/(?<=[.:;])\s+/)) {
+      if (affirm.test(s)) expect(s).toMatch(/\b(?:not|None|no|never|cannot)\b/)
+    }
+  })
   test('the allocator completion no longer says vLLM coalesces', () => {
     const next = FORGE_LABS.find((l) => l.id === 'rust-allocator')!.completion.next
     expect(next).not.toContain('block manager coalesces')
