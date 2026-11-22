@@ -1,3 +1,4 @@
+import { claimNumber } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -105,7 +106,7 @@ NVIDIA's execution model is **SIMT** — single instruction, multiple threads. Y
 
 - **Divergence is punished.** If lanes of a warp take different branches, the hardware *serializes* the paths: both sides execute, each with half (or fewer) the lanes active. An \`if\` in GPU code is not free — it's a fork in the assembly line.
 - **Memory access is warp-wide.** When lane 0..31 load consecutive addresses, the hardware *coalesces* them into a few wide transactions (four 32-byte ones for 32 floats) (T4.L4 is all about this). When they scatter, one instruction becomes 32 transactions. Your T0.L3 stride intuition applies directly — warps love unit stride.
-- **Occupancy is the latency strategy.** With no branch prediction or speculation, a stalled warp (waiting on HBM) is simply *swapped out* for a resident warp with work ready — thousands of warps per SM make this cheap. The GPU doesn't avoid latency; it **over-subscribes** until latency stops mattering. This is the same trick as your I/O-bound thread pool, hardware-ized.`,
+- **Occupancy is the latency strategy.** With no branch prediction or speculation, a stalled warp (waiting on HBM) is simply *swapped out* for a resident warp with work ready — up to ${claimNumber('hw.h100-sxm.max-warps-per-sm')} resident warps per SM, about 8,000 across an H100, make this cheap. The GPU doesn't avoid latency; it **over-subscribes** until latency stops mattering. This is the same trick as your I/O-bound thread pool, hardware-ized.`,
     },
     {
       type: 'diagram',
@@ -143,7 +144,7 @@ NVIDIA's execution model is **SIMT** — single instruction, multiple threads. Y
           'Right: warp state lives in registers already, so the scheduler picks a ready warp on the next cycle at no cost. Enough resident warps keep the pipeline full.',
           'Idling is what a stalled CPU pipeline does. The GPU keeps many warps resident precisely so that one stalled warp leaves others to run.',
           'GPU cores are in-order and do not speculate. Latency is covered by running other warps, not by guessing past the load.',
-          'A switch copies nothing: each resident warp already holds its registers on chip. That is why the switch is free and thousands of warps can be resident.',
+          'A switch copies nothing: each resident warp already holds its registers on chip. That is why the switch is free and dozens of warps per SM can be resident.',
         ],
         kcs: ['t4.simt-warps', 't4.throughput-design'],
       },
