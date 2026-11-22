@@ -1,5 +1,10 @@
 import type { Lesson } from '../types'
 
+import { claimNumber } from '../claims'
+
+// The mean time per output token InferenceX measured for Llama-3.3-70B FP8 on 4 H100s at 4 users, in ms.
+const TPOT_MS = (claimNumber('bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot') * 1000).toFixed(1)
+
 const lesson: Lesson = {
   id: 't2.l4',
   slug: 'scheduling',
@@ -42,7 +47,7 @@ This lesson is the bridge of the whole course: the ideas here — time slices, p
       type: 'prose',
       md: `## Admission control: the scheduler's other half
 
-Every scheduler has a silent partner deciding what enters the runqueue at all. Too much admitted work and *no* scheduling policy survives: context switches eat the CPU (T2.L1), or queues grow without bound (Little's Law is not a suggestion). Real systems push back: bounded thread pools with rejection policies, load shedding at the LB, semaphore-bounded concurrency in your service, and the kernel's own OOM killer as the failure-typed admission controller. **The healthiest systems reject early and cheaply** rather than accepting work into a queue that guarantees missed deadlines for everyone.`,
+Every scheduler has a silent partner deciding what enters the runqueue at all. Too much admitted work and *no* scheduling policy survives: context switches eat the CPU (T2.L1), or the arrival rate outruns the service rate and the queue grows without bound. (Little's Law, L = λW, holds for any stable queue; it is the unstable one, arrivals faster than service, that grows without limit.) Real systems push back: bounded thread pools with rejection policies, load shedding at the LB, semaphore-bounded concurrency in your service, and the kernel's own OOM killer as the failure-typed admission controller. **The healthiest systems reject early and cheaply** rather than accepting work into a queue that guarantees missed deadlines for everyone.`,
     },
     {
       type: 'callout',
@@ -112,7 +117,7 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
       type: 'prose',
       md: `## Why batching *is* scheduling
 
-The deepest idea in modern serving is a scheduling observation: a GPU, like a CPU core, is a timeshared resource — but its "context switch" (draining one batch, loading another) is so expensive relative to the work that static, run-to-completion batching wastes most of the chip. **Continuous batching** applies preemptive timesharing at *iteration* granularity: after every single decode step (~50 ms), finished sequences leave, waiting sequences join, no one drains anything. The batch is the timeslice; the iteration is the quantum; the KV-block manager is the admission controller. T5.L7 is this lesson with GPUs; in the simulator below you can watch static batching waste the chip while continuous batching fills it.`,
+The deepest idea in modern serving is a scheduling observation: a GPU, like a CPU core, is a timeshared resource — but its "context switch" (draining one batch, loading another) is so expensive relative to the work that static, run-to-completion batching wastes most of the chip. **Continuous batching** applies preemptive timesharing at *iteration* granularity: after every single decode step (${TPOT_MS} ms per output token in one InferenceX measurement, a mean that includes other requests' prefills; steps vary with model, GPUs and batch), finished sequences leave, waiting sequences join, no one drains anything. Nothing is time-sliced and there is no quantum: the engine re-decides the batch at every step, admits whenever KV blocks are free, and preempts mainly when they run out. The decode step is the scheduling boundary, the KV-block manager is the admission controller. T5.L7 is this lesson with GPUs; in the simulator below you can watch static batching waste the chip while continuous batching fills it.`,
     },
     {
       type: 'exercise',
@@ -126,7 +131,7 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         'Enable priority inheritance; confirm high-priority latency recovers.',
         'Toggle admission control off under 2× overload: watch the queue (and p99) explode.',
       ],
-      note: `Every phenomenon in this lab has a serving-systems twin: the convoy = static batching behind a long generation; the quantum = the decode iteration; inversion = a low-priority request holding KV blocks a high-priority one needs; admission control = the waiting queue with capacity checks. T5 is this lesson at 3 TB/s.`,
+      note: `Every phenomenon in this lab has a serving-systems twin: the convoy = static batching behind a long generation; the quantum has no twin (continuous batching re-decides the batch at each decode step and time-slices nothing); inversion = a low-priority request holding KV blocks a high-priority one needs; admission control = the waiting queue with capacity checks. T5 is this lesson at 3 TB/s.`,
     },
     {
       type: 'field-note',
@@ -210,10 +215,10 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
           ],
           correct: [1],
           explanation:
-            'Iteration-level scheduling: the batch is the timeslice, the decode step is the quantum, KV-block availability is admission control. Static batching is run-to-completion FIFO — the convoy effect on silicon.',
+            'Iteration-level scheduling: the engine re-decides the running set at every decode step, with no quantum and no timeslice, and KV-block availability is admission control. Static batching is run-to-completion FIFO — the convoy effect on silicon.',
           why: [
             'Misconception: core count is the link. Static batching also runs on a many-core GPU; the mapping to preemption is about when the running set is re-chosen, not how wide the hardware is.',
-            'Right: the decode step plays the quantum. Re-picking the running set every iteration lets finished sequences leave and waiting ones join, so no one drains the batch, as with timeslicing.',
+            'Right: the decode step is the scheduling boundary, not a quantum. Re-picking the running set every iteration lets finished sequences leave and waiting ones join, so no one drains the batch; nothing is time-sliced.',
             'Misconception: inheritance is involved. Priority inheritance repairs lock-holder inversion; batch slots are not locks held for a waiter, and continuous batching has no such step.',
             'Misconception: length bucketing is the idea. Bucketing cuts padding but each batch still runs to completion, so one long output holds slots; that refines static batching, not scheduling per iteration.',
           ],
@@ -231,7 +236,7 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         prompt:
           'Explain why a scheduler needs admission control, and how continuous batching is an example of it.',
         model:
-          'Past capacity no scheduling policy helps: queues grow without bound, or switching eats the CPU, and everyone misses deadlines. Admission rejects or queues work early and cheaply instead. Continuous batching admits a waiting sequence only when KV blocks are free, and re-decides the running set after every decode step.',
+          'Past capacity no scheduling policy helps: when arrivals outrun service the queue grows without bound, or switching eats the CPU, and everyone misses deadlines. Admission rejects or queues work early and cheaply instead. Continuous batching admits a waiting sequence only when KV blocks are free, and re-decides the running set after every decode step.',
         ideas: [
           'Past capacity no scheduling policy helps: queues grow or switch overhead eats the CPU',
           'Reject or queue work early and cheaply, rather than missing deadlines for everyone',
