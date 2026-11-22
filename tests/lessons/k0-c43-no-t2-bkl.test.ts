@@ -12,6 +12,8 @@ describe('K0-C43: the big kernel lock is not sent to T2', () => {
         const near = text.slice(Math.max(0, m.index! - 160), m.index! + 160)
         expect(near).not.toMatch(/\bT2\b/)
       }
+      // The old ticket said "name the T2 trade-off it matches", 306 characters from its "big kernel lock".
+      expect(text).not.toMatch(/\bT2 trade-off\b/)
     })
   }
   test('the t0.l5 lesson does not say serving stacks keep Python out entirely', () => {
