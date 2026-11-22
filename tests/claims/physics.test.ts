@@ -6,7 +6,6 @@ import { ALL_CLAIMS, byId, lazyGroupFor, pinProblems, type Claim } from '@/data/
 import { ENGINE_CLAIMS } from '@/data/claims/engines'
 import { HARDWARE_CLAIMS } from '@/data/claims/hardware'
 import { IX_POINT_CLAIMS } from '@/data/claims/lazy/ix-points'
-import { RUST_LANG_CLAIMS } from '@/data/claims/lazy/rust-lang'
 import { EXTRACT_SHA256, INFERENCEX_PIN, LLAMA33_70B_PIN, PHYSICS_CLAIMS, RAW_SHA256, VLLM_0_10_2_PIN } from '@/data/claims/lazy/physics'
 import { MODEL_CLAIMS } from '@/data/claims/models'
 import { PRICE_CLAIMS } from '@/data/claims/prices'
@@ -326,8 +325,8 @@ describe('homes, order and the ⌘K index', () => {
     expect(ids.indexOf(IX_POINT_CLAIMS[0].id)).toBeGreaterThan(ids.indexOf(PHYSICS_CLAIMS[PHYSICS_CLAIMS.length - 1].id))
   })
 
-  test('the ⌘K index leaves out both physics groups (S5-D36) and the rust-lang group (K0-C45) and keeps every other claim; the committed file is the builder\'s output', () => {
-    const left = new Set([...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...RUST_LANG_CLAIMS].map((c) => c.id))
+  test('the ⌘K index leaves out both physics groups (S5-D36) and keeps every other claim; the committed file is the builder\'s output', () => {
+    const left = new Set([...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS].map((c) => c.id))
     const indexed = buildSearchIndex().claims.map((row) => row[0])
     for (const id of left) expect(indexed).not.toContain(id)
     expect(indexed).toEqual(ALL_CLAIMS.filter((c) => !left.has(c.id)).map((c) => c.id))
