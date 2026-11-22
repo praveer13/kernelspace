@@ -78,6 +78,9 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "EAGLE, MTP, draft, n-gram, suffix as of vLLM v0.34.0, read 2026-11-22",
     release: "vLLM v0.34.0",
   },
+  "status.wasi.version": {
+    cite: "WASI 0.3.0, shipped 2026-06-11",
+  },
   "synthetic.kv.paged-waste": {
     value: 4,
     cite: "4",
