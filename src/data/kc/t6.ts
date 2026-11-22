@@ -64,7 +64,7 @@ export const T6_KCS: readonly Kc[] = [
   {
     id: 't6.comm-overlap',
     title: 'Hiding the all-to-all under compute',
-    can: 'You can say how dual-batch overlap runs one micro-batch\'s all-to-all under the other\'s compute, and when it fails.',
+    can: 'You can say how overlap hides the all-to-all under compute: alternating micro-batches in prefill, a pipeline in decode.',
     track: 't6',
     kind: 'concept',
     lessons: ['t6.l2'],
