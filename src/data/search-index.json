@@ -455,7 +455,8 @@
 [7,"loadgen.llmperf","LLMPerf (Ray) repository status","archived 2025-12-17, read-only",""],
 [15,"genai-perf","GenAI-Perf (NVIDIA) status","being phased out; use AIPerf",""],
 [16,"uidellm","GuideLLM status and traffic profiles","live; recommended by the vLLM docs for production servers",""],
-[15,"aiperf","AIPerf status and benchmarking modes","live; NVIDIA's replacement for GenAI-Perf",""]
+[15,"aiperf","AIPerf status and benchmarking modes","live; NVIDIA's replacement for GenAI-Perf",""],
+[7,"rust.polonius","Polonius Alpha is not yet on stable Rust: the conditional-return borrow is still rejected","as of Rust 1.100.0, Nov 2026",""]
 ],
 "glossary": [
 ["page","Page","KV token block (tens of tokens)","t2.l2","block, chunk, memory unit"],
