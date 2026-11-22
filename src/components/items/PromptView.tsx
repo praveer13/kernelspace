@@ -111,36 +111,54 @@ interface StepListProps {
   className?: string
 }
 
+/**
+ * Two conventions reach a step: the text leads up to the value and `result` is the chip (cost, prefill, memory,
+ * rollout), or the text already ends with the value, or with "=" or ":" where a blanked step hid it, and `result`
+ * repeats it (roofline, step, tiling, step-calibrated). The list draws the value once either way.
+ */
+function StepBody({ s, gap }: { s: SolutionStep; gap: boolean }) {
+  const r = s.result
+  if (!r) return <Parts parts={s.text} />
+  const last = s.text[s.text.length - 1]
+  const shown = `${formatNumber(r.value)}${r.unit ? ` ${r.unit}` : ''}`
+  const inText = last?.t === 'value' ? last.value === r.value : last?.t === 'claim' && partText(last) === shown
+  // a blank step still shows its answer in the text only if a family forgot to cut it: cut it here
+  const text = gap && inText ? s.text.slice(0, -1) : s.text
+  const tail = text[text.length - 1]
+  const lead = tail?.t === 'text' && /[=:]\s*$/.test(tail.text)
+  const hole = (
+    <span className="inline-block min-w-12 rounded border border-dashed border-line-bright px-1.5 text-center font-mono text-text-3">
+      ?<span className="sr-only"> blank step: your answer goes in the answer field</span>
+    </span>
+  )
+  if (!gap && inText) return <Parts parts={text} />
+  return (
+    <>
+      <Parts parts={text} />
+      {lead ? (/\s$/.test((tail as { text: string }).text) ? '' : ' ') : ' = '}
+      {gap ? (
+        hole
+      ) : (
+        <span className={CHIP}>
+          {shown}
+        </span>
+      )}
+    </>
+  )
+}
+
 /** Worked or solution steps, numbered. A `blank` step hides its result until `reveal`. */
 export function StepList({ steps, reveal, label, className }: StepListProps) {
   return (
     <ol aria-label={label} className={cn('space-y-2', className)}>
-      {steps.map((s, i) => {
-        const gap = s.blank && !reveal
-        return (
-          <li key={i} className="flex min-w-0 gap-2.5 text-body-sm text-text-2">
-            <span className="mt-0.5 shrink-0 font-mono text-[11px] text-text-3">{String(i + 1).padStart(2, '0')}</span>
-            <span className="min-w-0 break-words">
-              <Parts parts={s.text} />
-              {s.result && (
-                <>
-                  {' = '}
-                  {gap ? (
-                    <span className="inline-block min-w-12 rounded border border-dashed border-line-bright px-1.5 text-center font-mono text-text-3">
-                      ?<span className="sr-only"> blank step: your answer goes in the answer field</span>
-                    </span>
-                  ) : (
-                    <span className={CHIP}>
-                      {formatNumber(s.result.value)}
-                      {s.result.unit ? ` ${s.result.unit}` : ''}
-                    </span>
-                  )}
-                </>
-              )}
-            </span>
-          </li>
-        )
-      })}
+      {steps.map((s, i) => (
+        <li key={i} className="flex min-w-0 gap-2.5 text-body-sm text-text-2">
+          <span className="mt-0.5 shrink-0 font-mono text-[11px] text-text-3">{String(i + 1).padStart(2, '0')}</span>
+          <span className="min-w-0 break-words">
+            <StepBody s={s} gap={!!s.blank && !reveal} />
+          </span>
+        </li>
+      ))}
     </ol>
   )
 }
