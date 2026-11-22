@@ -38,6 +38,57 @@ export interface SearchIndex {
   glossary: GlossaryRow[]
 }
 
+/**
+ * The committed file's encoding of a `SearchIndex` (K0-Z3, docs/specs/k0.md K0-Z-D16): the same rows, written so gzip
+ * has less to carry, and `decodeSearchIndex` gives back exactly the rows above. Lesson, play and glossary rows are
+ * unchanged. A concept row names its anchor by its place in its lesson row's H2 list (-1: the top of the lesson) rather
+ * than by the slug, which the decoder recomputes, and its claims by their place in `claims` (an id when the claim is
+ * not indexed); a trailing -1 or empty list is left off. A claim row front-codes its id: how many leading characters it
+ * shares with the row before, then the rest.
+ */
+export type EncodedKcRow =
+  | [id: string, title: string, can: string, lessonId: string]
+  | [id: string, title: string, can: string, lessonId: string, h2: number]
+  | [id: string, title: string, can: string, lessonId: string, h2: number, claims: (number | string)[]]
+export type EncodedClaimRow = [shared: number, idRest: string, label: string, value: number | string, unit: string]
+
+export interface EncodedSearchIndex {
+  version: 2
+  lessons: LessonRow[]
+  kcs: EncodedKcRow[]
+  plays: PlayRow[]
+  claims: EncodedClaimRow[]
+  glossary: GlossaryRow[]
+}
+
+/** The H2 slug the lesson page gives a heading (src/pages/lesson/markdown.tsx `slugify`, copied so Fuse's chunk does not pull the lesson renderer; tests/search/k0-z3-encoding.test.ts holds them equal). */
+export const headingSlug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+
+/** The rows an `EncodedSearchIndex` holds. */
+export function decodeSearchIndex(encoded: EncodedSearchIndex): SearchIndex {
+  let prev = ''
+  const claims = encoded.claims.map<ClaimRow>(([shared, rest, name, value, unit]) => {
+    prev = prev.slice(0, shared) + rest
+    return [prev, name, value, unit]
+  })
+  const h2sOf = new Map(encoded.lessons.map(([id, , , h2s]) => [id, h2s]))
+  return {
+    version: 1,
+    lessons: encoded.lessons,
+    kcs: encoded.kcs.map<KcRow>(([id, title, can, lessonId, h2 = -1, refs = []]) => {
+      const heading = h2 >= 0 ? h2sOf.get(lessonId)?.[h2] : undefined
+      return [id, title, can, lessonId, heading === undefined ? '' : headingSlug(heading), refs.map((r) => (typeof r === 'number' ? claims[r][0] : r))]
+    }),
+    plays: encoded.plays,
+    claims,
+    glossary: encoded.glossary,
+  }
+}
+
 export interface SearchItem {
   id: string
   group: SearchGroup

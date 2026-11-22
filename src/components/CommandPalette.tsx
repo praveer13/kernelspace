@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Search, FileText, ArrowRight, BookOpen, Hash, Languages, Lightbulb, Play } from 'lucide-react'
 import { TRACKS, CAPSTONE, SIMS } from '@/lib/tracks'
-import { indexItems, makeSearcher, type SearchIndex, type SearchItem } from '@/lib/search'
+import { decodeSearchIndex, indexItems, makeSearcher, type EncodedSearchIndex, type SearchIndex, type SearchItem } from '@/lib/search'
 import { cn } from '@/lib/utils'
 
 const GROUP_ICON: Partial<Record<SearchItem['group'], typeof FileText>> = {
@@ -92,7 +92,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     if (!open || index || loading.current) return
     loading.current = true
     import('@/data/search-index.json')
-      .then((m) => setIndex(m.default as unknown as SearchIndex))
+      .then((m) => setIndex(decodeSearchIndex(m.default as unknown as EncodedSearchIndex)))
       .catch(() => {})
       .finally(() => {
         loading.current = false
