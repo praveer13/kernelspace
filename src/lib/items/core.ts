@@ -118,6 +118,22 @@ export type InstanceDraft = Omit<Instance, 'family' | 'version' | 'rev' | 'claim
  * Completes an instance. Params must be JSON-safe numbers, strings and booleans: a NaN would
  * serialise as null and silently change what the fingerprint and the replay see.
  */
+/**
+ * The worked steps a level shows before the question. Level 0 shows every step with the last blanked; level 1 shows
+ * every step but the last, with the one before it blanked, so no visible step holds the final answer. Later levels
+ * show none. `full` ends on the step that finds the answer. When an earlier step already finds the same value (the
+ * lower of two roofs, the longer of two times, the smaller of two limits), the steps stop there and that one is the
+ * blank: showing it would print the answer, and showing what follows would print what it hides.
+ */
+export function workedSteps(full: readonly SolutionStep[], level: Level, blank: (s: SolutionStep) => SolutionStep): SolutionStep[] | undefined {
+  if (level > 1) return undefined
+  const answer = full[full.length - 1]?.result?.value
+  const found = answer === undefined ? -1 : full.findIndex((s) => s.result !== undefined && Math.abs(s.result.value - answer) <= 1e-9 * Math.abs(answer))
+  const upto = level === 0 ? full.length : full.length - 1
+  const shown = full.slice(0, found >= 0 && found < upto ? found + 1 : upto)
+  return shown.map((s, i) => (i === shown.length - 1 ? blank(s) : s))
+}
+
 export function finishInstance(gen: Pick<Gen, 'id' | 'version'>, draft: InstanceDraft): Instance {
   for (const [k, v] of Object.entries(draft.params)) {
     if (typeof v === 'number' && !Number.isFinite(v)) throw new RangeError(`${gen.id}/${draft.variant}: param ${k} is not finite`)

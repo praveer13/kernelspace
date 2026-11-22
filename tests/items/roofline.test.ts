@@ -157,8 +157,13 @@ describe('levels', () => {
         const worked = i.prompt.worked!
         expect(worked.filter((w) => w.blank)).toHaveLength(1)
         const blank = worked.findIndex((w) => w.blank)
-        expect(blank).toBe(l === 0 ? worked.length - 1 : Math.floor((worked.length - 1) / 2))
+        // the blank is the last step shown: level 0 blanks the last step, level 1 shows every step but the last and blanks the one before
+        expect(blank).toBe(worked.length - 1)
         const full = roofline.solution(i)
+        expect(worked.length).toBeLessThanOrEqual(l === 0 ? full.length : full.length - 1)
+        // no visible step finds the answer
+        const truth = (i.answer as { truth: number }).truth
+        for (const w of worked) if (!w.blank) expect(w.result?.value).not.toBe(truth)
         expect(partsText(worked[blank].text).length).toBeLessThan(partsText(full[blank].text).length)
       }
     }

@@ -20,7 +20,7 @@ import { byId, claimNumber } from '@/data/claims'
 import '@/data/claims/lazy/ix-points'
 import '@/data/claims/lazy/physics'
 import '@/data/claims/lazy/tiling'
-import { claimRef, finishInstance, type Rng } from '@/lib/items/core'
+import { claimRef, finishInstance, workedSteps, type Rng } from '@/lib/items/core'
 import type { Gen, Instance, Level, Params, PromptPart, SolutionStep, VariantSpec } from '@/lib/items/types'
 import { formatNumber, GB } from '@/lib/items/units'
 import { stepCard } from '@/lib/world/physics/card'
@@ -295,9 +295,7 @@ export function make(gen: Gen, vs: VariantSpec, level: Level, seed: number, r: R
   const p = vs.id === PREFILL_V2 ? drawPrefill(r) : r.pick(r.pick(binsOfSpeedup()))
   const truth = truthOf(vs.id, p)
   const full = calSteps(vs.id, p, truth)
-  // level 0 shows every step with the last blanked; level 1 blanks one in the middle
-  const blankAt = level === 0 ? full.length - 1 : Math.floor((full.length - 1) / 2)
-  const worked = level < 2 ? full.map((s, i) => (i === blankAt ? blanked(s) : s)) : undefined
+  const worked = workedSteps(full, level, blanked)
   const stem = calStem(vs.id, p)
   const given = calGivens(p)
   // the claims shown as chips (the whys' measured points too), and those that decide the scene: the capacity, the dataset

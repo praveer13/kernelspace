@@ -24,7 +24,7 @@
 import { atlasRow } from '@/data/atlas'
 import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
-import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
+import { claimRef, finishInstance, workedSteps, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
 import { gradeResponse } from '@/lib/items/grade'
 import { familyPart, loadFamilyPart, PARTS_ON_DEMAND } from '@/lib/items/on-demand'
 import type { Gen, Instance, Level, Params, PromptPart, RatioRule, SolutionStep, VariantSpec } from '@/lib/items/types'
@@ -252,9 +252,7 @@ function stemOf(vid: string, p: Params): PromptPart[] {
 function build(vs: VariantSpec, level: Level, seed: number, p: Params): Instance {
   const truth = truthOf(vs.id, p)
   const full = steps(vs.id, p, truth)
-  // level 0 shows every step with the last blanked; level 1 blanks one in the middle
-  const blankAt = level === 0 ? full.length - 1 : Math.floor((full.length - 1) / 2)
-  const worked = level < 2 ? full.map((s, i) => (i === blankAt ? blanked(s) : s)) : undefined
+  const worked = workedSteps(full, level, blanked)
   const stem = stemOf(vs.id, p)
   const given = vs.id === 'quant-bytes' ? [] : givens(p)
   const claims = [...stem, ...given.map((g) => g.value)].flatMap((x) => (x.t === 'claim' ? [x.claim] : []))
@@ -328,7 +326,7 @@ const RATIO_RULES: RatioRule[] = [
 
 const gen: Gen = {
   id: 'step',
-  version: 3, // gen-literal-ok: the generator version
+  version: 4, // gen-literal-ok: the generator version
   title: 'The step card',
   kcs: [KC.decodeBandwidth, LATENCY_METRICS, PREFILL_VS_DECODE, KC.ridgePoint, KC.fp4Capacity, PARALLELISM],
   variants: VARIANTS,

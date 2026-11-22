@@ -16,7 +16,7 @@
  */
 
 import { KC } from '@/data/kc/ids'
-import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
+import { claimRef, finishInstance, workedSteps, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
 import { gradeResponse } from '@/lib/items/grade'
 import type { AnswerSpec, Gen, Instance, Level, Params, PromptPart, RatioRule, SolutionStep, VariantSpec } from '@/lib/items/types'
 import { byteUnitChoices, BYTE_UNITS, formatNumber, KIB, type Dtype } from '@/lib/items/units'
@@ -328,10 +328,8 @@ function build(vs: VariantSpec, level: Level, seed: number, p: Params): Instance
     default:
       answer = { kind: 'numeric', truth, unit: 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
   }
-  // level 0 shows every step with the last blanked; level 1 blanks one in the middle
   const full = steps(vs.id, p, truth)
-  const blankAt = level === 0 ? full.length - 1 : Math.floor((full.length - 1) / 2)
-  const worked = level < 2 ? full.map((s, i) => (i === blankAt ? blanked(s) : s)) : undefined
+  const worked = workedSteps(full, level, blanked)
   return finishInstance(gen, {
     variant: vs.id,
     seed,
@@ -516,7 +514,7 @@ const pin = (name: string, source: string, variant: string, p: Params, truth: nu
 const gen: Gen = {
   id: 'tiling',
   // v2: fp8-ridge's tile ask is the whole side that reaches the ridge (591 on H100), graded exactly
-  version: 2,
+  version: 3, // gen-literal-ok: the generator version
   title: 'Tiling: shared memory, occupancy, raster order, FP8 and FlashAttention',
   kcs: ['t4.shared-memory-scratchpad', 't4.occupancy', KC.rasterL2Reuse, KC.ridgePoint, 't4.flashattention-blocking'],
   variants: VARIANTS,
