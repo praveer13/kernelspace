@@ -14,6 +14,9 @@ const KV_KIB_PER_TOKEN = 128 // T5.L4's 8B model
 const mib = (tokens: number) => (tokens * KV_KIB_PER_TOKEN) / 1024
 const POOL_RELEASE = claimRelease('production.vllm.extensible-kv-cache')
 const GPU_UTIL = claimNumber('production.vllm.gpu-memory-utilization')
+// Section 1 of the paper: the share of KV memory holding token states in earlier systems, two claims.
+const USED_LOW = claimNumber('model.kv.static-utilization-low')
+const USED_HIGH = claimNumber('model.kv.static-utilization-high')
 
 const lesson: Lesson = {
   id: 't5.l5',
@@ -233,7 +236,7 @@ class BlockManager:
       type: 'prose',
       md: `## What the indirection costs — and buys
 
-The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% (the paper measured only 20.4%–38.2% of KV memory holding token states in earlier systems) → near-zero waste in the paper's words, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. ${wasteStory()} In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
+The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% (the paper measured only ${USED_LOW}%–${USED_HIGH}% of KV memory holding token states in earlier systems) → near-zero waste in the paper's words, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. ${wasteStory()} In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging copies KV, "confusing block-table indirection
     // with copying KV", the evidence's own example of a seeded error in a protégé explanation of PagedAttention

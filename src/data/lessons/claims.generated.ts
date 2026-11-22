@@ -26,4 +26,12 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 4,
     cite: "4",
   },
+  "model.kv.static-utilization-low": {
+    value: 20.4,
+    cite: "20.4",
+  },
+  "model.kv.static-utilization-high": {
+    value: 38.2,
+    cite: "38.2",
+  },
 }

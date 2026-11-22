@@ -44,7 +44,7 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
   test("<4% is not called the paper's figure", () => {
     expect(text).not.toContain('**<4%**')
     expect(text).toContain('near-zero waste in the paper')
-    expect(text).toContain('20.4%–38.2%')
+    expect(text).toContain(`${claimNumber('model.kv.static-utilization-low')}%–${claimNumber('model.kv.static-utilization-high')}%`)
     expect(text).toContain(wasteStory())
     expect(text).toContain("is the course's estimate, not the paper's")
     expect(text).not.toContain('does not report')

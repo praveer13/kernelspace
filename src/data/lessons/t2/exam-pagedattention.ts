@@ -7,6 +7,9 @@ const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE_CITE = claimCite('production.vllm.block-size')
 // Figure 2 of the paper: the share of vLLM's KV cache memory holding token states, a claim.
 const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-states')
+// Section 1 of the paper: the share of KV memory holding token states in earlier systems, two claims.
+const USED_LOW = claimNumber('model.kv.static-utilization-low')
+const USED_HIGH = claimNumber('model.kv.static-utilization-high')
 
 /**
  * Spiral items (spec §8.6): authored questions on earlier T0-T2 KCs, drawn by the t2.l7 checkpoint beside the
@@ -218,7 +221,7 @@ The checkpoint rule: eight items, **six right**, with at least one written or co
     },
     {
       type: 'prose',
-      md: `## §1–2: The problem, in OS vocabulary
+      md: `## §1–3: The problem, in OS vocabulary
 
 The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, pre-allocated for the maximum possible length**.
 
@@ -231,14 +234,14 @@ You already know this bug — you built it in T1. Contiguous, worst-case, per-cl
     },
     {
       type: 'prose',
-      md: `## §3: PagedAttention — paging, verbatim
+      md: `## §4: PagedAttention — paging, verbatim
 
-The fix, section 3: partition each sequence's KV cache into **blocks** of a fixed number of tokens (${PAPER_BLOCK} in the paper). Blocks live anywhere in GPU memory; each sequence keeps a **block table** mapping its logical blocks to physical blocks; the attention kernel reads keys/values *through* the block table.
+The fix, §4.1: partition each sequence's KV cache into **blocks** of a fixed number of tokens (${PAPER_BLOCK} in the paper). Blocks live anywhere in GPU memory; each sequence keeps a **block table** mapping its logical blocks to physical blocks; the attention kernel reads keys/values *through* the block table.
 
 Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; the block table is a **page table** (one level, since sequences are small); the attention kernel walking it is the **MMU** doing translation. Every property follows for free, exactly as in 1962:
 
 - **Fixed-size blocks ⇒ no external fragmentation.** Any free block fits any sequence (T1.L4's fixed-block maneuver).
-- **Waste is bounded to the tail block**: at most block_size − 1 tokens per sequence (${PAPER_BLOCK - 1} at the paper's ${PAPER_BLOCK}). The paper's own words are **near-zero waste**, against only 20.4% to 38.2% of KV memory holding token states in earlier systems — bounded internal fragmentation by construction.
+- **Waste is bounded to the tail block**: at most block_size − 1 tokens per sequence (${PAPER_BLOCK - 1} at the paper's ${PAPER_BLOCK}). The paper's own words are **near-zero waste**, against only ${USED_LOW}% to ${USED_HIGH}% of KV memory holding token states in earlier systems — bounded internal fragmentation by construction.
 - **Growth is lazy**: blocks are allocated on demand as tokens generate, like demand paging — no more worst-case reservation.
 - **Sharing is block-granular**: two sequences with a common prefix (the system prompt, parallel samples, beam branches) *share physical blocks*, reference-counted. When one branch writes to a shared block, it is copied — **copy-on-write**, the fork() trick from T2.L2, with the same refcounts.`,
     },
@@ -303,7 +306,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
     },
     {
       type: 'prose',
-      md: `## §4: Scheduling — the T2.L4 layer
+      md: `## §4.5: Scheduling — the T2.L4 layer
 
 Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — T5.L7 goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
 
@@ -312,7 +315,7 @@ On preemption the paper evaluates two policies that should give you déjà vu: *
     {
       type: 'callout',
       variant: 'analogy',
-      md: `If you've operated a JVM under memory pressure you already feel §4 in your bones: admission control = "don't start what you can't heap," swapping = the OS paging cold heap out to disk, which is literally what the paper's swap policy does with host RAM, over PCIe, as the disk. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
+      md: `If you've operated a JVM under memory pressure you already feel §4.5 in your bones: admission control = "don't start what you can't heap," swapping = the OS paging cold heap out to disk, which is literally what the paper's swap policy does with host RAM, over PCIe, as the disk. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
     },
     {
       type: 'prose',
@@ -320,7 +323,7 @@ On preemption the paper evaluates two policies that should give you déjà vu: *
 
 One level down: the paper contributes a CUDA kernel that performs attention *through* the block table — gathering K/V from scattered physical blocks instead of assuming contiguity. That indirection costs something (block-table lookups, non-unit strides), and the paper's engineering is keeping that cost near zero against a **2–4× throughput** win from fitting 2–4× more sequences per GPU. Headline results (A100, OPT/LLaMA models, real traces): vLLM delivers up to **~24× FasterTransformer and ~3.5× Orca** in throughput, and — the number that sold the field — it serves the same traffic on a fraction of the GPUs by reclaiming the 60–80% wasted KV memory.
 
-Also note §5's distributed bits: for models spanning GPUs, the block manager is replicated per worker and the scheduler broadcasts block tables — a shared-nothing page-table-per-process design, consistent with everything above.`,
+Also note §4.6's distributed bits: for models spanning GPUs, one KV cache manager in the central scheduler serves every worker. Each step the scheduler broadcasts the block tables, and each worker stores only its own attention heads' share of every block — one page table shared by every process, like threads in one address space, consistent with everything above.`,
     },
     {
       type: 'deepdive',
@@ -408,9 +411,9 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           explanation:
             'Swapping KV to CPU RAM costs PCIe bandwidth but preserves state; recomputation frees HBM but repays prefill FLOPs. The OS makes the identical call for anonymous vs file-backed pages.',
           why: [
-            'Misconception: it is an allocation-timing choice. Eager versus lazy allocation decides when memory is granted; §4 is about restoring state after memory was taken away.',
+            'Misconception: it is an allocation-timing choice. Eager versus lazy allocation decides when memory is granted; §4.5 is about restoring state after memory was taken away.',
             'Right: a clean file-backed page can be dropped and re-read; an anonymous page must be written out to be preserved. KV swap pays bandwidth and recompute pays FLOPs, the same trade.',
-            'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach for internal waste; §4 keeps the block size fixed and chooses how to treat a victim sequence.',
+            'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach for internal waste; §4.5 keeps the block size fixed and chooses how to treat a victim sequence.',
             'Misconception: it is a scheduling-policy choice. Round-robin versus priority picks who runs next; swap versus recompute is how the evicted sequence\'s state is restored afterwards.',
           ],
           kcs: ['t2.swap-vs-recompute'],

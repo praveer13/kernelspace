@@ -17,6 +17,8 @@ export const LESSON_CLAIMS = [
   'serving.pagedattention.paper-block-size',
   'serving.pagedattention.fig2-vllm-token-states',
   'synthetic.kv.paged-waste',
+  'model.kv.static-utilization-low',
+  'model.kv.static-utilization-high',
 ]
 
 export const OUT = new URL('../src/data/lessons/claims.generated.ts', import.meta.url)

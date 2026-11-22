@@ -67,7 +67,7 @@ describe('search results', () => {
 
   test('a concept opens its introducing lesson, at its H2 when one is known', () => {
     const hit = search('PagedAttention').find((r) => r.group === 'Concepts')!
-    expect(hit.to).toBe('/lesson/t2.l7#3-pagedattention-paging-verbatim')
+    expect(hit.to).toBe('/lesson/t2.l7#4-pagedattention-paging-verbatim')
   })
 
   test('a short query does not fuzz into unrelated rows', () => {
