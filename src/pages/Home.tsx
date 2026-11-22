@@ -357,7 +357,7 @@ const PAINS = [
   {
     icon: TrendingDown,
     title: 'One request = one idle GPU.',
-    body: 'Static batching wastes 60%+ of a $30k accelerator. The fix is an idea from 1962: preemptive scheduling.',
+    body: 'Static batching holds every slot until the longest request in the batch finishes. The fix is an idea from 1962: preemptive scheduling.',
     foot: 'track 5 · continuous batching',
     color: '#FB7185',
   },
