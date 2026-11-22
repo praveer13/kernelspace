@@ -309,7 +309,7 @@ function Hero() {
 
 const MARQUEE: Array<[string, string]> = [
   ['L1 cache', '0.5 ns'],
-  ['L2', '7 ns'],
+  ['L2', '5 ns'],
   ['DRAM', '100 ns'],
   ['NVMe', '150 µs'],
   ['H100 HBM3', '3.35 TB/s'],
