@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import { ClaimValue } from '@/components/ClaimValue'
 import { useObserve } from '@/lib/sims/host'
+import { ENGINE_BLOCK_SCOPE_TEXT } from '@/lib/sims/models/kv'
 import {
   BLOCK_SIZE,
   INITIAL_POOL,
@@ -673,7 +674,7 @@ export default function BlockTableExplorer() {
 
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
               larger blocks amortize table-entry overhead but increase tail waste. vLLM&apos;s default
-              is <ClaimValue id="production.vllm.block-size" />; this pool uses {BLOCK_SIZE}, the paper&apos;s size.
+              on CUDA is <ClaimValue id="production.vllm.block-size" /> ({ENGINE_BLOCK_SCOPE_TEXT}); this pool uses {BLOCK_SIZE}, the paper&apos;s size.
             </p>
           </ControlGroup>
         </aside>
