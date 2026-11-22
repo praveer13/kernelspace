@@ -395,8 +395,11 @@ export interface WalkOutcome {
 export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now: IsoInstant): WalkOutcome {
   const pattern = blindPattern(state)
   const verdict = (kc: KcId): KcVerdict | undefined => (pattern && state.verdicts[kc] ? 'missed' : state.verdicts[kc])
+  // The Rust anchor item was offered and every answer to it was "not sure": the anchor was not asked, it was not missed.
+  const anchorAnswers = state.answers[RUST_ANCHOR_KC] ?? []
+  const anchorNotAsked = !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true)
   const solidKcs = state.probes.filter((kc) => verdict(kc) === 'solid')
-  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed')
+  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed' && !(anchorNotAsked && kc === RUST_ANCHOR_KC))
 
   const firstMissed = THRESHOLD_KCS.find((kc) => verdict(kc) === 'missed')
   const entryTrack: TrackId = pattern ? 't0' : firstMissed ? trackOf(firstMissed) : 't5'
@@ -413,7 +416,7 @@ export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now
       solidKcs,
       missedKcs,
       misconceptions: [...slips.keys()],
-      rustAnchor: anchor ?? 'skipped',
+      rustAnchor: anchorNotAsked ? 'skipped' : (anchor ?? 'skipped'),
       items: state.asked,
     },
     pattern,

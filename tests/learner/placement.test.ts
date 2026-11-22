@@ -214,8 +214,24 @@ describe('solid and missed', () => {
     expect(w.outcome.result.misconceptions).toEqual([])
     expect(w.outcome.result.solidKcs).toEqual([])
     expect(w.outcome.result.entryTrack).toBe('t0')
+    expect(w.outcome.result.rustAnchor).toBe('skipped')
     expect(w.outcome.pattern).toBeNull()
     expect(w.state.asked).toBe(PROBES.length)
+  })
+
+  test('an expert who skips only the Rust anchor item is placed at T5 with R as test-outs, not sent to R.L1', () => {
+    const graph: PathGraph = { kcs: KCS, lessons: ALL_LESSONS, labs: [] }
+    for (const seed of SEEDS.slice(0, 20)) {
+      const { outcome } = drive(real, (v, step) => (step.kc === RUST_ANCHOR_KC ? 'skip' : expert(v, step)), seed)
+      const r = outcome.result
+      expect(r.rustAnchor).toBe('skipped')
+      expect(r.missedKcs).not.toContain(RUST_ANCHOR_KC)
+      expect(r.solidKcs).not.toContain(RUST_ANCHOR_KC)
+      expect(r.entryTrack).toBe('t5')
+      const plan = cachedPathPlan('full-ramp', graph, r)
+      expect(plan.lessons[0]).toBe('t5.l1')
+      expect(plan.testOut).toEqual(ALL_LESSONS.filter((l) => l.trackId === 'r').map((l) => l.id))
+    }
   })
 })
 
