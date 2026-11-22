@@ -76,7 +76,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Models don't read text — they read sequences of integer **token ids**, each indexing a row of the embedding table. The **tokenizer** is the deterministic, model-specific compiler that turns bytes into those ids, and it shapes everything downstream: how much text fits the context window, what generation costs, which languages are cheap, and why "Strawberry has 3 r's" stumps models that can prove theorems. For a systems engineer, the tokenizer is the *unit of billing*: every capacity, latency, and cost number in T5 is priced in these little integers.
 
-The dominant algorithm is **BPE — byte-pair encoding** (GPT-2 through GPT-4-class, LLaMA's SentencePiece-BPE variants): start with a 256-symbol alphabet of raw bytes, then repeatedly merge the most frequent adjacent pair into a new symbol, ~50k–256k times, until you have a vocabulary. Common strings become single tokens; rare ones decompose into bytes. Elegant, lossless (any byte sequence is representable), and greedy.`,
+The dominant algorithm is **BPE — byte-pair encoding** (GPT-2 through GPT-4-class, and Llama 3's tiktoken-style byte-level variant): start with a 256-symbol alphabet of raw bytes, then repeatedly merge the most frequent adjacent pair into a new symbol, ~50k–256k times, until you have a vocabulary. Common strings become single tokens; rare ones decompose into bytes. Elegant, lossless (any byte sequence is representable), and greedy.`,
     },
     {
       type: 'code',
@@ -102,7 +102,7 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
                 else:
                     out.append(s[i]); i += 1
             vocab[w] = tuple(out)
-    return merges    # apply in order at encode time (greedy longest-first)`,
+    return merges    # at encode time, repeatedly apply the lowest-rank merge that occurs, left to right`,
       chips: ['greedy merge', '256-byte floor', 'lossless'],
     },
     {
