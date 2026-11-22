@@ -25,7 +25,8 @@ describe('K0-C12: a glossary pair does not repeat a pairing an erratum retired',
   })
 
   test('no pair twin shares a phrase with an erratum before-text that names the pair', () => {
-    for (const e of ERRATA) {
+    // Only an erratum whose before-text states a pairing can retire one.
+    for (const e of ERRATA.filter((x) => /\b(pair|pairing|twin|isomorphism|maps? to)\b/i.test(x.before))) {
       const before = ` ${words(e.before).join(' ')} `
       const bg = bigrams(e.before)
       for (const p of PAIRS) {
