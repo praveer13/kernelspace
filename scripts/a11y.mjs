@@ -57,6 +57,7 @@ const DEFAULT_ROUTES = [
   '/lesson/t2.l4',
   '/drills',
   '/capstone/service',
+  '/glossary',
 ]
 const DEFAULT_WIDTHS = [360, 320, 1280]
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
