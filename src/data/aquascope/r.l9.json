@@ -46,8 +46,8 @@
         {"line":4,"col":25,"path":"prompt","needs":"R","has":"RO"},
         {"line":4,"col":34,"path":"reply","needs":"R","has":"RWO"},
         {"line":5,"col":9,"path":"reply","needs":"RW","has":"R"},
-        {"line":10,"col":11,"path":"left","needs":"R","has":"R"},
-        {"line":10,"col":26,"path":"right","needs":"R","has":"R"},
+        {"line":10,"col":11,"path":"*left","needs":"R","has":"R"},
+        {"line":10,"col":26,"path":"*right","needs":"R","has":"R"},
         {"line":10,"col":35,"path":"left","needs":"R","has":"RO"},
         {"line":10,"col":49,"path":"right","needs":"R","has":"RO"}
       ]
@@ -81,10 +81,10 @@
         {"line":6,"col":15,"path":"prompt","needs":"R","has":"RO"},
         {"line":6,"col":24,"path":"reply","needs":"R","has":"RWO"},
         {"line":6,"col":32,"path":"winner","needs":"R","has":"RO"},
-        {"line":10,"col":11,"path":"left","needs":"R","has":"R"},
-        {"line":10,"col":26,"path":"right","needs":"R","has":"R"},
-        {"line":10,"col":39,"path":"left","needs":"R","has":"R"},
-        {"line":10,"col":66,"path":"right","needs":"R","has":"R"}
+        {"line":10,"col":11,"path":"*left","needs":"R","has":"R"},
+        {"line":10,"col":26,"path":"*right","needs":"R","has":"R"},
+        {"line":10,"col":39,"path":"*left","needs":"R","has":"R"},
+        {"line":10,"col":66,"path":"*right","needs":"R","has":"R"}
       ]
     }
   }

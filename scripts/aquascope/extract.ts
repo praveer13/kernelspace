@@ -126,6 +126,72 @@ export function pathAt(line: string, col: number): string {
   return `@${col}`
 }
 
+/**
+ * The place a boundary names, as written: its base name, any `*` written before it, the field path
+ * after it, and whether Rust auto-dereferences it there (a method receiver, `x.push(..)` or `x.len()`,
+ * or a field access, `x.ids`). The method name itself is not part of the place.
+ */
+export function placeAt(line: string, col: number): { base: string; stars: string; fields: string; autoDeref: boolean } | null {
+  const ahead = /^(?:&(?:mut\s+)?)?\(?(\**)([A-Za-z_]\w*)((?:\.[A-Za-z_]\w*)*)(\s*(?:::<[^>]*>)?\()?/.exec(line.slice(col))
+  if (ahead) {
+    let fields = ahead[3]
+    let call = false
+    if (ahead[4] && fields) {
+      // `x.f.m(` : the last segment is a method, the receiver is `x.f`
+      fields = fields.slice(0, fields.lastIndexOf('.'))
+      call = true
+    }
+    return { base: ahead[2], stars: ahead[1], fields, autoDeref: !ahead[1] && (call || fields !== '') }
+  }
+  // a method call reports the `.` after its receiver: `x.push` at the dot, or `x.f.push`
+  if (line[col] === '.') {
+    const behind = /(?:\((\*+)([A-Za-z_]\w*)\)|(\**)([A-Za-z_]\w*))((?:\.[A-Za-z_]\w*)*)$/.exec(line.slice(0, col))
+    if (behind) {
+      const stars = behind[1] ?? behind[3] ?? ''
+      return { base: behind[2] ?? behind[4], stars, fields: behind[5], autoDeref: !stars }
+    }
+  }
+  return null
+}
+
+/**
+ * The path a use belongs to. Aquascope reports a position and the permissions of the place it checks,
+ * not the place's name. Where Rust auto-dereferences a reference (`all.push(..)` with `all: &mut Vec`,
+ * `a.get()` with `a: &Cell`, `&mut b.ids` with `b: &Table`), the place checked is behind the reference
+ * (`*all`, `*a`, `(*b).ids`), not the reference variable, whose own permissions differ. So the use goes
+ * to the most precise tracked candidate whose state at that line is what the boundary reports it has;
+ * a write need that no candidate's state explains (a loan taken earlier on the same line) goes behind
+ * the reference when the variable itself cannot be written. Otherwise the place as `pathAt` reads it.
+ */
+export function usePath(src: string, col: number, needs: Perms, has: Perms, stateAt: (path: string) => Perms | undefined): string {
+  const fallback = pathAt(src, col)
+  const place = placeAt(src, col)
+  if (!place || !place.autoDeref) return fallback
+  const { base, fields } = place
+  const behind = fields ? `(*${base})${fields}` : `*${base}`
+  const candidates = [behind, ...(fields ? [`*${base}`, `${base}${fields}`] : []), base].filter((p, i, xs) => xs.indexOf(p) === i)
+  const tracked = candidates.filter((p) => stateAt(p) !== undefined)
+  const match = tracked.find((p) => stateAt(p) === has)
+  if (match) return match
+  const own = stateAt(base)
+  if (needs.includes('W') && own !== undefined && !own.includes('W')) {
+    const deref = tracked.find((p) => p.startsWith('*') || p.startsWith('(*'))
+    if (deref) return deref
+  }
+  return fallback
+}
+
+/** A path's permissions when a use on `line` runs: its state before that line's changes. Undefined for a path no change names. */
+export function stateBefore(changes: PermissionChange[], path: string, line: number): Perms | undefined {
+  let s: Perms | undefined
+  for (const c of changes) {
+    if (c.path !== path) continue
+    if (c.line < line) s = c.after
+    else if (c.line === line) return c.before
+  }
+  return s
+}
+
 /** Plain code-unit order, the same on every machine (not `localeCompare`). */
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
@@ -163,7 +229,7 @@ export function toTrace(results: BodyResult[], code: string, offset: number): Pe
   const src = code.replace(/\n$/, '').split('\n')
   const inRange = (n: number) => n >= 1 && n <= lines
   const byKey = new Map<string, PermissionChange>()
-  const uses: PermissionUse[] = []
+  const bounds: { line: number; col: number; needs: Perms; has: Perms }[] = []
   for (const r of results) {
     if (!('Ok' in r)) continue
     for (const display of r.Ok.steps) {
@@ -183,11 +249,18 @@ export function toTrace(results: BodyResult[], code: string, offset: number): Pe
     for (const b of r.Ok.boundaries) {
       const line = b.location.line + 1 - offset
       if (!inRange(line)) continue
-      uses.push({ line, col: b.location.column, path: pathAt(src[line - 1] ?? '', b.location.column), needs: rawPerms(b.expected), has: rawPerms(b.actual) })
+      bounds.push({ line, col: b.location.column, needs: rawPerms(b.expected), has: rawPerms(b.actual) })
     }
   }
   // Aquascope lists the paths of one line in a run-dependent order, so ties are broken on every field, paths in reading order (pathOrder)
   const changes = [...byKey.values()].filter((c) => c.before !== c.after).sort((a, b) => a.line - b.line || pathOrder(a.path, b.path) || cmp(a.before, b.before) || cmp(a.after, b.after))
+  const uses: PermissionUse[] = bounds.map((b) => ({
+    line: b.line,
+    col: b.col,
+    path: usePath(src[b.line - 1] ?? '', b.col, b.needs, b.has, (p) => stateBefore(changes, p, b.line)),
+    needs: b.needs,
+    has: b.has,
+  }))
   uses.sort((a, b) => a.line - b.line || a.col - b.col || pathOrder(a.path, b.path) || cmp(a.needs, b.needs) || cmp(a.has, b.has))
   const order: string[] = []
   for (const x of [...changes, ...uses].sort((a, b) => a.line - b.line)) if (!order.includes(x.path)) order.push(x.path)
