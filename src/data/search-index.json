@@ -129,7 +129,7 @@
 ["t2.mutex-atomics","Mutex, atomic or lock-free","choose a mutex, an atomic or a…","t2.l5",2],
 ["t2.aba","Lock-free queues and ABA","explain how ABA fools a…","t2.l5",2],
 ["t2.async-io","Readiness versus completion I/O","say what epoll and io_uring…","t2.l6",0],
-["t2.async-tasks","Async tasks and blocking","say why a suspended task costs…","t2.l6"],
+["t2.async-tasks","Async tasks and blocking","say why a task costs its live…","t2.l6"],
 ["t2.pagedattention-as-paging","PagedAttention as paging","map PagedAttention onto paging:…","t2.l7",1,[95]],
 ["t3.cyclic-structures","Graphs without leaks","build a graph from an arena…","t3.l1",1],
 ["t3.shared-state-cost","Rc<RefCell<T>> versus Arc<Mutex<T>>","choose Rc<RefCell<T>> or…","t3.l1",2],
