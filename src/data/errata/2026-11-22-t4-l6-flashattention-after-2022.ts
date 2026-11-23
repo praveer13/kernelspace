@@ -8,7 +8,7 @@ export default {
   title: 'FlashAttention is more than the 2022 paper',
   before: 'The lesson presented the 2022 FlashAttention paper as the whole story of tiled attention.',
   after:
-    'FlashAttention-3 (2024) targets Hopper; FlashAttention-4 (March 2026) targets Blackwell, where tensor-core throughput doubles while shared-memory bandwidth and exponential units scale more slowly. The blocking idea is the same.',
+    'FlashAttention-3 targets Hopper; FlashAttention-4 targets Blackwell, where tensor-core throughput doubles while shared-memory bandwidth and exponential units scale more slowly. It still rests on the same blocking.',
   why: 'Attention kernels kept changing with each GPU generation; the bottleneck moved from HBM traffic toward shared memory and exponentials.',
   source: {
     url: 'https://arxiv.org/abs/2603.05451',

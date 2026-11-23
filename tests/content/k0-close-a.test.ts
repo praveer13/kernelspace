@@ -168,12 +168,31 @@ describe('the Kimi erratum says what t6.l3 now says', () => {
     .map((b) => b.md ?? '')
     .join('\n')
   const MONTHS = /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g
-  const figures = (text: string): string[] => [...(text.match(/\d[\d,.]*(?:k|%)?/g) ?? []), ...(text.match(MONTHS) ?? [])]
+  // K0-CLOSE-J: an ISO date is one token and is checked whole, so a date the lesson lacks cannot pass piece by piece.
+  // Every other figure is a whole word that holds a digit (K2, 128, 224k, 2,000), and it must appear in the lesson as
+  // a whole token: no letter, digit or digit group runs on before or after it.
+  const ISO = /\d{4}-\d{2}-\d{2}/g
+  const figures = (text: string): string[] => {
+    const rest = text.replace(ISO, ' ')
+    return [...(text.match(ISO) ?? []), ...(rest.match(/\w*\d\w*(?:[.,]\d+)*%?/g) ?? []), ...(rest.match(MONTHS) ?? [])]
+  }
+  const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const has = (hay: string, f: string): boolean => new RegExp(`(?<![\\w.,]|\\d-)${escape(f)}(?![\\w%]|[.,-]\\d)`).test(hay)
   test('its title and after name no figure, month or date that the lesson does not', () => {
     for (const text of [kimi.title, kimi.after]) {
-      const missing = figures(text).filter((f) => !lesson.includes(f))
+      const missing = figures(text).filter((f) => !has(lesson, f))
       expect(missing).toEqual([])
     }
+  })
+  test('the check compares whole dates and whole figures, not their pieces', () => {
+    expect(figures('Kimi K2 on 128 H200s joined 2026-02-20, 2,000 in, May.')).toEqual(['2026-02-20', 'K2', '128', 'H200s', '2,000', 'May'])
+    expect(has('joined on 2026-02-20.', '2026-02-20')).toBe(true)
+    expect(has('joined on 2026-02-20.', '2026-02-21')).toBe(false)
+    expect(has('joined on 2026-02-20.', '20')).toBe(false)
+    expect(has('joined on 2026-02-20.', '02')).toBe(false)
+    expect(has('at 128 GPUs', '12')).toBe(false)
+    expect(has('at 2,000 tokens', '2')).toBe(false)
+    expect(has('Kimi K2 runs', 'K2')).toBe(true)
   })
   test('its after says the post is a Mooncake-team benchmark with SGLang, not production, as the lesson does', () => {
     expect(kimi.title).toBe('The Kimi K2 numbers are a Mooncake-team benchmark, not Moonshot production')

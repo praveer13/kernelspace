@@ -10,7 +10,7 @@ export default {
     'The broken-benchmark note said a p95 taken past the knee depends on how long the run lasted, and Rule 3\'s worked sweep said step 32 "may still add tokens per second".',
   after:
     'A p95 taken past capacity depends on run length; between the knee and capacity the queue stays bounded. Step 32 serves fewer tokens per second than 16: 32 ÷ 240 ms is less than 16 ÷ 96 ms.',
-  why: 'The knee is at or below the goodput peak, which sits below Little\'s-law capacity, so a load past the knee can still offer less than capacity. Tokens per second is streams over TPOT.',
+  why: 'The knee is at or below the goodput peak, which usually sits a little below Little\'s-law capacity, so a load past the knee can still offer less than capacity. Tokens per second is streams over TPOT.',
   source: {
     url: 'https://www.usenix.org/conference/nsdi-06/open-versus-closed-cautionary-tale',
     title: 'Schroeder, Wierman and Harchol-Balter: Open Versus Closed: A Cautionary Tale (NSDI 2006)',

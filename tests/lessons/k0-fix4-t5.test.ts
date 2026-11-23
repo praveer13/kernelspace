@@ -64,7 +64,8 @@ describe('t5.l10: the comparison table says which cells were read, from claims',
     expect(dates.length).toBeGreaterThan(0)
     for (const d of dates) expect(verified.has(d)).toBe(true)
     expect(before).toContain(claimCite('status.trtllm.pytorch-sole-backend'))
-    expect(before).toContain(claimRelease('status.sglang.hardware'))
+    // K0-CLOSE-J: the caption names the Rust radix tree's release from twin.sglang.treecore; the Runs on cell's release is in the table.
+    expect(before).toContain(claimRelease('twin.sglang.treecore'))
     // K0-CLOSE-A: no claim holds vLLM's release-notes line, so the caption no longer counts that cell as checked.
     expect(before).not.toContain(claimRelease('twin.vllm.scheduler'))
     expect(before).toContain('the course\'s summary')

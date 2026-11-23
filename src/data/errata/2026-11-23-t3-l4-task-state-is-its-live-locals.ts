@@ -11,7 +11,7 @@ export default {
     "A task is just a resumable function whose state is the locals live across its awaits: about 1 KiB for T2.L6's echo task, most of it the read buffer.",
   why: 'The read buffer is live across the read await, so the compiler stores it in the future. The size follows the locals, as T2.L6 and its correction say.',
   source: {
-    url: 'https://docs.docker.com/engine/security/seccomp/',
-    title: 'Seccomp security profiles for Docker',
+    url: 'https://doc.rust-lang.org/1.96.0/reference/expressions/block-expr.html#r-expr.block.async.layout-unspecified',
+    title: 'The Rust Reference, Rust 1.96.0: Block expressions, async blocks',
   },
 } satisfies Erratum
