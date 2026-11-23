@@ -4,9 +4,8 @@ import { PAIRS } from '@/data/glossary'
 import { ALL_LESSONS } from '@/data/lessons'
 
 // K0-C9: Dynamo's components talk over TCP by default and NATS is optional. No lesson, chip or glossary pair names
-// NATS as Dynamo's default. The sites below still do; each is listed by its exact current sentence and belongs to a
-// later task (K0-C10 zero-copy, K0-C11 async-io, K0-C8a production-stack, K0-C12 glossary). When that task rewrites the
-// sentence, its entry matches nothing and this test holds the new text.
+// NATS as Dynamo's default. The sites other tasks owned (K0-C10 zero-copy, K0-C11 async-io, K0-C8a production-stack,
+// K0-C12 glossary) have all been rewritten, so the list of pending sentences is empty and every sentence is held (K0-FIX-T3).
 
 function strings(v: unknown, out: string[] = []): string[] {
   if (typeof v === 'string') out.push(v)
@@ -15,13 +14,7 @@ function strings(v: unknown, out: string[] = []): string[] {
   return out
 }
 
-const PENDING: string[] = [
-  'moves a KV block description from NATS message to transfer request without copying the payload',
-  "exactly why Dynamo's data plane is Rust + tokio over NATS rather than threads",
-  'another distributed system to run, with NATS, etcd, and transfer fabric of its own',
-  'Dynamo adds NATS, etcd and a transfer fabric.',
-  'Dynamo’s Rust message plane (NATS)',
-]
+const PENDING: string[] = []
 
 const OPTIONAL = /optional|not require|does not require/i
 

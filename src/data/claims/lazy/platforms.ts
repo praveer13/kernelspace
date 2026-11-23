@@ -40,6 +40,22 @@ export const PLATFORMS_CLAIMS: Claim[] = [
       'Chromium only: "Analysis based on 912 high or critical severity security bugs since 2015, affecting the Stable channel." It is not a share of all C/C++ CVEs. Microsoft\'s similar figure was not re-read, so the course does not attribute this one to Microsoft.',
   },
   {
+    id: 'status.chromium.memory-safety-sample',
+    kind: 'status',
+    value: 912,
+    unit: 'bugs',
+    label: 'Chromium memory-safety analysis sample',
+    source: {
+      url: 'https://www.chromium.org/Home/chromium-security/memory-safety/',
+      title: 'Chromium Security: Memory safety',
+      quote: 'Analysis based on 912 high or critical severity security bugs since 2015, affecting the Stable channel.',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary:
+      'The whole sample behind status.chromium.memory-safety-share: every high or critical bug analysed, not the memory-unsafe ones among them. Chromium only, Stable channel.',
+  },
+  {
     id: 'status.android.memory-safety-share',
     kind: 'status',
     value: 'below 20',
@@ -53,7 +69,7 @@ export const PLATFORMS_CLAIMS: Claim[] = [
     verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'Google says the data covers first-party and third-party code changes to the Android platform across C, C++, Java, Kotlin and Rust, published before the end of 2025, with the 90-day patch window leaving results very likely close to final. It is the platform total, not a measurement of Rust alone.',
+      'Google says the 2025 data covers first-party and third-party code changes to the Android platform across C, C++, Java, Kotlin and Rust. The post was published a couple of months before the end of 2025, and Google says the 90-day patch window makes the results very likely close to final. It is the platform total, not a measurement of Rust alone.',
   },
   {
     id: 'status.wasi.version',
