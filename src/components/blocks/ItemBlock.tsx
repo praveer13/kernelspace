@@ -208,6 +208,14 @@ export default function ItemBlock({ lessonId, blockIndex, block, trackColor, rea
         </p>
       </div>
 
+      {reading && (stage.kind === 'predict' || stage.kind === 'practice') && (
+        <p data-reading-note className="mt-3 text-body-sm text-text-2">
+          You do not write Rust here: rustc is Rust&apos;s compiler, and each item shows a few lines and asks what it says about them. An
+          error code names the kind of refusal, and the legend lists the codes in this item. A value is &quot;moved&quot; when it has been
+          handed to a function, a channel or another name, and the old name can no longer be used.
+        </p>
+      )}
+
       {stage.kind === 'loading' && <p className="mt-2 min-h-11 font-mono text-body-sm text-text-3">loading…</p>}
 
       {stage.kind === 'error' && (
