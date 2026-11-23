@@ -112,12 +112,12 @@ Lock-free has its own trap, and it is beautiful: **ABA**. Thread 1 reads pointer
       caption: 'fig 1 — ABA: the pointer is the same, the world is not',
       height: 50,
       nodes: [
-        { id: 't1', x: 2, y: 6, w: 20, h: 9, label: 'thread 1', sub: 'CAS(head, A, A.next)', color: '#22D3EE' },
-        { id: 't2', x: 2, y: 34, w: 20, h: 9, label: 'thread 2', sub: 'runs while T1 sleeps', color: '#FB7185' },
+        { id: 't1', x: 2, y: 6, w: 20, h: 9, label: 'thread 1', sub: 'CAS(A, A.next)', color: '#22D3EE' },
+        { id: 't2', x: 2, y: 34, w: 20, h: 9, label: 'thread 2', sub: 'runs; T1 sleeps', color: '#FB7185' },
         { id: 's1', x: 34, y: 6, w: 28, h: 8, label: 'head→A→B→C', sub: 'T1 reads head = A' },
         { id: 's2', x: 34, y: 22, w: 28, h: 8, label: 'head→C (A,B popped)', sub: 'T2: pop A, pop B' },
         { id: 's3', x: 34, y: 38, w: 28, h: 8, label: 'head→A→C (A recycled!)', sub: 'T2: push A back' },
-        { id: 'boom', x: 74, y: 22, w: 22, h: 10, label: 'CAS succeeds ✗', sub: 'B is lost — corruption', color: '#FF5C6C' },
+        { id: 'boom', x: 74, y: 22, w: 22, h: 10, label: 'CAS succeeds ✗', sub: 'B lost — corruption', color: '#FF5C6C' },
       ],
       edges: [
         { from: 't1', to: 's1' },

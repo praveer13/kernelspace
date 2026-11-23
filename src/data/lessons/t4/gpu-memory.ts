@@ -105,12 +105,12 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       caption: 'fig 1 — the steep ladder: per-SM tiers vs shared tiers',
       height: 52,
       nodes: [
-        { id: 'sm0', x: 2, y: 6, w: 20, h: 12, label: 'SM 0', sub: 'reg 256KiB · smem 228KiB' },
-        { id: 'sm1', x: 2, y: 24, w: 20, h: 12, label: 'SM 1', sub: 'reg 256KiB · smem 228KiB' },
-        { id: 'sm2', x: 2, y: 42, w: 20, h: 12, label: 'SM …131', sub: '×132 total' },
+        { id: 'sm0', x: 2, y: 6, w: 28, h: 12, label: 'SM 0', sub: 'reg 256KiB·smem 228KiB' },
+        { id: 'sm1', x: 2, y: 24, w: 28, h: 12, label: 'SM 1', sub: 'reg 256KiB·smem 228KiB' },
+        { id: 'sm2', x: 2, y: 42, w: 28, h: 12, label: 'SM …131', sub: '×132 total' },
         { id: 'l2', x: 34, y: 20, w: 24, h: 14, label: 'L2 · ~50 MiB', sub: 'shared, all SMs', color: '#A78BFA' },
         { id: 'hbm', x: 70, y: 20, w: 26, h: 14, label: 'HBM · 80 GB', sub: '3.35 TB/s', color: '#3EF2A4' },
-        { id: 'cpu', x: 70, y: 42, w: 26, h: 10, label: 'CPU RAM (PCIe)', sub: '~64 GB/s · the offload tier', color: '#FFB224' },
+        { id: 'cpu', x: 70, y: 42, w: 26, h: 10, label: 'CPU RAM (PCIe)', sub: '~64 GB/s · offload tier', color: '#FFB224' },
       ],
       edges: [
         { from: 'sm0', to: 'l2' },

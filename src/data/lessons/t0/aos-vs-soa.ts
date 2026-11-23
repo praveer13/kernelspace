@@ -162,8 +162,8 @@ Picture a classic pattern: 8 worker threads, each incrementing its own counter i
       caption: 'fig 1 — one cache line, two writers: the ping-pong of false sharing',
       height: 46,
       nodes: [
-        { id: 'core0', x: 2, y: 6, w: 18, h: 9, label: 'core 0', sub: 'writes counter A' },
-        { id: 'core1', x: 2, y: 30, w: 18, h: 9, label: 'core 1', sub: 'writes counter B' },
+        { id: 'core0', x: 2, y: 6, w: 18, h: 9, label: 'core 0', sub: 'writes A' },
+        { id: 'core1', x: 2, y: 30, w: 18, h: 9, label: 'core 1', sub: 'writes B' },
         { id: 'line', x: 40, y: 16, w: 26, h: 12, label: 'cache line 0x…40', sub: '[ A:8B | B:8B | … ] 64 B' },
         { id: 'l1a', x: 76, y: 6, w: 20, h: 9, label: 'L1 (core 0)', sub: 'exclusive?' },
         { id: 'l1b', x: 76, y: 30, w: 20, h: 9, label: 'L1 (core 1)', sub: 'invalid!' },

@@ -109,11 +109,11 @@ The block boundary matters. With the paper's ${PAPER_BLOCK}-token blocks, ${PROM
       height: 58,
       nodes: [
         { id: 'root', x: 3, y: 23, w: 15, h: 9, label: 'root', sub: 'no KV' },
-        { id: 'sys', x: 27, y: 23, w: 20, h: 9, label: '[system…]', sub: '384 tok · blocks 7–30', color: '#22D3EE' },
+        { id: 'sys', x: 25, y: 23, w: 20, h: 9, label: '[system…]', sub: '384 tok · blocks 7–30', color: '#22D3EE' },
         { id: 'tools', x: 57, y: 7, w: 19, h: 9, label: '[tools…]', sub: '+160 tok · blocks 42–51', color: '#3EF2A4' },
         { id: 'docs', x: 57, y: 23, w: 19, h: 9, label: '[RAG doc…]', sub: '+256 tok · blocks 61–76', color: '#A78BFA' },
         { id: 'chat', x: 57, y: 39, w: 19, h: 9, label: '[turn 1…]', sub: '+96 tok · blocks 81–86', color: '#FB7185' },
-        { id: 'query', x: 82, y: 22, w: 15, h: 11, label: 'new query', sub: 'system + doc + new tail' },
+        { id: 'query', x: 84, y: 22, w: 14, h: 11, label: 'new query', sub: 'sys+doc+tail' },
       ],
       edges: [
         { from: 'root', to: 'sys' },
