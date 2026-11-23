@@ -5,8 +5,10 @@ import erratum from '@/data/errata/2026-11-22-t6-l1-moe-18x-is-batch-1-and-round
 import { lessonById } from '@/data/lessons'
 
 /**
- * K0-C25: t6.l1's three figures, recomputed from the DeepSeek-V3 claims. The config (hidden 7168, moe_intermediate_size 2048,
- * 61 layers, first_k_dense_replace 3, one shared expert) was read on 2026-11-22; the config constants below are those rows.
+ * K0-C25: t6.l1's three figures. Total and active parameters, routed experts and experts per token come from the DeepSeek-V3
+ * claims. No claim holds the other five config fields, so they are typed below: hidden_size, moe_intermediate_size,
+ * num_hidden_layers, first_k_dense_replace and n_shared_experts, as config.json at e815299 gives them (read 2026-11-22 and
+ * again 2026-11-23). Nothing ties these constants to the pin; a re-read of the config must check them.
  */
 const num = (id: string): number => {
   const c = byId[id] ?? MOE_CLAIMS.find((m) => m.id === id)
@@ -38,8 +40,12 @@ describe('t6.l1 MoE arithmetic', () => {
     expect(((ROUTED + SHARED) / (TOPK + SHARED)).toFixed(1)).toBe('28.6')
     expect(ROUTED / TOPK).toBe(32)
   })
-  test('one dispatch and one combine in each of 58 MoE layers is 116', () => {
+  test("one dispatch and one combine in each of 58 MoE layers is 116, and the lesson's chip says 2 × 58", () => {
     expect(2 * (LAYERS - DENSE)).toBe(116)
+    const stats = lessonById('t6.l1')!.blocks.flatMap((b) => (b.type === 'statline' ? b.stats : []))
+    const chip = stats.find((s) => s.label === 'all-to-alls per forward')
+    expect(chip?.value).toBe(`2 × ${LAYERS - DENSE}`)
+    expect(chip?.hint).toContain(`${LAYERS - DENSE} of ${LAYERS}; the first ${DENSE} are dense`)
   })
   test('the lesson and the erratum state the corrected figures', () => {
     const text = JSON.stringify(lessonById('t6.l1'))

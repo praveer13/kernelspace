@@ -1,4 +1,5 @@
 import type { Lesson } from '../types'
+import { claimCite } from '../claims'
 
 const lesson: Lesson = {
   id: 't6.l2',
@@ -21,12 +22,12 @@ Why EP32 for prefill but EP144 for decode? The phases have opposite physics agai
       type: 'prose',
       md: `## Mechanism 1: DeepEP — the dispatch/combine library
 
-The all-to-all is so central that DeepSeek open-sourced a dedicated library for it. This section describes the library as it first shipped, because the trade it teaches is the lasting part. That first release had two kernel sets, since the two phases want different things:
+The all-to-all is so central that DeepSeek open-sourced a dedicated library for it, in ${claimCite('status.deepep.first-release')}. This section describes the library's first interface, V1, because the trade it teaches is the lasting part. V1 had two kernel sets, since the two phases want different things:
 
 - **Normal kernels** (prefill/training): maximize bandwidth. Aggregate tokens by destination, forward over NVLink and RDMA with big transfers, tolerate microseconds of latency.
-- **Low-latency kernels** (decode): minimize latency at smaller transfer sizes. The README calls them "a set of low-latency kernels with pure RDMA to minimize delays", for latency-sensitive decoding.
+- **Low-latency kernels** (decode): minimize latency at smaller transfer sizes. DeepEP's V1 README calls them "a set of low-latency kernels with pure RDMA to minimize delays", for latency-sensitive decoding.
 
-**The API has moved since.** DeepEP's current README says its V2 unified "High-throughput and low-latency APIs ... into a single \`EPBuffer\` interface", and that its V2.5 release "Fully remove[d] V1". Training, prefill and decode now call the same dispatch and combine. The bandwidth-versus-latency trade did not go away; it moved inside the library, which estimates the SM and QP counts itself. Read the repository's README for the interface you would install today.
+**The API has moved since** (${claimCite('status.deepep.api')}). DeepEP's current README says its V2 unified "High-throughput and low-latency APIs ... into a single \`EPBuffer\` interface", and that its V2.5 release "Fully remove[d] V1". Training, prefill and decode now call the same dispatch and combine. The bandwidth-versus-latency trade did not go away; it moved inside the library, which estimates the SM and QP counts itself. Read the repository's README for the interface you would install today.
 
 This is a recurring systems lesson: *one fabric, phase-specific paths*. Your batch-vs-streaming instinct, your bulk-vs-interactive RPC instinct — same shape. The transport is shared; what you optimize depends on the phase.`,
     },
@@ -34,7 +35,7 @@ This is a recurring systems lesson: *one fabric, phase-specific paths*. Your bat
       type: 'prose',
       md: `## Mechanism 2: EPLB — load balance as a packing problem
 
-The **Expert Parallel Load Balancer** treats hot experts as a bin-packing problem. Estimate per-expert load (the repository leaves the predictor out of scope; "a common method is to use moving average of historical statistics"); **replicate** the hottest experts as "redundant experts" onto other GPUs (replication, not migration — the weights are small compared to the KV); then **pack** the copies onto GPUs heuristically, so the combine barrier costs about the mean load, not the max.
+The **Expert Parallel Load Balancer** treats hot experts as a bin-packing problem. Estimate per-expert load (the repository leaves the predictor out of scope; "A common method is to use moving average of historical statistics"); **replicate** the hottest experts as "redundant experts" onto other GPUs (replication, not migration — the weights are small compared to the KV); then **pack** the copies onto GPUs heuristically, so the combine barrier costs about the mean load, not the max.
 
 Notice what EPLB really is: **replication plus bin-packing, with no hashing in it**. Placement is computed from measured load, not from a hash of the expert id: that is the difference from your cache tier (T3.L6, T5.L9), where a hash fixes which node owns a key and load follows. Here load comes first and placement follows. DeepSeek's repository ships two policies: a *hierarchical* one for prefill, at a smaller expert-parallel size, that packs expert groups onto nodes first, and a *global* one for decode, at a larger size, that replicates across all experts and packs the copies onto GPUs.`,
     },
@@ -47,9 +48,9 @@ Notice what EPLB really is: **replication plus bin-packing, with no hashing in i
       type: 'prose',
       md: `## Mechanism 3: overlap — hide the network under compute
 
-Even with DeepEP, the all-to-all costs real microseconds. The fix is the oldest trick in the latency book (T2.L6): never wait. DeepSeek's **dual-batch overlap** splits a batch of requests into two micro-batches. In *prefill* the two run alternately: while micro-batch A computes, micro-batch B does its dispatch/combine transfer, and the cost of one hides behind the compute of the other.
+Even with DeepEP, the all-to-all costs real microseconds. The fix is the oldest trick in the latency book (T2.L6): never wait. DeepSeek's **dual-batch overlap** splits a batch of requests into two micro-batches, in both phases. In *prefill* the two run alternately: while micro-batch A computes, micro-batch B does its dispatch/combine transfer, and the cost of one hides behind the compute of the other.
 
-*Decode* is different. DeepSeek writes that "the execution durations of different stages are unbalanced", so it subdivides the attention layer into two steps and uses "a 5-stage pipeline" for the overlap. Two equal alternating halves would leave gaps when the stages are unequal. In both phases the all-to-all leaves the critical path — not removed, hidden.
+*Decode* keeps the two micro-batches and schedules them differently. DeepSeek writes that "the execution durations of different stages are unbalanced", so it subdivides the attention layer into two steps and runs "a 5-stage pipeline" for the overlap. Its profiling notes add that decode's all-to-all "does not occupy GPU SMs": after the RDMA messages are issued "all GPU SMs are freed", and the system waits for the transfer only after the computation has finished. In both phases the all-to-all leaves the critical path — not removed, hidden.
 
 The same pattern appears as DualPipe in training and as "PDL" (programmatic dependent launch) in NVIDIA's decode optimizations. When you see compute and communication alternating, overlap them. When you see a barrier, ask what could have been running during it.`,
     },
@@ -133,10 +134,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
           ],
           correct: [1],
           explanation:
-            'Compute and communication alternate every layer; overlapping keeps both resources busy. In prefill DeepSeek alternates two micro-batches; in decode it splits attention into two steps and runs a 5-stage pipeline. It is T2.L6\'s never-block principle applied to a distributed forward pass.',
+            'Compute and communication alternate every layer; overlapping keeps both resources busy. DeepSeek splits the batch into two micro-batches in both phases: prefill alternates them, and decode splits attention into two steps and runs them through a 5-stage pipeline. It is T2.L6\'s never-block principle applied to a distributed forward pass.',
           why: [
             'Model co-location is a different concern. Dual-batch overlap splits one batch into two micro-batches of the same model; both halves run the same weights.',
-            'Right: in prefill, while micro-batch A computes, micro-batch B runs its dispatch or combine, so SMs and network stay busy and the transfer leaves the critical path. Decode uses a staged pipeline instead.',
+            'Right: while micro-batch A computes, micro-batch B runs its dispatch or combine, so SMs and network stay busy and the transfer leaves the critical path. Prefill alternates the two; decode runs them through a 5-stage pipeline.',
             'That is large-batch load balancing (T6.L1). Dual-batch overlap keeps the same total tokens and splits them in two to overlap phases, not to enlarge the batch.',
             'Replication is EPLB\'s tool, and replicated experts still need dispatch and combine. Dual-batch overlap leaves placement alone and overlaps communication with compute.',
           ],
@@ -166,7 +167,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
     {
       type: 'deepdive',
       title: 'Read the reproduction',
-      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers, including the day's "cost profit margin of 545%" (theoretical revenue at R1 list prices over cost) and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
+      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers, including the day's "cost profit margin of 545%" (profit over cost, at R1 list prices) and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
     },
   ],
   kcs: ['t6.ep-economics', 't6.expert-load-balance', 't6.comm-overlap'],
@@ -189,9 +190,9 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         prompt:
           'How does dual-batch overlap hide the all-to-all, and what does it not remove?',
         model:
-          'In prefill the batch splits into two micro-batches: while one computes, the other runs its dispatch or combine, so the GPUs and the network are both busy. Decode uses a 5-stage pipeline with attention split in two, because its stages are unequal. The transfer leaves the critical path but still happens: if it takes longer than the compute it hides under, the stall returns.',
+          'The batch splits into two micro-batches: while one computes, the other runs its dispatch or combine, so the GPUs and the network are both busy. Prefill alternates them; decode, whose stages are unequal, splits attention in two and runs them through a 5-stage pipeline. The transfer leaves the critical path but still happens: if it takes longer than the compute it hides under, the stall returns.',
         ideas: [
-          'In prefill two micro-batches alternate: one computes while the other dispatches or combines; decode uses a 5-stage pipeline',
+          'Two micro-batches: one computes while the other dispatches or combines (alternating in prefill, a 5-stage pipeline in decode)',
           'The transfer is hidden behind compute, so it leaves the critical path',
           'It is hidden, not removed: a transfer longer than the compute it hides under still stalls',
         ],

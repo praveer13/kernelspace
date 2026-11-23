@@ -3,14 +3,14 @@ import type { Erratum } from './schema'
 export default {
   id: '2026-11-21-dynamo-kvbm-removal-v1-7-0',
   date: '2026-11-21',
-  kind: 'error',
+  kind: 'changed',
   lessons: ['t5.l10', 't6.l3'],
-  title: 'Dynamo targets KVBM removal for v1.7.0, not v1.6.0; v1.6.0 and v1.6.2 still ship it',
+  title: 'Dynamo now targets KVBM removal for v1.7.0; v1.6.0 and v1.6.2 still ship it',
   before:
     'Dynamo v1.5.0 (2026-09-21) deprecated KVBM, removal targeted for v1.6.0.',
   after:
-    'Dynamo v1.5.0 (2026-09-21) deprecated KVBM; its notes target removal for v1.7.0. v1.6.0 (2026-10-22) and v1.6.2 (2026-11-05) still ship it. The engine\'s native KV offloading is still the path to build on.',
-  why: 'A deprecation date is a plan, not a removal. Read the version from the release notes, and check the release you deploy before assuming a component is gone.',
+    'Dynamo v1.5.0 (2026-09-21) deprecated KVBM. Its notes now target removal for v1.7.0; they read v1.6.0 on 2026-10-06. v1.6.0 (2026-10-22) and v1.6.2 (2026-11-05) still ship it. Build on the engine\'s native KV offloading.',
+  why: 'Release notes can change after a release, and a deprecation target is a plan, not a removal. Check the release you deploy before assuming a component is gone.',
   supersedes: '2026-10-04-dynamo-kvbm-deprecated',
   source: {
     url: 'https://github.com/ai-dynamo/dynamo/releases/tag/v1.5.0',
@@ -28,8 +28,8 @@ export default {
       correct: [0],
       why: [
         'Right: removal was targeted for v1.7.0, and v1.6.0 and v1.6.2 still ship KVBM. New work should still use the engine\'s native KV offloading.',
-        'Deprecation does not say when removal happens. The notes name v1.7.0, two feature releases after v1.5.0.',
-        'The notes target v1.7.0, not v1.6.0. An earlier version of this course said v1.6.0, and that was wrong.',
+        'Deprecation does not say when removal happens. The notes now name v1.7.0, two feature releases after v1.5.0.',
+        'The notes said v1.6.0 when this course first read them; they now say v1.7.0, and v1.6.0 and v1.6.2 both ship KVBM.',
         'NIXL moves bytes between memories and nodes. It does not own block placement, and KVBM was never moved into it.',
       ],
     },

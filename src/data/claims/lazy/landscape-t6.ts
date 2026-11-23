@@ -20,7 +20,7 @@ export const LANDSCAPE_T6_CLAIMS: Claim[] = [
     verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'A target in the v1.5.0 notes, not a removal. Dynamo v1.6.0 (2026-10-22) and v1.6.2 (2026-11-05) still ship KVBM; the README feature matrix at both tags still lists it. v1.7.0 exists only as dev snapshots on 2026-11-21.',
+      'A target in the v1.5.0 notes, not a removal. Dynamo v1.6.0 (2026-10-22) and v1.6.2 (2026-11-05) still ship KVBM; the README feature matrix at both tags still lists it. v1.7.0 exists only as dev snapshots on 2026-11-21. The same notes read "removal is targeted for v1.6.0" when the course\'s backtest snapshot fetched them on 2026-10-06 (docs/backtest/snapshot.json), so the target was edited after the release.',
     pin: { repo: 'ai-dynamo/dynamo', ref: 'v1.5.0' },
   },
   {
@@ -56,17 +56,32 @@ export const LANDSCAPE_T6_CLAIMS: Claim[] = [
     pin: { repo: 'deepseek-ai/DeepEP', ref: 'f6aa38fe06cd4a0489e7730365d4e0114970a2f3' },
   },
   {
+    id: 'status.deepep.first-release',
+    kind: 'status',
+    value: 'February 2025, on day 2 of its Open-Source Week',
+    label: 'When DeepSeek first open-sourced DeepEP',
+    source: {
+      url: 'https://github.com/deepseek-ai/open-infra-index/blob/main/README.md',
+      title: 'DeepSeek open-infra-index README (202502 Open-Source Week, Day 2 - DeepEP)',
+      quote: "Starting **this week** , Feb 24, 2025 we'll open-source 5 repos – one daily drop",
+    },
+    verifiedAt: '2026-11-23',
+    ttlDays: 60,
+    boundary:
+      'The README lists the week\'s repositories one per day, and DeepEP is "Day 2", so its first release fell in the week starting Feb 24, 2025. Read from the main branch, because the repository has no tags. It dates the V1 interface the lesson describes, not the current one (status.deepep.api).',
+  },
+  {
     id: 'status.deepseek.production-drafter',
     kind: 'status',
     value: 'MTP-1 (one draft token per step), superseded by DSpark',
     label: "DeepSeek's production speculative drafter before DSpark, and why it was kept at one token",
     source: {
-      url: 'https://arxiv.org/html/2607.05147',
-      title: 'DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation (arXiv 2607.05147), section 5.4',
+      url: 'https://arxiv.org/html/2607.05147v1',
+      title: 'DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation (arXiv 2607.05147v1), section 5.4',
       quote:
         'This single-token setup was historically maintained in production because deploying a static multi-token drafter (e.g., MTP-3/5) strictly degrades aggregate throughput under high concurrency due to excessive verification overhead.',
     },
-    verifiedAt: '2026-11-22',
+    verifiedAt: '2026-11-23',
     ttlDays: 60,
     boundary:
       'The paper says "MTP-1 represents the former production setup, having been superseded by DSpark two weeks following the DeepSeek-V4-preview release", and names the V4-Flash and V4-Pro (preview) serving engines, not DeepSeek-R1. It is the authors\' statement about their own deployment, not a measurement the course can repeat.',

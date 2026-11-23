@@ -134,6 +134,19 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 70,
     cite: "70",
   },
+  "status.deepep.api": {
+    cite: "one EPBuffer interface for high-throughput and low-latency EP; V1 removed as of DeepEP f6aa38f, read 2026-11-22",
+    release: "DeepEP f6aa38f",
+  },
+  "status.deepep.first-release": {
+    cite: "February 2025, on day 2 of its Open-Source Week",
+  },
+  "status.deepseek.production-drafter": {
+    cite: "MTP-1 (one draft token per step), superseded by DSpark",
+  },
+  "status.deepseek.trtllm-mtp-depth": {
+    cite: "three MTP layers, for single-concurrency DeepSeek-R1 on 8xB200",
+  },
   "status.dynamo.kvbm.removal-target": {
     cite: "v1.7.0 as of Dynamo v1.5.0, read 2026-11-21",
     release: "Dynamo v1.5.0",

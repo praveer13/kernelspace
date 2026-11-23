@@ -12,10 +12,10 @@ describe('K0-C6: t6.l4 DeepSeek decode', () => {
   const l4 = ALL_LESSONS.find((l) => l.id === 't6.l4')!
   const all = strings(l4)
 
-  test('the DeepSeek decode card does not call dual-batch its decode scheme', () => {
+  test('the DeepSeek decode card runs two micro-batches through its pipeline (decode splits the batch too)', () => {
     const card = all.filter((s) => s.includes('**DeepSeek decode**'))
     expect(card.length).toBeGreaterThan(0)
-    for (const s of card) expect(/dual-batch/i.test(s)).toBe(false)
+    for (const s of card) expect(s).toContain('two micro-batches through a 5-stage pipeline')
   })
 
   test('the DeepSeek decode card names the 5-stage pipeline', () => {

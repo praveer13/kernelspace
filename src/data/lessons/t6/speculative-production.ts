@@ -1,4 +1,5 @@
 import type { Lesson } from '../types'
+import { claimCite } from '../claims'
 
 const lesson: Lesson = {
   id: 't6.l6',
@@ -17,7 +18,7 @@ const lesson: Lesson = {
 
 - **Draft model** (T5.L8's version): a small sibling model. Simple, but the drafter is a second model to host, version, and keep distribution-aligned — and it doesn't share the target's KV cache, so verify cost includes extra bookkeeping.
 - **Medusa heads**: small extra output heads on the target model predicting tokens t+1..t+k in parallel. One model, one cache — but the heads are shallow predictors; acceptance drops on hard text.
-- **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with an extra MTP module — a transformer-block head fed by the target's hidden states, sharing its embedding and output head. DeepSeek-V3/R1 ship exactly one (config num_nextn_predict_layers = 1). The draft is nearly the same distribution as the target because it reads the target's own hidden states. Highest acceptance rates of the three; DeepSeek's own serving drafted one token per step with it (MTP-1), because a static multi-token drafter lowered aggregate throughput under high concurrency, and has since replaced it with DSpark, a confidence-scheduled block drafter. Longer chains are a serving-time setting: NVIDIA's TensorRT-LLM recipe for DeepSeek-R1 at single concurrency (its min-latency case) applies the module three times (MTP-3), the best of the depths NVIDIA measured there. Every 2026 engine integrated this idea (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
+- **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with an extra MTP module — a transformer-block head fed by the target's hidden states, sharing its embedding and output head. DeepSeek-V3/R1 ship exactly one (config num_nextn_predict_layers = 1). The draft is nearly the same distribution as the target because it reads the target's own hidden states. Highest acceptance rates of the three. DeepSeek's own production serving (the DSpark paper measures it on the V4 previews) ran ${claimCite('status.deepseek.production-drafter')}. It kept one token because a static multi-token drafter lowered aggregate throughput under high concurrency; DSpark is a confidence-scheduled block drafter. Longer chains are a serving-time setting: NVIDIA's TensorRT-LLM min-latency recipe runs ${claimCite('status.deepseek.trtllm-mtp-depth')} (MTP-3, the one module applied three times), the best of the depths NVIDIA measured there. Every 2026 engine integrated this idea (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
     },
     {
       type: 'prose',
