@@ -189,6 +189,20 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "TCP as of Dynamo v1.6.2, read 2026-11-21",
     release: "Dynamo v1.6.2",
   },
+  "status.loadgen.aiperf": {
+    cite: "live; NVIDIA's replacement for GenAI-Perf as of ai-dynamo/aiperf v0.14.0, read 2026-11-21",
+    release: "ai-dynamo/aiperf v0.14.0",
+  },
+  "status.loadgen.genai-perf": {
+    cite: "being phased out; use AIPerf",
+  },
+  "status.loadgen.guidellm": {
+    cite: "live; recommended by the vLLM docs for production servers as of vllm-project/guidellm v0.8.1, read 2026-11-21",
+    release: "vllm-project/guidellm v0.8.1",
+  },
+  "status.loadgen.llmperf": {
+    cite: "archived 2025-12-17, read-only",
+  },
   "status.meta.ttft-goal": {
     value: 350,
     cite: "350",
