@@ -5,7 +5,7 @@ import type { QuizQuestion } from '../../src/components/QuizBlock'
 import Feedback from '../../src/components/items/Feedback'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { R_ANCHORS } from '../../src/data/placement/anchors'
-import { explanationRepeatsWhy, explanationToPrint, gradeItem, playView, type PlayView } from '../../src/lib/items/play'
+import { explanationRepeatsWhy, explanationToPrint, gradeItem, playView, sentenceRepeatsWhy, type PlayView } from '../../src/lib/items/play'
 import type { Grade, PlayableItem } from '../../src/lib/items/types'
 
 const KEY_WHY = 'Right: the tightest hole is found by size, so the structure decides the cost of the search.'
@@ -112,6 +112,11 @@ const sentences = (t: string) =>
 
 describe('no authored question prints the same sentence twice', () => {
   const all = authored()
+  const at = (ref: string) => {
+    const found = all.find((a) => a.ref === ref)
+    if (!found) throw new Error(`no authored question ${ref}`)
+    return render(found.item)
+  }
   test('the pool is the authored questions that carry both a why per option and an explanation', () => {
     expect(all.length).toBeGreaterThan(250)
   })
@@ -127,6 +132,30 @@ describe('no authored question prints the same sentence twice', () => {
       if (sentences(view.explanation).some((s) => keySentences.has(s))) twice.push(ref)
     }
     expect(twice).toEqual([])
+  })
+  test('no printed sentence of an explanation is a near-copy of the key why (the measure the page cuts by)', () => {
+    const near: string[] = []
+    for (const { ref, item } of all) {
+      const { html, view } = render(item)
+      if (view.kind !== 'choice' || !view.explanation) continue
+      const key = view.options.filter((o) => view.correct.includes(o.id) && o.why !== '').map((o) => o.why)
+      for (const s of view.explanation.split(/(?<=[.!?])\s+/)) {
+        // printed as the explanation: on the page more often than the whys themselves hold it
+        const inWhys = key.reduce((n, why) => n + why.split(s).length - 1, 0)
+        if (count(html, s) > inWhys && key.some((why) => sentenceRepeatsWhy(s, why))) near.push(`${ref}: ${s}`)
+      }
+    }
+    expect(near).toEqual([])
+  })
+  test('a near-copy with a word or two more is cut: t5.l8#3 reads "Engines gate speculation" once', () => {
+    const { html } = at('t5.l8#3')
+    expect(count(html, 'Engines gate speculation on occupancy')).toBe(1)
+    expect(text(html)).not.toContain('for exactly this reason')
+  })
+  test('an explanation that adds something the key why lacks still prints it (t3.l1#2, t5.l10#0, t0.l2#0)', () => {
+    expect(text(at('t3.l1#2').html)).toContain('and cycles still leak')
+    expect(text(at('t5.l10#0').html)).toContain('beats hash-map sharing')
+    expect(text(at('t0.l2#0').html)).toContain('about two orders of magnitude')
   })
   test('the number of questions whose explanation the page now leaves out', () => {
     const dropped = all.filter(({ item }) => {

@@ -115,10 +115,6 @@ export function instanceRev(i: Pick<Instance, 'family' | 'version' | 'variant' |
 export type InstanceDraft = Omit<Instance, 'family' | 'version' | 'rev' | 'claims'> & { claims?: readonly string[] }
 
 /**
- * Completes an instance. Params must be JSON-safe numbers, strings and booleans: a NaN would
- * serialise as null and silently change what the fingerprint and the replay see.
- */
-/**
  * The worked steps a level shows before the question. Level 0 shows every step with the last blanked; level 1 shows
  * every step but the last, with the one before it blanked, so no visible step holds the final answer. Later levels
  * show none. `full` ends on the step that finds the answer. When an earlier step already finds the same value (the
@@ -131,12 +127,39 @@ export function workedSteps(full: readonly SolutionStep[], level: Level, blank: 
   const found = answer === undefined ? -1 : full.findIndex((s) => s.result !== undefined && Math.abs(s.result.value - answer) <= 1e-9 * Math.abs(answer))
   const upto = level === 0 ? full.length : full.length - 1
   const shown = full.slice(0, found >= 0 && found < upto ? found + 1 : upto)
-  return shown.map((s, i) => (i === shown.length - 1 ? blank(s) : s))
+  const worked = shown.map((s, i) => (i === shown.length - 1 ? blank(s) : s))
+  BUILT_BY_WORKED_STEPS.add(worked)
+  return worked
 }
 
+/** The lists `workedSteps` returned, so `finishInstance` can hold the families that use it to its rule. */
+const BUILT_BY_WORKED_STEPS = new WeakSet<readonly SolutionStep[]>()
+
+/**
+ * Completes an instance. Params must be JSON-safe numbers, strings and booleans: a NaN would
+ * serialise as null and silently change what the fingerprint and the replay see. Worked steps built by `workedSteps`
+ * are held to its rule (K0-A6) against the answer itself: the blank step is the last one shown, and no other step
+ * has a result equal to a numeric or estimate answer's truth in the same unit, so a family that hands the helper a
+ * `full` list ending somewhere other than the answer fails here, in verify:generators, not in front of a learner.
+ */
 export function finishInstance(gen: Pick<Gen, 'id' | 'version'>, draft: InstanceDraft): Instance {
   for (const [k, v] of Object.entries(draft.params)) {
     if (typeof v === 'number' && !Number.isFinite(v)) throw new RangeError(`${gen.id}/${draft.variant}: param ${k} is not finite`)
+  }
+  const worked = draft.prompt.worked
+  if (worked && BUILT_BY_WORKED_STEPS.has(worked)) {
+    const where = `${gen.id}/${draft.variant} level ${draft.level}`
+    const blank = worked.findIndex((w) => w.blank)
+    if (blank !== worked.length - 1) throw new RangeError(`${where}: the blank worked step is not the last one shown`)
+    const a = draft.answer
+    if (a.kind === 'numeric' || a.kind === 'estimate') {
+      for (const [k, w] of worked.entries()) {
+        const r = w.result
+        // a value that only coincides with the answer in another unit (9 req/s against 9 replicas) is not the answer
+        if (!r || w.blank || (r.unit !== undefined && r.unit !== a.unit)) continue
+        if (Math.abs(r.value - a.truth) <= 1e-9 * Math.abs(a.truth)) throw new RangeError(`${where}: worked step ${k + 1} shows the answer`)
+      }
+    }
   }
   const claims = [...new Set(draft.claims ?? [])].sort()
   const inst: Omit<Instance, 'rev'> = { ...draft, family: gen.id, version: gen.version, claims }
