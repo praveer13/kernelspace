@@ -417,7 +417,7 @@ export default function BlockTableExplorer() {
             <p className="mt-4 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">
               two 40-token prompts map to the same three physical blocks. refcount tracks how many
               sequences share each block; a write to a shared block triggers copy-on-write, copying
-              exactly the one partly filled tail block (8 of its 16 slots) to a free entry.
+              exactly the one partly filled tail block to a free entry.
             </p>
           )}
 
@@ -581,7 +581,7 @@ export default function BlockTableExplorer() {
               </ChipButton>
             </div>
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
-              forking creates beam C sharing B&apos;s blocks. diverging B at logical block {DIVERGE_AT}
+              forking creates beam C sharing B&apos;s blocks. diverging B at logical block {DIVERGE_AT}{' '}
               writes into a shared, partly filled block, so copy-on-write first copies that block&apos;s
               tokens into a free block.
             </p>
