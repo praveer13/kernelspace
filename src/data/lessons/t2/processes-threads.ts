@@ -94,8 +94,8 @@ When switches get expensive, engineers stop switching. Three great escapes, all 
           os: 'runqueue / timeslice',
           osLine: 'Runnable threads wait for a quantum on a core.',
           llm: 'waiting queue / iteration',
-          llmLine: 'Waiting requests get a slot in the next GPU iteration — the batch is the timeslice.',
-          breaks: 'A core runs one thread per slice; a GPU iteration serves the whole batch at once, so the slice is shared by many sequences rather than owned by one.',
+          llmLine: 'Waiting requests get a slot at the next decode step; the step is a scheduling boundary, not a timeslice.',
+          breaks: 'A timer ends a thread\'s slice and interrupts it; a decode step advances the whole batch and ends when its work does, so nothing is time-sliced.',
         },
       ],
       principle:

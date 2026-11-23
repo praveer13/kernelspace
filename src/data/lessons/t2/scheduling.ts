@@ -63,7 +63,7 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
           osLine: 'Interrupt at quantum end; another runnable thread gets the core.',
           llm: 'iteration-level scheduling',
           llmLine: 'After EVERY decode step, the engine re-picks which sequences occupy the batch.',
-          breaks: 'A decode step is not an interchangeable time slice: a sequence carries growing KV state, so evicting it costs a recompute of that state, not a register save.',
+          breaks: 'A timer ends a time slice mid-work; a decode step ends on its own and nothing is time-sliced, so only the decision point carries over. Evicting a sequence costs a recompute of its growing KV state, not a register save.',
         },
         {
           os: 'runqueue → running set',
