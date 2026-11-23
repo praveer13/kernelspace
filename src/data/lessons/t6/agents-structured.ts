@@ -13,9 +13,9 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `The chat workload that T5 optimized for — independent requests, short shared system prompts — is no longer the frontier traffic. Three shapes define 2026 products, and each rewards a different part of your stack:
+      md: `The chat workload that T5 optimized for — independent requests, short shared system prompts — is no longer the frontier traffic. Two shapes define 2026 products, and each rewards a different part of your stack:
 
-**Agentic loops.** An agent turn appends tool output to the *entire prior conversation* and re-sends it. Turn N's prompt contains turn N−1's prompt almost verbatim: 85–95% shared prefix per request, growing contexts (50k–500k tokens), long sessions. The workload is *prefix-locality-bound*: throughput is set by how much of that prefix you never recompute.
+**Agentic loops.** An agent turn appends tool output to the *entire prior conversation* and re-sends it. Turn N's prompt contains turn N−1's prompt almost verbatim: roughly 85–95% shared prefix per request (this course's estimate for a long agent session, not a published measurement), growing contexts (50k–500k tokens), long sessions. The workload is *prefix-locality-bound*: throughput is set by how much of that prefix you never recompute.
 
 **Structured output.** Function calling, JSON-mode, schemas that must validate or downstream code breaks. Constrained decoding restricts the sampler to grammar-legal **model tokens** — not characters — through a compiled parser state and a vocabulary mask. XGrammar prechecks context-independent tokens, keeps a persistent pushdown stack for the remainder, and overlaps mask work with GPU execution. XGrammar 2 adds dynamic tag dispatch, JIT compilation, and cross-grammar reuse for agent tool protocols. The product lesson: enforce structure during decoding rather than retrying malformed output afterward.`,
     },
@@ -39,7 +39,7 @@ RadixAttention (T5.L10's SGLang lesson) was built for exactly this traffic: the 
       type: 'prose',
       md: `## The token mask is not a string mask
 
-A BPE token can contain \`"tool","arguments":{\` — several grammar terminals and transitions in one model step. A mask that checks only the first character admits tokens whose suffix is impossible and rejects legal tokens that cross state boundaries. The constraint engine must speculatively consume the **whole token byte string** from the current parser stack. That is Forge lab 08: schema → pushdown state → whole-token mask → cached compilation.`,
+A BPE token can contain \`"tool","arguments":{\` — several grammar terminals and transitions in one model step. A mask that checks only a token's first character can only over-admit: every token whose first byte is legal passes, including tokens whose suffix is impossible, and no legal token is rejected. A different naive design, matching the whole token against the current terminal only, does reject legal tokens that cross into the next terminal. The constraint engine must speculatively consume the **whole token byte string** from the current parser stack. That is Forge lab 08: schema → pushdown state → whole-token mask → cached compilation.`,
     },
     {
       type: 'reading',
@@ -57,7 +57,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
     {
       type: 'statline',
       stats: [
-        { value: '85–95%', label: 'shared prefix per agent turn', hint: 'Turn N re-sends nearly all of turn N−1. Cache-hit rate is the throughput multiplier.' },
+        { value: '85–95%', label: 'shared prefix per agent turn', hint: 'The course\'s estimate, not a measurement: turn N re-sends nearly all of turn N−1. Cache-hit rate is the throughput multiplier.' },
         { value: '~10×', label: 'less prefill work at 90% hit', hint: 'Radix-tree reuse on agentic loops, SGLang\'s design center.' },
         { value: '1 token', label: 'may cross many grammar states', hint: 'BPE vocabulary entries are byte strings, never single parser characters.' },
         { value: '6×+', label: 'XGrammar 2 compile speedup', hint: 'Reported against prior structured-generation engines for dynamic agentic tasks.' },
@@ -83,7 +83,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
           explanation:
             'The workload is prefix-locality-bound. A 90% hit rate means ~10× less prefill compute per turn — the cache-hit rate IS the throughput multiplier, which is why RadixAttention exists and why prefix-stable prompts are a hard requirement.',
           why: [
-            'Decode matters for each reply, but 85–95% of every prompt is re-sent history. How much of it hits the cache sets the prefill work, which is what limits throughput.',
+            'Decode matters for each reply, but most of every prompt, roughly 85–95% by the course estimate, is re-sent history. How much of it hits the cache sets the prefill work, which is what limits throughput.',
             'Right: turn N re-sends nearly all of turn N−1, so reusing the cached prefix removes most prefill. At a 90% hit rate only a tenth is recomputed, about 10× less.',
             'Tokenizing text on the CPU is cheap beside prefilling the same tokens on the GPU. Hit rate decides how many of those tokens ever reach prefill.',
             'Scaling is not linear when routing ignores locality: spreading one session across replicas leaves each with a cold cache. Cache-aware routing is what makes added GPUs pay off.',
@@ -143,7 +143,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
           explanation:
             'The sampler chooses model tokens. Grammar terminals are bytes/characters. Correct masking bridges those two alphabets by consuming every byte of each candidate token.',
           why: [
-            'Cost is not the defect; correctness is. A first-character check can admit tokens with impossible suffixes and reject legal tokens that cross state boundaries, however fast it runs.',
+            'Cost is not the defect; correctness is. A first-character check can only over-admit, letting through tokens whose suffix is impossible. Matching a token against the current terminal alone would also reject legal tokens that cross state boundaries. Neither is correct, however fast it runs.',
             'Right: tokens are byte strings, so one token may span several grammar transitions or start validly and end invalidly. The engine must consume every byte from the current parser state.',
             'JSON text is UTF-8 by default (RFC 8259). The flaw is multi-byte tokens crossing grammar states, which would break the check under any encoding.',
             'Each id maps to a known byte string in the vocabulary, so legality can be computed before sampling. That is the whole point of a mask: it restricts the choices in advance.',
