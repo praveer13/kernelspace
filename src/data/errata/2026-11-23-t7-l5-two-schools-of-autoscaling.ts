@@ -9,10 +9,10 @@ export default {
   before:
     'T7.L5 set the Planner against "HPA on a custom metric", called ModelExpress a Rust loader, and named weight-sharing an "NVLink copy over network pull".',
   after:
-    'Dynamo scales with a Planner; llm-d scales each role through KEDA and the HPA it manages. ModelExpress copies weights from a serving peer over NIXL RDMA; its loaders are Python and only its CLI is Rust.',
-  why: 'llm-d runs KEDA reading vLLM metrics, one ScaledObject per role, so HPA is a real stack, not a straw man. The ModelExpress README names the mechanism, a peer-to-peer RDMA copy, and its Python loaders.',
+    'Dynamo scales with a Planner; llm-d scales each role through KEDA and the HPA it manages. ModelExpress copies weights from a serving peer over NIXL RDMA; its engine loaders are a Python package and its client CLI is Rust.',
+  why: 'llm-d runs KEDA reading vLLM metrics, one ScaledObject per role, so HPA is a real stack, not a straw man. The ModelExpress README names the mechanism, a peer-to-peer RDMA copy, and its Python package of engine loaders.',
   source: {
-    url: 'https://github.com/ai-dynamo/modelexpress',
-    title: 'ModelExpress README (P2P RDMA weight transfer; loaders in Python, a Rust CLI)',
+    url: 'https://github.com/ai-dynamo/modelexpress/blob/v0.8.0/README.md',
+    title: 'ModelExpress v0.8.0 README (P2P RDMA weight transfer; a Python package of engine loaders and a Rust client CLI)',
   },
 } satisfies Erratum
