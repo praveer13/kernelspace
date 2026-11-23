@@ -54,16 +54,51 @@ async function stored(page: Page, kind: string, prefix: string): Promise<Stored[
   )
 }
 
+/** The page's own record of its clock, kept by `recordPageClock`. */
+interface PageClockRecord {
+  __seen: { t: number; hidden: boolean }[]
+  __alertAt: number | null
+  /** when a fleet worker's reply first carried an incident's alert (the Daily's alert follows it at once) */
+  __readyAt: number | null
+  /** when the ledger first put an event of kind `incident`, by its ref */
+  __incidentPutAt: Record<string, number>
+}
+
 /**
- * Record, from before the page's own code runs, when the page itself saw each visibilitychange and when the alert was
- * raised (a click on the drill's start button), on the page's own monotonic clock. The test's outside clock and the
- * page's can disagree by scheduling under load; the page's bookkeeping is checked against what the page saw.
+ * Record, from before the page's own code runs, when the page itself saw each visibilitychange, when the alert was
+ * raised (a click on the drill's start button; on the Daily, the fleet worker's reply that opens the incident with its
+ * alert, which the page's own handler receives after this one and only then marks its alert), and when the ledger wrote each incident event into IndexedDB, all on
+ * the page's own monotonic clock. The test's outside clock and the page's can disagree by scheduling under load; the
+ * page's bookkeeping is checked against what the page saw. The page takes an incident's `ms` before it hands the event
+ * to the ledger, and the ledger puts it after, so the put is an upper end for the time the event holds that does not
+ * grow while the test waits for the event to appear.
  */
 async function recordPageClock(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __seen: { t: number; hidden: boolean }[]; __alertAt: number | null }
+    const w = window as unknown as PageClockRecord
     w.__seen = []
     w.__alertAt = null
+    w.__incidentPutAt = {}
+    w.__readyAt = null
+    const PageWorker = window.Worker
+    window.Worker = class extends PageWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options)
+        // added before the page sets its onmessage, so it runs first for every reply
+        this.addEventListener('message', (ev: MessageEvent) => {
+          const d = ev.data as { incident?: { alert?: unknown } } | null
+          if (w.__readyAt === null && d && typeof d === 'object' && d.incident && d.incident.alert !== undefined) w.__readyAt = performance.now()
+        })
+      }
+    }
+    const put = IDBObjectStore.prototype.put
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      const e = value as { kind?: unknown; ref?: unknown } | null
+      if (this.name === 'events' && e && e.kind === 'incident' && typeof e.ref === 'string' && !(e.ref in w.__incidentPutAt)) {
+        w.__incidentPutAt[e.ref] = performance.now()
+      }
+      return key === undefined ? put.call(this, value) : put.call(this, value, key)
+    }
     document.addEventListener(
       'visibilitychange',
       () => w.__seen.push({ t: performance.now(), hidden: document.visibilityState === 'hidden' }),
@@ -79,10 +114,12 @@ async function recordPageClock(page: Page): Promise<void> {
   })
 }
 
-/** The hidden stretch the page itself saw (ms), and the page's clock now. */
-async function pageSaw(page: Page): Promise<{ hidden: number; now: number; alertAt: number | null }> {
+/** The hidden stretch the page itself saw (ms), the page's clock now, the alert, and each incident event's put. */
+async function pageSaw(
+  page: Page,
+): Promise<{ hidden: number; now: number; alertAt: number | null; readyAt: number | null; incidentPutAt: Record<string, number> }> {
   return page.evaluate(() => {
-    const w = window as unknown as { __seen: { t: number; hidden: boolean }[]; __alertAt: number | null }
+    const w = window as unknown as PageClockRecord
     let hidden = 0
     let from: number | null = null
     for (const e of w.__seen) {
@@ -92,7 +129,7 @@ async function pageSaw(page: Page): Promise<{ hidden: number; now: number; alert
         from = null
       }
     }
-    return { hidden, now: performance.now(), alertAt: w.__alertAt }
+    return { hidden, now: performance.now(), alertAt: w.__alertAt, readyAt: w.__readyAt, incidentPutAt: { ...w.__incidentPutAt } }
   })
 }
 
@@ -129,20 +166,24 @@ test('/daily: the incident holds the visible time from the alert to the debrief,
   await hiddenFor(page, HIDDEN_MS)
   await page.waitForTimeout(1500)
   await playDailyToDebrief(page)
-  // the page's clock from its load (before the alert) to now, less the stretch it saw hidden: an upper bound on what it had visible
   await expect.poll(async () => (await stored(page, 'incident', 'inc:daily/')).length, { timeout: 30_000 }).toBe(1)
-  // read after the event is stored: the debrief writes it a moment after its phase shows (it loads lazily), and the
-  // page's visible time to that moment is what the event holds
+  // from the worker's reply that opens the incident (the page marks its alert right after) to the instant the ledger put
+  // the event (the debrief writes it a moment after its phase shows, as it loads lazily), on the page's clock: neither
+  // the page's load before the alert nor the test's poll for the event adds to the bound
   const saw = await pageSaw(page)
-  const wall = saw.now
-  const hidden = saw.hidden
   const [e] = await stored(page, 'incident', 'inc:daily/')
-  console.log(`fleet-time: Daily ms ${e.ms}, page clock ${Math.round(wall)} ms, ${Math.round(hidden)} ms of it hidden as the page saw it`)
+  const putAt = saw.incidentPutAt[e.ref]
+  expect(saw.readyAt).not.toBeNull()
+  expect(putAt).toBeDefined()
+  const wall = putAt - saw.readyAt!
+  const hidden = saw.hidden
+  const bound = wall - hidden + SLACK_MS
+  console.log(`fleet-time: Daily ms ${e.ms}, page clock from the alert to the put ${Math.round(wall)} ms, ${Math.round(hidden)} ms of it hidden as the page saw it, bound ${Math.round(bound)} ms`)
   expect(hidden).toBeGreaterThanOrEqual(HIDDEN_MS)
   expect(Number.isInteger(e.ms)).toBe(true)
   // the 3 s visible before and after the hidden stretch are in it, and the hidden stretch is not
   expect(e.ms!).toBeGreaterThanOrEqual(3000)
-  expect(e.ms!).toBeLessThanOrEqual(wall - hidden + SLACK_MS)
+  expect(e.ms!).toBeLessThanOrEqual(bound)
   expect(e.ms!).toBeLessThanOrEqual(INCIDENT_MAX_MS)
 })
 
@@ -165,15 +206,20 @@ test('/week: a drill holds its visible alert-to-debrief time, and Act III the vi
   await page.locator('[data-drill] [data-give-up]').click()
   await expect(page.locator('[data-drill][data-phase="debrief"]')).toBeVisible({ timeout: 90_000 })
   await expect.poll(async () => (await stored(page, 'incident', 'inc:drill/')).length, { timeout: 30_000 }).toBe(1)
-  // read after the event is stored: the debrief writes it a moment after its phase shows (it loads lazily)
+  // from the alert click to the instant the ledger put the event (the debrief writes it a moment after its phase shows),
+  // on the page's clock: the test's poll adds nothing to the bound
   const sawDrill = await pageSaw(page)
-  const drillWall = sawDrill.now - sawDrill.alertAt!
   const [drill] = await stored(page, 'incident', 'inc:drill/')
-  console.log(`fleet-time: drill ms ${drill.ms}, page clock from the alert ${Math.round(drillWall)} ms, ${Math.round(sawDrill.hidden)} ms of it hidden as the page saw it`)
+  const drillPutAt = sawDrill.incidentPutAt[drill.ref]
+  expect(sawDrill.alertAt).not.toBeNull()
+  expect(drillPutAt).toBeDefined()
+  const drillWall = drillPutAt - sawDrill.alertAt!
+  const drillBound = drillWall - sawDrill.hidden + SLACK_MS
+  console.log(`fleet-time: drill ms ${drill.ms}, page clock from the alert to the put ${Math.round(drillWall)} ms, ${Math.round(sawDrill.hidden)} ms of it hidden as the page saw it, bound ${Math.round(drillBound)} ms`)
   expect(sawDrill.hidden).toBeGreaterThanOrEqual(HIDDEN_MS)
   expect(Number.isInteger(drill.ms)).toBe(true)
   expect(drill.ms!).toBeGreaterThanOrEqual(3000)
-  expect(drill.ms!).toBeLessThanOrEqual(drillWall - sawDrill.hidden + SLACK_MS)
+  expect(drill.ms!).toBeLessThanOrEqual(drillBound)
   expect(drill.ms!).toBeLessThanOrEqual(INCIDENT_MAX_MS)
 
   /* ---- Act III, which needs no module: execute, cite, check, score, submit ---- */
