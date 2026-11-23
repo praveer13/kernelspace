@@ -185,6 +185,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "v1.6.2 as of Dynamo v1.6.2, read 2026-11-22",
     release: "Dynamo v1.6.2",
   },
+  "status.dynamo.release-first-major": {
+    cite: "v1.0.0 as of Dynamo v1.0.0, read 2026-11-23",
+    release: "Dynamo v1.0.0",
+  },
   "status.dynamo.transport": {
     cite: "TCP as of Dynamo v1.6.2, read 2026-11-21",
     release: "Dynamo v1.6.2",
@@ -287,6 +291,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   "synthetic.kv.paged-waste": {
     value: 4,
     cite: "4",
+  },
+  "twin.sglang.treecore": {
+    cite: "rust as of SGLang v0.5.23, read 2026-11-21",
+    release: "SGLang v0.5.23",
   },
   "twin.vllm.scheduler": {
     cite: "no prefill or decode phase as of vLLM v0.34.0, read 2026-11-21",

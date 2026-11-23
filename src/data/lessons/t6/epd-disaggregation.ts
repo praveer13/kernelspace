@@ -14,7 +14,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when this lesson was written; ${claimRelease('status.dynamo.release')} is the newest release we have read) packaged NIXL transfer and a tiered KV-block manager (KVBM, since deprecated; see below) as its disaggregation plumbing; and **llm-d** (Red Hat/Google/CoreWeave) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
+      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when this lesson was written; ${claimRelease('status.dynamo.release')} is the newest release we have read) packaged NIXL transfer and a tiered KV-block manager (KVBM, since deprecated; see below) as its disaggregation plumbing; and **llm-d** (${claimCite('status.llm-d.founders')}) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
 
 The new letter: **E — encode.** Multimodal models need a third worker class: the vision/audio encoder that turns pixels and waveforms into embeddings. Encode workers have their own physics (massively parallel vision transformers, zero KV), their own scaling curve, and no reason to share GPUs with prefill. EPD = encode, prefill, decode — three fleets, three hardware mixes, one transfer fabric.`,
     },
@@ -34,7 +34,7 @@ Disaggregation lives or dies on KV transfer (T5.L9's 26.8 ms budget line). Two a
       type: 'prose',
       md: `## Mooncake grows up, llm-d packages it
 
-Mooncake (T5.L9's KV-cache-as-distributed-store) won a FAST'25 best-paper award and joined the PyTorch ecosystem (announced on the PyTorch blog in February 2026) — its transfer engine and store are now infrastructure others build on, including SGLang's EPD mode and vLLM's KV connectors. The Mooncake team's July 2025 post on serving Kimi K2 with SGLang is a *benchmark*, not Moonshot's production: 128 H200 GPUs as 16 nodes (4 prefill, 12 decode), 2,000 tokens in and 100 out, measured at 224k tokens/sec prefill and 288k tokens/sec decode. The numbers are that post's, not a general rate. The FAST'25 paper's own claim about production is a different one: Kimi handling 115% and 107% more requests on A800 and H800 clusters than previous systems.
+Mooncake (T5.L9's KV-cache-as-distributed-store) won a FAST'25 best-paper award ([the paper's page](https://www.usenix.org/conference/fast25/presentation/qin)) and joined the PyTorch ecosystem — its transfer engine and store are now infrastructure others build on, including SGLang's EPD mode and vLLM's KV connectors. The Mooncake team's [post on deploying Kimi K2 with SGLang](https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/) is a *benchmark*, not Moonshot's production: one cluster, one fixed input and output length, and the post leaves longer outputs for agentic scenarios to future work. Its throughput figures are that post's, not a general rate. The FAST'25 paper's own claim about production is a different one: how many more requests Kimi handled in practical deployments than with previous systems.
 
 **llm-d** is the packaging answer for teams that don't want to assemble this: Kubernetes-native disaggregated serving — prefill/decode worker pools, KV-aware routing, Mooncake-style cache tiers, autoscalers that understand TTFT. If Dynamo is NVIDIA's fabric, llm-d is the cloud-native distribution. For your career: the job posts say "Kubernetes + disaggregated inference" and mean this stack.`,
     },
@@ -157,7 +157,7 @@ No worker in this model both prefills and decodes, so the interference a colocat
           ],
           correct: [1],
           explanation:
-            'Your paged block manager manages one pool; KVBM manages a hierarchy of pools. Same block tables and refcounts, plus tier placement and migration — T2.L3\'s swap lesson industrialized. The idea outlived the product: engines now ship the tiering themselves.',
+            'Your paged block manager manages one pool; KVBM manages a hierarchy of pools. Same block tables and refcounts, plus tier placement and migration — T2.L3\'s swap lesson industrialized. The idea is outliving the product: KVBM is deprecated, and engines now ship the tiering themselves.',
           why: [
             'Block tables already let attention address scattered blocks within HBM. KVBM\'s addition was placing blocks across storage tiers, not new gather kernels.',
             'Right: same block tables and refcounts as lab-02, plus placement, eviction and migration across HBM, DRAM, SSD and remote storage. It is now deprecated for engine-native offload.',

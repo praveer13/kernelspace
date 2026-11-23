@@ -101,6 +101,24 @@ export const LANDSCAPE_T6_CLAIMS: Claim[] = [
     boundary:
       'The blog frames its setting as "single concurrency (min-latency scenario)" on 8xB200; its own table shows MTP 3 narrowly ahead of MTP 2 and MTP 4. It says nothing about high-concurrency serving or about what DeepSeek runs.',
   },
+  {
+    id: 'status.dynamo.release-first-major',
+    kind: 'status',
+    value: 'v1.0.0',
+    label: 'First major Dynamo release',
+    source: {
+      url: 'https://github.com/ai-dynamo/dynamo/releases/tag/v1.0.0',
+      title: 'NVIDIA Dynamo v1.0.0 release notes',
+      quote:
+        'Dynamo v1.0.0 is the first major release of the open-source distributed inference platform. This release delivers production-grade disaggregated serving with comprehensive multimodal and omni-model support, KV cache optimizations, improved handling of agentic workloads, Kubernetes-native deployment at scale, and a stabilized public API.',
+      row: 'Release Notes, first paragraph',
+    },
+    verifiedAt: '2026-11-23',
+    ttlDays: 60,
+    boundary:
+      'The release page dates v1.0.0 2026-03-13 (its datetime 2026-03-13T20:57:29Z). "First major" is the notes\' own word for v1.0.0; they do not say "GA". A later release does not change which one was first; status.dynamo.release holds the newest one read.',
+    pin: { repo: 'ai-dynamo/dynamo', ref: 'v1.0.0' },
+  },
 ]
 
 registerClaims(LANDSCAPE_T6_CLAIMS)
