@@ -75,6 +75,17 @@ describe('Feedback prints the explanation once under Correct.', () => {
     expect(render(quiz(q)).html).toContain('Best fit needs the smallest hole that fits.')
   })
 
+  test('a formula with an operand the why lacks adds something, unless the why states a formula itself (K0-CLOSE-E)', () => {
+    const why = 'Right: only k of N experts run per token. Decode is bandwidth-bound, so tokens/s rises while capacity stays large.'
+    // BW and bytes are not in the why, and are too short or too plain for the content-word measure to weigh
+    expect(sentenceRepeatsWhy('Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token.', why)).toBe(false)
+    expect(sentenceRepeatsWhy('Decode is bandwidth-bound (T4): tokens/s rises.', why)).toBe(true)
+    // every operand named by the why: nothing new
+    expect(sentenceRepeatsWhy('Decode is bandwidth-bound: tokens ≈ k × N per token.', why)).toBe(true)
+    // the why has its own formula: the restated one is a near-copy
+    expect(sentenceRepeatsWhy('Decode is bandwidth-bound: tokens/s ≈ BW ÷ bytes/token.', 'Right: tokens/s ≈ bandwidth ÷ bytes per token, so decode is bandwidth-bound.')).toBe(true)
+  })
+
   test('a lesson reference (T2.L4, T4) is not a number, and a cache level (L2) still is', () => {
     const why = 'Right: the slow sibling holds the batch, the FIFO convoy with HBM as the held resource.'
     expect(sentenceRepeatsWhy('It is the FIFO convoy from T2.L4 with HBM as the held resource.', why)).toBe(true)
@@ -164,10 +175,16 @@ describe('no authored question prints the same sentence twice', () => {
     expect(text(at('t7.l3#1').html)).not.toContain('The frontier shifts only when the physics change')
     expect(text(at('t0.l6#3').html)).not.toContain('Three wide wait bars + one absent')
   })
-  test('a lesson reference is not a new number: t5.l7#0, t6.l5#1 and t6.l1#0 are cut', () => {
+  test('a lesson reference is not a new number: t5.l7#0 and t6.l5#1 are cut', () => {
     expect(text(at('t5.l7#0').html)).not.toContain('the FIFO convoy from T2.L4')
     expect(text(at('t6.l5#1').html)).not.toContain('T6.L4: only')
-    expect(text(at('t6.l1#0').html)).not.toContain('Decode is bandwidth-bound (T4)')
+  })
+  test('a formula the key why lacks prints: t6.l1#0 keeps "tokens/s ≈ BW ÷ bytes-per-token" once (K0-CLOSE-E)', () => {
+    const html = text(at('t6.l1#0').html)
+    expect(count(html, 'Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token.')).toBe(1)
+    // a why that states the formula itself still cuts the restated one (t6.l5#3), and "=" read as "means" is no formula (t0.l6#3)
+    expect(text(at('t6.l5#3').html)).not.toContain('tokens/s ≈ BW ÷ bytes/token')
+    expect(text(at('t0.l6#3').html)).not.toContain('Three wide wait bars + one absent')
   })
   test('an explanation that adds something the key why lacks still prints it (t3.l1#2, t5.l10#0, t0.l2#0)', () => {
     expect(text(at('t3.l1#2').html)).toContain('and cycles still leak')
@@ -185,5 +202,91 @@ describe('no authored question prints the same sentence twice', () => {
     })
     console.log(`feedback-dedupe: of ${all.length} authored questions, ${dropped.length} no longer print their explanation (${dropped.length - cut.length} left out whole, ${cut.length} cut to what the key why lacks)`)
     expect(dropped.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * An independent lint (K0-CLOSE-E): a printed sentence of an explanation that shares a run of VERBATIM_RUN words, word
+ * for word, with the key why. sentenceRepeatsWhy judges a whole sentence by its count of new words, so a copied clause
+ * inside a longer sentence that adds a little ("GC pauses", "zero spatial locality") prints, and the learner reads the
+ * clause twice. The fix is at the source: reword the explanation sentence in its lesson so it says only what the why
+ * lacks (editing an explanation keeps saved answers), then take its question off the list below.
+ */
+const VERBATIM_RUN = 8
+/** The questions that print such a sentence on the branch today. This list may only shrink. */
+const VERBATIM_ALLOWED = [
+  't0.l1#1',
+  't0.l1#2',
+  't0.l3#0',
+  't0.l3#1',
+  't2.l7#2',
+  't3.l1#3',
+  't5.l8#1',
+  't5.l8#2',
+  't5.l10#2',
+  't6.l3#3',
+  't7.l2#0',
+  't7.l4#0',
+  't7.l5#4',
+  't7.l5#5',
+]
+/**
+ * Two more print a paraphrase of the key why that neither measure can see (synonyms, not shared runs). Each entry is
+ * the start of the printed sentence; when the sentence is reworded, the entry goes.
+ */
+const PARAPHRASE_KNOWN: Record<string, string> = {
+  't5.l6#1': 'Evict an eligible leaf, drop its references',
+  't5.l8#0': 'The speedup is a roofline conversion',
+}
+/** Today's count: 14 with a verbatim run and 2 paraphrases. */
+const KNOWN_MAX = 16
+
+const runWords = (t: string) =>
+  t
+    .replace(/^\s*(right|correct)\s*:\s*/i, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w !== '')
+
+/** True when `sentence` shares a run of `n` words, in order, with `why`. */
+function sharesRun(sentence: string, why: string, n: number): boolean {
+  const s = runWords(sentence)
+  const w = ` ${runWords(why).join(' ')} `
+  for (let i = 0; i + n <= s.length; i++) if (w.includes(` ${s.slice(i, i + n).join(' ')} `)) return true
+  return false
+}
+
+describe(`no printed explanation sentence copies a ${VERBATIM_RUN}-word run of the key why (K0-CLOSE-E)`, () => {
+  const all = authored()
+  test('the run measure finds a copied clause inside a longer sentence, and not a sentence that only shares words', () => {
+    const why = 'Right: the weight read dominates the step and happens once, so scoring k positions is nearly free.'
+    expect(sharesRun('The weight read dominates the step and happens once regardless; the rest is compute.', why, VERBATIM_RUN)).toBe(true)
+    expect(sharesRun('Once per step, the weight read dominates: scoring is nearly free.', why, VERBATIM_RUN)).toBe(false)
+  })
+  test('only the listed questions print a sentence that copies a run of the key why, and every listed one still does', () => {
+    const found: string[] = []
+    for (const { ref, item } of all) {
+      const { html, view } = render(item)
+      if (view.kind !== 'choice') continue
+      const printed = explanationToPrint(view)
+      if (!printed) continue
+      const key = view.options.filter((o) => view.correct.includes(o.id) && o.why !== '').map((o) => o.why)
+      const sentencesPrinted = printed.split(/(?<=[.!?])\s+/).filter((s) => count(html, s) > 0)
+      if (sentencesPrinted.some((s) => key.some((why) => sharesRun(s, why, VERBATIM_RUN)))) found.push(ref)
+    }
+    // a new copy fails here; a reworded one fails too until its ref leaves the list, so the list only shrinks
+    expect(found.sort()).toEqual([...VERBATIM_ALLOWED].sort())
+  })
+  test('each known paraphrase still prints, so a reworded one leaves the list', () => {
+    for (const [ref, start] of Object.entries(PARAPHRASE_KNOWN)) {
+      const found = all.find((a) => a.ref === ref)
+      expect(found).toBeDefined()
+      if (found) expect(text(render(found.item).html)).toContain(start)
+    }
+  })
+  test(`the two lists hold at most today's ${KNOWN_MAX} questions`, () => {
+    expect(VERBATIM_ALLOWED.length + Object.keys(PARAPHRASE_KNOWN).length).toBeLessThanOrEqual(KNOWN_MAX)
   })
 })
