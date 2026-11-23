@@ -267,7 +267,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
   return (
     <div className="space-y-4">
       <h3 ref={headingRef} tabIndex={-1} className="font-display text-h3 text-text-1 focus-visible:outline-none">
-        {resultHeading({ entryTrack: result.entryTrack, pattern: Boolean(pattern), startLessonId: startId })}
+        {resultHeading({ entryTrack: result.entryTrack, pattern: Boolean(pattern), startLessonId: startId, lessons: plan.lessons })}
       </h3>
 
       {pattern && (

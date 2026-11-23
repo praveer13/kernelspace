@@ -395,7 +395,7 @@ export interface WalkOutcome {
 export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now: IsoInstant): WalkOutcome {
   const pattern = blindPattern(state)
   const verdict = (kc: KcId): KcVerdict | undefined => (pattern && state.verdicts[kc] ? 'missed' : state.verdicts[kc])
-  // The Rust anchor item was offered and every answer to it was "not sure": the anchor was not asked, it was not missed.
+  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it, which is not a miss.
   const anchorAnswers = state.answers[RUST_ANCHOR_KC] ?? []
   const anchorNotAsked = !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true)
   const solidKcs = state.probes.filter((kc) => verdict(kc) === 'solid')
