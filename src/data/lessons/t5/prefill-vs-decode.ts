@@ -103,7 +103,7 @@ The phase split explains the product shape of every serving API you've used: why
       stats: [
         { value: '∝ prompt × params', label: 'TTFT driver', hint: 'Prefill FLOPs scale with prompt length — compute-bound, tensor cores busy.' },
         { value: '∝ bytes/token', label: 'ITL driver', hint: 'Weight + KV reads per step ÷ HBM bandwidth — the roofline slope.' },
-        { value: '<100 ms', label: 'ITL comfort', hint: 'Streaming feels responsive. Human reading is slower than 50 ms per token: one 2019 meta-analysis of silent reading (Brysbaert, J. Memory and Language 109) puts it well above that at T5.L2\'s words-per-token rule.' },
+        { value: '<100 ms', label: 'ITL comfort', hint: 'Streaming feels responsive. Adult silent reading is far slower than 50 ms per token at T5.L2\'s rule of about 0.75 words per token.' },
         { value: 'goodput', label: 'the real KPI', hint: 'Throughput within SLO. Everything else is marketing.' },
       ],
     },

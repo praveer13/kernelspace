@@ -5,13 +5,9 @@ export default {
   date: '2026-11-22',
   kind: 'error',
   lessons: ['t5.l3'],
-  title: 'Human reading is well above 50 ms per token, by one 2019 study',
+  title: 'Adult silent reading is far slower than 50 ms per token',
   before: 'T5.L3\'s ITL chip said "human reading speed is ~50 ms/token".',
   after:
-    'One 2019 meta-analysis of silent reading (Brysbaert) puts reading well above 50 ms per token at about 0.75 words per token. The ~200 ms "broken" line is the course\'s rule of thumb, not a reading speed.',
-  why: 'The 50 ms figure had no source and would mean reading far faster than any study of adults finds. The study is known to us only through its title and citation, so the lesson gives no replacement number.',
-  source: {
-    url: 'https://doi.org/10.1016/j.jml.2019.104047',
-    title: 'Brysbaert (2019), How many words do we read per minute? A review and meta-analysis of reading rate, Journal of Memory and Language 109',
-  },
+    'Adult silent reading is far slower than 50 ms per token at T5.L2\'s rule of about 0.75 words per token. The ~200 ms "broken" line is the course\'s rule of thumb, not a reading speed.',
+  why: 'The 50 ms figure had no source. At 0.75 words per token it means 900 words a minute, far faster than adults read silently. The course has read no study of reading rate, so it gives no replacement number.',
 } satisfies Erratum
