@@ -1,4 +1,5 @@
 import type { Lesson } from '../types'
+import { claimNumber, claimCite } from '../claims'
 
 const lesson: Lesson = {
   id: 't7.l1',
@@ -21,9 +22,9 @@ Why the distinction is not pedantry: as batch grows, throughput rises and then f
       type: 'prose',
       md: `## The metrics, hardened
 
-- **TTFT** (arrival → first token): queue + prefill (+ KV transfer when disaggregated). The "is it alive" signal. Production SLOs: Meta's app targets **<350 ms**; typical chat SLOs 0.5–2 s depending on prompt class.
-- **TPOT/ITL** (per-token decode period, seconds per token): at least (weight + KV bytes each GPU reads per step) ÷ its bandwidth, the datasheet bound; bandwidth ÷ bytes is the inverse, a rate. Measured periods sit above the bound: Llama-3.3-70B FP8 on 4 H100s ran 2.2× it at 4 users and 3.1× at 64 (InferenceX ids 41187, 41821). The "is it fast" signal. Meta targets **<25 ms TTIT**; chat comfort is <50–80 ms.
-- **E2E latency** and its percentiles: what the user feels; **p50 for design, p95/p99 for contracts**. Never one number.
+- **TTFT** (arrival → first token): queue + prefill (+ KV transfer when disaggregated). The "is it alive" signal. Published numbers are goals and benchmark limits, not a universal SLO. Meta's [engineering post](https://engineering.fb.com/2025/10/17/ai-research/scaling-llm-inference-innovations-tensor-parallelism-context-parallelism-expert-parallelism/) says the first token should appear "ideally under ${claimNumber('status.meta.ttft-goal')}ms", a goal for its inference work, not an SLO. [MLPerf Inference](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc) publishes limits per model (${claimCite('status.mlperf.round')} rules): Llama3.1-8B must keep TTFT under ${claimNumber('status.mlperf.llama31-8b.conversational-ttft')} ms in its conversational category and ${claimNumber('status.mlperf.llama31-8b.interactive-ttft')} ms in its interactive one; DeepSeek-R1, ${claimNumber('status.mlperf.deepseek-r1.server-ttft')} ms in the server scenario and ${claimNumber('status.mlperf.deepseek-r1.interactive-ttft')} ms in the interactive one.
+- **TPOT/ITL** (per-token decode period, seconds per token): at least (weight + KV bytes each GPU reads per step) ÷ its bandwidth, the datasheet bound; bandwidth ÷ bytes is the inverse, a rate. Measured periods sit above the bound: Llama-3.3-70B FP8 on 4 H100s ran 2.2× it at 4 users and 3.1× at 64 (InferenceX ids 41187, 41821). The "is it fast" signal. The same Meta post calls its decode goal TTIT (time to incremental token) and writes "targeting less than ${claimNumber('status.meta.ttit-goal')}ms". MLPerf's TPOT limits are ${claimNumber('status.mlperf.llama31-8b.conversational-tpot')} ms (Llama3.1-8B conversational) and ${claimNumber('status.mlperf.llama31-8b.interactive-tpot')} ms (interactive), ${claimNumber('status.mlperf.deepseek-r1.server-tpot')} ms (DeepSeek-R1 server) and ${claimNumber('status.mlperf.deepseek-r1.interactive-tpot')} ms (interactive). MLPerf checks them at the ${claimNumber('status.mlperf.server-tail-percentile')}th percentile under Poisson arrivals.
+- **E2E latency** and its percentiles: what the user feels. **Report p50, but size and contract on p95 or p99**: the median hides the slow requests users remember, and a fleet sized at the median misses its contract. Never one number.
 - **Goodput**: throughput *subject to* the above — e.g. req/s with TTFT < 2 s AND TPOT < 100 ms. Capacity planning's only honest input.
 - **Interactivity** (tok/s/user) vs **throughput** (tok/s/GPU): the two ends of the dial T7.L3 turns. Benchmarks that don't name which end they're showing are marketing.
 
@@ -32,9 +33,9 @@ The engine's control loop, one line: **batching puts throughput and latency on a
     {
       type: 'statline',
       stats: [
-        { value: '<350 ms', label: 'Meta TTFT SLO', hint: 'Production app target (Oct 2025 writeup).' },
-        { value: '<25 ms', label: 'Meta TTIT SLO', hint: 'Per-token interactivity target — decode loop latency budget.' },
-        { value: 'p95', label: 'the honest percentile', hint: 'Design at p50, contract at p95. Never one number.' },
+        { value: `under ${claimNumber('status.meta.ttft-goal')} ms`, label: 'Meta TTFT goal', hint: 'A goal in Meta\'s Oct 2025 engineering post, not a published SLO.' },
+        { value: `under ${claimNumber('status.meta.ttit-goal')} ms`, label: 'Meta TTIT goal', hint: 'Meta\'s name for the gap between tokens: a goal for the decode loop, not a published SLO.' },
+        { value: 'p95', label: 'the honest percentile', hint: 'Report p50; size and contract on p95 or p99. Never one number.' },
         { value: 'goodput', label: 'the objective', hint: 'Requests within SLO per second; divide by cost to compare fleets. Everything else is a proxy.' },
       ],
     },
@@ -182,19 +183,19 @@ An SLO is also a budget. A **99% SLO** lets 1 request in 100 miss, and that 1% i
           miss: ['t7.seesaw-is-tokenizer', 't7.seesaw-is-collectives', '', 't7.seesaw-is-quantization'],
         },
         {
-          q: 'Why design at p50 but contract at p95?',
+          q: 'Why do you size a fleet and write its contract on p95 or p99, not on the median?',
           options: [
-            'The median is stable with few samples while the tail is too noisy to design with, and noise decides',
-            'The median sizes for the typical user while the tail is promised, and one number cannot do both',
+            'The median is stable with few samples while the tail is too noisy to promise anything on, and noise decides',
+            'The median hides the slow requests users remember, and the promise belongs on the tail',
             'The slowest requests come mostly from client networks and say nothing about the engine, and are excluded',
             'The median and the tail move together, and a system that meets one target will also meet the other',
           ],
           correct: [1],
           explanation:
-            'Averages and tails answer different questions: design for the typical user, promise for the unlucky one. Systems that fail tails look great at the median — see the convoy lessons of T2 and lab 06.',
+            'The median describes the typical request and the contract is judged on the slow ones, so you report p50 but size on p95 or p99. Systems that fail tails look great at the median — see the convoy lessons of T2 and lab 06.',
           why: [
             'Sample noise is solved with more requests per load step (hundreds, per T7.L2), not by ignoring the tail. The contract binds on the tail regardless of how noisy it is to measure.',
-            'Right: the median describes the typical experience and sizes the system. The tail is what the least lucky user is promised, so contracts bind there. One number answers only one question.',
+            'Right: the median hides the slowest requests, and those are what users remember and what the contract binds. Size on p95 or p99; report p50 beside it. One number answers only one question.',
             'In LLM serving the tail is mostly the engine\'s own doing: queueing, preemption and long prompts. The convoy effects of T2 and lab 06 live exactly in that slowest slice.',
             'They diverge sharply near the knee: the median can look healthy while the tail snaps. A system that passes at p50 can still miss p95 by a wide margin.',
           ],

@@ -477,7 +477,19 @@
 [15,"v4-pro-output-peak","DeepSeek flagship (deepseek-v4-pro) list price, output tokens, peak hours",3.96,"USD/Mtok"],
 [29,"offpeak","DeepSeek flagship (deepseek-v4-pro) list price, output tokens, off-peak hours",1.98,"USD/Mtok"],
 [6,"h100.median-2026-11","H100 on-demand median rental price, November 2026 reading",3.91,"USD/GPU-hr"],
-[0,"status.rust.polonius","Polonius is not on stable Rust: the conditional-return borrow is still rejected","no stable release through Rust 1.100.0, Nov 2026, ships Polonius",""]
+[0,"status.meta.ttft-goal","Meta: first-token latency goal (TTFT)",350,"ms"],
+[14,"it-goal","Meta: gap-between-tokens goal (TTIT, time to incremental token)",25,"ms"],
+[8,"lperf.llama31-8b.conversational-ttft","MLPerf Inference Llama3.1-8B conversational TTFT limit",2000,"ms"],
+[41,"pot","MLPerf Inference Llama3.1-8B conversational TPOT limit",100,"ms"],
+[25,"interactive-ttft","MLPerf Inference Llama3.1-8B interactive TTFT limit",500,"ms"],
+[38,"pot","MLPerf Inference Llama3.1-8B interactive TPOT limit",30,"ms"],
+[14,"deepseek-r1.server-ttft","MLPerf Inference DeepSeek-R1 server TTFT limit",2000,"ms"],
+[34,"pot","MLPerf Inference DeepSeek-R1 server TPOT limit",80,"ms"],
+[26,"interactive-ttft","MLPerf Inference DeepSeek-R1 interactive TTFT limit",1500,"ms"],
+[39,"pot","MLPerf Inference DeepSeek-R1 interactive TPOT limit",15,"ms"],
+[14,"server-tail-percentile","MLPerf Inference server and interactive scenarios: tail latency percentile",99,"%"],
+[14,"round","Latest MLPerf Inference round read","v6.1",""],
+[7,"rust.polonius","Polonius is not on stable Rust: the conditional-return borrow is still rejected","no stable release through Rust 1.100.0, Nov 2026, ships Polonius",""]
 ],
 "glossary": [
 ["page","Page","KV token block (tens of tokens)","t2.l2","block, chunk, memory unit"],
