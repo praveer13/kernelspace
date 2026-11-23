@@ -8,6 +8,22 @@ const ACTIVE_B = claimNumber('model.deepseek-v3.active-params')
 const LAYERS = claimNumber('zoo.deepseek-v3.layers')
 const DENSE_LAYERS = 3
 const MOE_LAYERS = LAYERS - DENSE_LAYERS
+/** MLA's cached bytes per token: a 576-element latent at 2 bytes (BF16) in every layer. */
+const MLA_BYTES = 576 * 2 * LAYERS
+const LLAMA70_BYTES = 327_680
+const MHA70_BYTES = 2_621_440
+const bytes = (v: number) => v.toLocaleString('en-US')
+/** DeepSeek's day six (open-infra index), read from the claims that hold it. */
+const DAY6 = {
+  nodes: claimNumber('bench.deepseek-day6.avg-nodes'),
+  inTokens: claimNumber('bench.deepseek-day6.input-tokens'),
+  outTokens: claimNumber('bench.deepseek-day6.output-tokens'),
+  hitRate: claimNumber('bench.deepseek-day6.cache-hit-rate'),
+  cost: claimNumber('bench.deepseek-day6.daily-cost'),
+  revenue: claimNumber('bench.deepseek-day6.theoretical-revenue'),
+  margin: claimNumber('bench.deepseek-day6.cost-profit-margin'),
+}
+const usdK = (v: number) => `$${Math.round(v / 1e3)}k`
 
 const lesson: Lesson = {
   id: 't6.l1',
@@ -24,7 +40,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Everything before this track assumed a dense model: every token touches every parameter, so every token costs the same weight-read (T4's roofline arithmetic). Mixture-of-Experts breaks that symmetry. The FFN layer — roughly two-thirds of a transformer's parameters — is replaced by **N parallel expert FFNs plus a tiny router network**. Each token, the router scores all N experts and sends the token to the top-k (DeepSeek-V3: N=256 routed experts + 1 shared, k=8). Total parameters: ${TOTAL_B}B. Parameters touched per token: ~${ACTIVE_B}B.
 
-The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the whole model at batch 1 (${TOTAL_B}B ÷ ${ACTIVE_B}B), and by about 28 for the expert path alone (9 of 257 experts per token, the shared one included). Larger batches touch more experts, so the saving shrinks as the batch grows. That is why most of the open frontier models of 2025 were MoEs (as of August 2025: DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants, gpt-oss); not all are, since some current releases are dense.`,
+The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the whole model at batch 1 (${TOTAL_B}B ÷ ${ACTIVE_B}B), and by about 28 for the expert path alone (9 of 257 experts per token, the shared one included). Larger batches touch more experts, so the saving shrinks as the batch grows. That is why most of the open frontier models of 2025 were MoEs (DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants and gpt-oss among them); not all are, since some current releases are dense.`,
     },
     {
       type: 'prose',
@@ -56,7 +72,7 @@ This is why MoE serving is a *scheduling and networking* discipline:
     // The evidence: PLAN-100X §4 gives every lure a misconception id, and this one is the memory family's
     // `memory.active-for-total` ("You counted only the active parameters"), the slip t6.l1 warns about; the frontier models
     // the evidence lists are all total/active pairs (serving-landscape.md F5: Kimi K3 2.8T/104B, gpt-oss-120b 117B/5.1B).
-    // The numbers are claims model.deepseek-v3.total-params (671) and model.deepseek-v3.active-params (37), one byte per FP8 weight.
+    // The numbers are claims model.deepseek-v3.total-params and model.deepseek-v3.active-params, one byte per FP8 weight.
     // The family item that proves the fix: memory/active-bytes, the block just above, whose `resident` ask has that lure.
     // It sits after the item block so the item keeps its block index (its done state is keyed `t6.l1#<blockIndex>`).
     {
@@ -64,19 +80,19 @@ This is why MoE serving is a *scheduling and networking* discipline:
       title: 'Sam explains what an MoE holds in memory',
       setup: 'Sam is sizing a DeepSeek-V3 deployment and drafted this for the capacity review.',
       sentences: [
-        'DeepSeek-V3 has 671B parameters in all, and about 37B of them are used for each token.',
+        `DeepSeek-V3 has ${TOTAL_B}B parameters in all, and about ${ACTIVE_B}B of them are used for each token.`,
         'The router sends each token to 8 of its 256 routed experts, and the shared expert runs for every token.',
-        'At FP8, one token\'s decode step reads about 37 GB of weights, which is why an MoE decodes fast for its size.',
-        'So the deployment needs HBM for about 37 GB of weights, since the other experts sit idle for that token.',
+        `At FP8, one token's decode step reads about ${ACTIVE_B} GB of weights, which is why an MoE decodes fast for its size.`,
+        `So the deployment needs HBM for about ${ACTIVE_B} GB of weights, since the other experts sit idle for that token.`,
         'Under expert parallelism each expert lives on one GPU, so tokens travel to their experts and back in two all-to-alls per MoE layer.',
       ],
       falseAt: 3,
       find: {
         offer: [0, 2, 3, 4],
         why: [
-          'True: 671B in all and about 37B active per token are DeepSeek-V3\'s published figures.',
-          'True: at one byte per FP8 weight, the 37B active parameters are about 37 GB read for one token, against 671 GB for a dense model of the same size.',
-          'False: the next token may route to any expert, so every one of the 671B parameters stays resident, about 671 GB at FP8. Active parameters set the bytes a step reads, not the bytes the deployment holds.',
+          `True: ${TOTAL_B}B in all and about ${ACTIVE_B}B active per token are DeepSeek-V3's published figures.`,
+          `True: at one byte per FP8 weight, the ${ACTIVE_B}B active parameters are about ${ACTIVE_B} GB read for one token, against ${TOTAL_B} GB for a dense model of the same size.`,
+          `False: the next token may route to any expert, so every one of the ${TOTAL_B}B parameters stays resident, about ${TOTAL_B} GB at FP8. Active parameters set the bytes a step reads, not the bytes the deployment holds.`,
           'True: a dispatch and a combine all-to-all per MoE layer move each token to its experts and its results back.',
         ],
       },
@@ -99,17 +115,17 @@ This is why MoE serving is a *scheduling and networking* discipline:
       fix: {
         q: 'Which sentence should replace sentence 4?',
         options: [
-          'So the deployment holds about 37 GB in HBM and pulls in other experts from host memory as tokens need them.',
-          'So the deployment holds about 296 GB, the 37B active parameters times the 8 experts each token visits.',
-          'So the deployment holds about 74 GB, two bytes for each of the 37B active parameters at FP8.',
-          'So the deployment holds about 671 GB of weights in HBM, since the next token may route to any expert.',
+          `So the deployment holds about ${ACTIVE_B} GB in HBM and pulls in other experts from host memory as tokens need them.`,
+          `So the deployment holds about ${ACTIVE_B * 8} GB, the ${ACTIVE_B}B active parameters times the 8 experts each token visits.`,
+          `So the deployment holds about ${ACTIVE_B * 2} GB, two bytes for each of the ${ACTIVE_B}B active parameters at FP8.`,
+          `So the deployment holds about ${TOTAL_B} GB of weights in HBM, since the next token may route to any expert.`,
         ],
         correct: [3],
         why: [
           'Wrong: an expert pulled over PCIe when a token routes to it takes far longer than the step it serves, so the capacity review has to count every expert as resident.',
-          'Wrong: the 37B already counts the 8 routed experts a token visits, so multiplying by 8 counts them again, and it still leaves out the experts no token picked.',
+          `Wrong: the ${ACTIVE_B}B already counts the 8 routed experts a token visits, so multiplying by 8 counts them again, and it still leaves out the experts no token picked.`,
           'Wrong: FP8 is one byte per weight, and the total, not the active count, is what has to be resident.',
-          'Right: 671B parameters at one byte each is about 671 GB, which has to stay resident. The item just above asks both numbers on fresh models: the bytes a step reads and the bytes that must stay resident.',
+          `Right: ${TOTAL_B}B parameters at one byte each is about ${TOTAL_B} GB, which has to stay resident. The item just above asks both numbers on fresh models: the bytes a step reads and the bytes that must stay resident.`,
         ],
       },
       kcs: ['t6.moe-active-params'],
@@ -118,9 +134,9 @@ This is why MoE serving is a *scheduling and networking* discipline:
       type: 'prose',
       md: `## MLA: the other half of the DeepSeek trick
 
-T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 327,680 B/token (320 KiB). DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token *per layer* (~576 elements: a 512-dim compressed latent plus a 64-dim RoPE key) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: 576 × 2 B (BF16) = 1,152 B per layer × 61 layers = **70,272 B (≈68.6 KiB)**, against 327,680 B (320 KiB) for Llama-3-70B — about 4.7× smaller. The "×smaller than MHA" figure needs a baseline: the same 70B with full MHA (64 KV heads, 2 × 80 × 8192 × 2 B = 2,621,440 B per token) would be ≈37× bigger than MLA's 70,272 B.
+T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 327,680 B/token (320 KiB). DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token *per layer* (~576 elements: a 512-dim compressed latent plus a 64-dim RoPE key) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: 576 × 2 B (BF16) = 1,152 B per layer × ${LAYERS} layers = **${bytes(MLA_BYTES)} B (≈${(MLA_BYTES / 1024).toFixed(1)} KiB)**, against ${bytes(LLAMA70_BYTES)} B (320 KiB) for Llama-3-70B — about ${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× smaller. The "×smaller than MHA" figure needs a baseline: the same 70B with full MHA (64 KV heads, 2 × 80 × 8192 × 2 B = ${bytes(MHA70_BYTES)} B per token) would be ≈${Math.round(MHA70_BYTES / MLA_BYTES)}× bigger than MLA's ${bytes(MLA_BYTES)} B.
 
-Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload" conclusion intensifies *less*, long context gets ~4.7× cheaper than Llama-3-70B, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
+Run T5.L4's arithmetic again with ${bytes(MLA_BYTES)} B per token: the "cache is the payload" conclusion intensifies *less*, long context gets ~${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× cheaper than Llama-3-70B, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
     },
     {
       type: 'isomorphism',
@@ -131,7 +147,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           osLine: 'Dense model: every token reads every weight.',
           llm: 'N sharded services behind a router',
           llmLine: 'MoE: a router sends each token to top-k specialist experts.',
-          breaks: 'A service router picks a shard once per request; the MoE router picks the top-k experts for each token at each MoE layer, and under expert parallelism each pick is a network trip (a dispatch and a combine all-to-all, 2 × 58 = 116 per forward pass in DeepSeek-V3).',
+          breaks: `A service router picks a shard once per request; the MoE router picks the top-k experts for each token at each MoE layer, and under expert parallelism each pick is a network trip (a dispatch and a combine all-to-all, 2 × ${MOE_LAYERS} = ${2 * MOE_LAYERS} per forward pass in DeepSeek-V3).`,
         },
         {
           os: 'hot partition → fleet-wide straggler',
@@ -162,7 +178,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         why: [
           'This holds on both sides: a fan-out finishes when its slowest branch does, whether that is a hot shard or the GPU holding a hot expert. The pair says exactly this, so it is not where the analogy stops.',
           'This holds on both sides: a router in front gives each shard, or each expert, a share of the work. The analogy agrees here; the difference is how often the router decides.',
-          'Right: a service router decides once per request, while the MoE router decides for each token at each MoE layer, and under expert parallelism each decision costs a dispatch and a combine all-to-all. That is 2 × 58 = 116 trips per forward pass in DeepSeek-V3.',
+          `Right: a service router decides once per request, while the MoE router decides for each token at each MoE layer, and under expert parallelism each decision costs a dispatch and a combine all-to-all. That is 2 × ${MOE_LAYERS} = ${2 * MOE_LAYERS} trips per forward pass in DeepSeek-V3.`,
           'This holds on both sides: placing related work near the state or the experts it needs saves traffic. The pair claims this, so it is a match; EPLB differs in its goal, which is balance.',
         ],
       },
@@ -183,7 +199,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           explanation:
             'Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token. At batch 1, MoE cuts the FFN bytes a token reads to about k of N experts while keeping dense-level quality. The total parameter count is LARGER — capacity gets worse while per-token cost gets better. That trade is the whole point.',
           why: [
-            'Backwards: an MoE has more total parameters than a dense model of similar quality (671B here). Capacity grows; the win is that only ~37B are active per token.',
+            `Backwards: an MoE has more total parameters than a dense model of similar quality (${TOTAL_B}B here). Capacity grows; the win is that only ~${ACTIVE_B}B are active per token.`,
             'Right: only k of N experts run per token, so active parameters and FFN weight reads per token fall. Decode is bandwidth-bound, so tokens/s rises while capacity stays large.',
             'The router is a tiny scoring layer in front of the expert FFNs. Attention is unchanged, so its cost still grows with context length and KV size.',
             'Quantization is orthogonal to routing. Experts and dense FFNs are quantized with the same methods; MoE saves by running fewer weights per token, not by using fewer bits.',
@@ -200,10 +216,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           ],
           correct: [1],
           explanation:
-            'Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; the floor is one dispatch plus one combine in each of the 58 MoE layers. It is why MoE serving is a networking discipline, not a kernel one.',
+            `Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; the floor is one dispatch plus one combine in each of the ${MOE_LAYERS} MoE layers. It is why MoE serving is a networking discipline, not a kernel one.`,
           why: [
             'Weights stay put between rare rebalances. The per-forward cost is moving token activations to the experts\' GPUs, which happens every layer; weight migration is occasional and off the hot path.',
-            'Right: dispatch sends tokens to expert devices and combine returns results, per MoE layer. In DeepSeek-V3 that is 2 × 58 = 116 all-to-alls per forward pass, a network cost.',
+            `Right: dispatch sends tokens to expert devices and combine returns results, per MoE layer. In DeepSeek-V3 that is 2 × ${MOE_LAYERS} = ${2 * MOE_LAYERS} all-to-alls per forward pass, a network cost.`,
             'Router scores are tiny, and each token\'s top-k is computed on its home GPU. The heavy traffic is the token hidden states that follow the decision, not the scores.',
             'Gradient exchange is a training collective. The all-to-all in question runs in every inference forward pass too, moving activations, which is why serving MoE is a networking problem.',
           ],
@@ -219,10 +235,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           ],
           correct: [1],
           explanation:
-            'MLA caches one low-rank latent vector per token per layer (512 compressed dims plus a 64-dim RoPE key) instead of per-head K/V. It shrinks the cache ~4.7× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
+            'MLA caches one low-rank latent vector per token per layer (512 compressed dims plus a 64-dim RoPE key) instead of per-head K/V. It shrinks the cache ~${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
           why: [
             'MLA changes what is cached, not how fast it is read. Faster kernels do not shrink KV bytes per token, so they do not raise how many sequences fit in HBM.',
-            'Right: the ~576-element latent is cached per layer (576 × 2 B = 1,152 B), so 61 layers give 70,272 B per token, about 4.7× less than Llama-3-70B\'s 327,680 B, and much bigger batches fit.',
+            `Right: the ~576-element latent is cached per layer (576 × 2 B = 1,152 B), so ${LAYERS} layers give ${bytes(MLA_BYTES)} B per token, about ${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× less than Llama-3-70B's ${bytes(LLAMA70_BYTES)} B, and much bigger batches fit.`,
             'MLA skips no heads. It keeps all of them and rebuilds each head\'s K and V from the shared latent with up-projections; the saving is stored bytes, not skipped compute.',
             'FP8 KV is a precision change that halves bytes. MLA changes the cached object itself to a low-rank latent, and the two choices are independent of each other.',
           ],
@@ -252,7 +268,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
     {
       type: 'deepdive',
       title: 'DeepSeek-V3 as the reference architecture',
-      md: `Keep one concrete instance in your head for the rest of T6: **61 layers (3 dense + 58 MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% cost profit margin (profit over cost, at list prices) T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
+      md: `Keep one concrete instance in your head for the rest of T6: **${LAYERS} layers (${DENSE_LAYERS} dense + ${MOE_LAYERS} MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: ${DAY6.nodes} H800 nodes on average serving ${DAY6.inTokens / 1e9}B input / ${DAY6.outTokens / 1e9}B output tokens, ${DAY6.hitRate}% KV-cache hit rate, ${usdK(DAY6.cost)} cost vs ${usdK(DAY6.revenue)} theoretical revenue — the ${DAY6.margin}% cost profit margin (profit over cost, at list prices) T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
     },
   ],
   kcs: ['t6.moe-active-params', 't6.all-to-all'],
@@ -263,9 +279,9 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         prompt:
           'A 256-expert MoE reads far fewer weight bytes per decode step than its total size. Why, and why does that not shrink the memory you must provision?',
         model:
-          'Each token runs only its top-k experts (DeepSeek-V3: 8 of 256, plus one shared), so about 37B of 671B parameters are active and only those bytes are read per step. But any token may route to any expert, so every expert stays resident: bandwidth follows active parameters, capacity follows total.',
+          `Each token runs only its top-k experts (DeepSeek-V3: 8 of 256, plus one shared), so about ${ACTIVE_B}B of ${TOTAL_B}B parameters are active and only those bytes are read per step. But any token may route to any expert, so every expert stays resident: bandwidth follows active parameters, capacity follows total.`,
         ideas: [
-          'Only the top-k experts run per token, so active parameters (about 37B of 671B) set the bytes read per step',
+          `Only the top-k experts run per token, so active parameters (about ${ACTIVE_B}B of ${TOTAL_B}B) set the bytes read per step`,
           'Any token can route to any expert, so all experts stay resident and capacity follows total parameters',
           'Decode speed follows active bytes while the memory bill follows total bytes',
         ],

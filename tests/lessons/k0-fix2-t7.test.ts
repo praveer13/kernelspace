@@ -57,7 +57,7 @@ describe('t7.l2 load generators read their status claims (K0-FIX2-T7)', () => {
   test('LLMPerf and GenAI-Perf print their claim values; GuideLLM and AIPerf print value, release and read date', () => {
     expect(l2).toContain(`LLMPerf (Ray's load generator: ${getClaim('status.loadgen.llmperf').value})`)
     expect(l2).toContain(`GenAI-Perf (NVIDIA's earlier analyzer: ${getClaim('status.loadgen.genai-perf').value})`)
-    expect(l2).toContain(`GuideLLM (${claimCite('status.loadgen.guidellm')})`)
-    expect(l2).toContain(`AIPerf (${claimCite('status.loadgen.aiperf')})`)
+    // K0-CLOSE-B: the two live tools' cites sit together at the end of the sentence that names them live.
+    expect(l2).toContain(`GuideLLM and AIPerf are live (as last read: GuideLLM ${claimCite('status.loadgen.guidellm')}; AIPerf ${claimCite('status.loadgen.aiperf')})`)
   })
 })

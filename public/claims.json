@@ -7119,16 +7119,16 @@
     {
       "id": "status.loadgen.guidellm",
       "kind": "status",
-      "value": "live; recommended by the vLLM docs for production servers",
+      "value": "live",
       "label": "GuideLLM status and traffic profiles",
       "source": {
         "url": "https://github.com/vllm-project/guidellm/blob/v0.8.1/README.md",
         "title": "GuideLLM README at v0.8.1 (line 30)",
         "quote": "Generates realistic, configurable traffic patterns across synchronous, concurrent, and rate-based modes, including reproducible sweeps to identify safe operating ranges."
       },
-      "verifiedAt": "2026-11-21",
+      "verifiedAt": "2026-11-23",
       "ttlDays": 60,
-      "boundary": "The vLLM docs (docs.vllm.ai, benchmarking CLI page, read 2026-11-21) say: \"For benchmarking production vLLM servers, we recommend GuideLLM, an established performance benchmarking framework with live progress updates and automatic report generation.\"",
+      "boundary": "The README at the tag supports \"live\" and the traffic profiles, nothing more. The recommendation is the vLLM docs' (docs.vllm.ai, benchmarking CLI page, latest, read 2026-11-23): \"For benchmarking production vLLM servers, we recommend GuideLLM, an established performance benchmarking framework with live progress updates and automatic report generation.\"",
       "pin": {
         "repo": "vllm-project/guidellm",
         "ref": "v0.8.1"
@@ -7137,16 +7137,16 @@
     {
       "id": "status.loadgen.aiperf",
       "kind": "status",
-      "value": "live; NVIDIA's replacement for GenAI-Perf",
+      "value": "live",
       "label": "AIPerf status and benchmarking modes",
       "source": {
         "url": "https://github.com/ai-dynamo/aiperf/blob/v0.14.0/README.md",
         "title": "AIPerf README at v0.14.0 (lines 130, 155, 229)",
         "quote": "Multiple benchmarking modes: concurrency, request-rate, request-rate with max concurrency, trace replay"
       },
-      "verifiedAt": "2026-11-21",
+      "verifiedAt": "2026-11-23",
       "ttlDays": 60,
-      "boundary": "The same README lists \"Arrival Patterns - Constant, Poisson, gamma traffic\" and \"Goodput - SLO-based throughput measurement\". GenAI-Perf points here as its replacement.",
+      "boundary": "The same README lists \"Arrival Patterns - Constant, Poisson, gamma traffic\" and \"Goodput - SLO-based throughput measurement\". It does not call itself a replacement: that is the GenAI-Perf README's word (status.loadgen.genai-perf).",
       "pin": {
         "repo": "ai-dynamo/aiperf",
         "ref": "v0.14.0"
@@ -7367,17 +7367,17 @@
     {
       "id": "price.h100.median-2026-11",
       "kind": "price",
-      "value": 3.91,
+      "value": 3.98,
       "unit": "USD/GPU-hr",
       "label": "H100 on-demand median rental price, November 2026 reading",
       "source": {
         "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
         "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
-        "quote": "the median on-demand price is $3.91 per GPU per hour across 47 providers with a priced on-demand config"
+        "quote": "the median on-demand price is $3.98 per GPU per hour across 46 providers with a priced on-demand config"
       },
-      "verifiedAt": "2026-11-22",
+      "verifiedAt": "2026-11-23",
       "ttlDays": 30,
-      "boundary": "Median of priced on-demand configs across 47 providers; the page dates its figure \"As of November 23, 2026\" (the reading is the day before in this course's dates) and says the median rose about 16% over the past 90 days. Used only by lesson t7.l4 beside the older reading; price.h100.median (2026-10-04) stays for everything pinned to it. It moves daily."
+      "boundary": "Median of priced on-demand configs across 46 providers, in a sentence the page opens \"As of November 23, 2026\"; it says the median rose about 16% over the past 90 days. The page re-issues its figure within a dated day (this claim held another median read under the same date before), so a reading is one sample of that day. Used only by lesson t7.l4 beside the older reading; price.h100.median (2026-10-04) stays for everything pinned to it."
     },
     {
       "id": "status.meta.ttft-goal",
