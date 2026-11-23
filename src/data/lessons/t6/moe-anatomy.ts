@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Everything before this track assumed a dense model: every token touches every parameter, so every token costs the same weight-read (T4's roofline arithmetic). Mixture-of-Experts breaks that symmetry. The FFN layer — roughly two-thirds of a transformer's parameters — is replaced by **N parallel expert FFNs plus a tiny router network**. Each token, the router scores all N experts and sends the token to the top-k (DeepSeek-V3: N=256 routed experts + 1 shared, k=8). Total parameters: 671B. Parameters touched per token: ~37B.
 
-The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the FFN part. That is why every frontier open model of 2025-2026 is an MoE (DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants, gpt-oss).`,
+The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the whole model at batch 1 (671B ÷ 37B), and by about 28 for the expert path alone (9 of 257 experts per token, the shared one included). Larger batches touch more experts, so the saving shrinks as the batch grows. That is why most of the open frontier models of 2025 were MoEs (as of August 2025: DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants, gpt-oss); not all are, since some current releases are dense.`,
     },
     {
       type: 'prose',
@@ -26,12 +26,12 @@ Here is the systems bill, and it is paid in *network*, not FLOPs. With more expe
 This is why MoE serving is a *scheduling and networking* discipline:
 - **Load balance is the whole game.** If 30% of tokens pick expert #7, expert #7's GPU is the straggler and 143 others wait at the combine barrier. Hot experts are the NCCL stall of T0.L6 writ large.
 - **The batch is the load balancer's only material.** More tokens per forward = more uniform expert utilization = better GPU occupancy. MoE *demands* big batches — the exact opposite of low-latency small-batch serving, and the tension T6.L2 resolves.
-- **Latency floor = network round-trip × 2 × layers.** On NVLink this is tens of microseconds; on RDMA it dominates. Topology stops being trivia and starts being the price list.`,
+- **Latency floor = one dispatch and one combine in each of the 58 MoE layers.** Together they are one network round trip per MoE layer, 116 crossings per forward pass. On NVLink each crossing is short; over RDMA, exposed on the critical path, they dominate, which is why wide-EP serving overlaps them with compute (T6.L2) and why they can still be fine there. Topology stops being trivia and starts being the price list.`,
     },
     {
       type: 'statline',
       stats: [
-        { value: '671B / 37B', label: 'DeepSeek-V3 params: total / per-token', hint: 'MoE buys ~18× fewer weight bytes per token for the FFN path.' },
+        { value: '671B / 37B', label: 'DeepSeek-V3 params: total / per-token', hint: 'At batch 1, MoE reads ~18× fewer weight bytes per token for the whole model (671B ÷ 37B), about 28× for the expert path alone.' },
         { value: '256 + 1', label: 'routed experts + shared', hint: 'Top-8 of 256 chosen per token by the router; the shared expert always runs.' },
         { value: '2 × 58', label: 'all-to-alls per forward', hint: 'Dispatch + combine, every MoE layer (58 of 61; the first 3 are dense). MoE inference is a network workload.' },
         { value: 'EP144', label: 'DeepSeek decode EP width', hint: 'Experts spread across 144 GPUs in production decode (Feb 2025).' },
@@ -172,7 +172,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           ],
           correct: [1],
           explanation:
-            'Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token. MoE cuts the FFN bytes by ~k/N while keeping dense-level quality. The total parameter count is LARGER — capacity gets worse while per-token cost gets better. That trade is the whole point.',
+            'Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token. At batch 1, MoE cuts the FFN bytes a token reads to about k of N experts while keeping dense-level quality. The total parameter count is LARGER — capacity gets worse while per-token cost gets better. That trade is the whole point.',
           why: [
             'Backwards: an MoE has more total parameters than a dense model of similar quality (671B here). Capacity grows; the win is that only ~37B are active per token.',
             'Right: only k of N experts run per token, so active parameters and FFN weight reads per token fall. Decode is bandwidth-bound, so tokens/s rises while capacity stays large.',
@@ -191,7 +191,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           ],
           correct: [1],
           explanation:
-            'Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; latency floor = 2 × round-trip × layers. It is why MoE serving is a networking discipline, not a kernel one.',
+            'Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; the floor is one dispatch plus one combine in each of the 58 MoE layers. It is why MoE serving is a networking discipline, not a kernel one.',
           why: [
             'Weights stay put between rare rebalances. The per-forward cost is moving token activations to the experts\' GPUs, which happens every layer; weight migration is occasional and off the hot path.',
             'Right: dispatch sends tokens to expert devices and combine returns results, per MoE layer. In DeepSeek-V3 that is 2 × 58 = 116 all-to-alls per forward pass, a network cost.',
@@ -243,7 +243,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
     {
       type: 'deepdive',
       title: 'DeepSeek-V3 as the reference architecture',
-      md: `Keep one concrete instance in your head for the rest of T6: **61 layers (3 dense + 58 MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% margin T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
+      md: `Keep one concrete instance in your head for the rest of T6: **61 layers (3 dense + 58 MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% cost profit margin (profit over cost, at list prices) T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
     },
   ],
   kcs: ['t6.moe-active-params', 't6.all-to-all'],
