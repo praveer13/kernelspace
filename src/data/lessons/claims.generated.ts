@@ -142,6 +142,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "v1.6.2 as of Dynamo v1.6.2, read 2026-11-22",
     release: "Dynamo v1.6.2",
   },
+  "status.dynamo.transport": {
+    cite: "TCP as of Dynamo v1.6.2, read 2026-11-21",
+    release: "Dynamo v1.6.2",
+  },
   "status.meta.ttft-goal": {
     value: 350,
     cite: "350",
@@ -206,5 +210,9 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   "synthetic.kv.paged-waste": {
     value: 4,
     cite: "4",
+  },
+  "twin.vllm.scheduler": {
+    cite: "no prefill or decode phase as of vLLM v0.34.0, read 2026-11-21",
+    release: "vLLM v0.34.0",
   },
 }

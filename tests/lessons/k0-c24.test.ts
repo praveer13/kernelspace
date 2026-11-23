@@ -25,8 +25,8 @@ describe('t5.l8 speculative decoding and mixed batches', () => {
     expect(text).not.toContain('Medusa/EAGLE')
     expect(text).toMatch(/Medusa[^.]*removed from vLLM/)
   })
-  test('the claim it reads is a pinned status claim with a quote', () => {
-    for (const id of ['status.vllm.speculative-methods']) {
+  test('the two claims it reads are pinned status claims with a quote', () => {
+    for (const id of ['status.vllm.speculative-methods', 'status.trtllm.enable-chunked-prefill-default']) {
       const c = ENGINES_STATUS_CLAIMS.find((x) => x.id === id)!
       expect(c.kind).toBe('status')
       expect(c.ttlDays).toBeLessThanOrEqual(60)
