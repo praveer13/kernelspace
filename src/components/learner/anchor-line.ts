@@ -6,11 +6,13 @@ import { getTrack } from '@/lib/tracks'
 
 type RustAnchor = WalkOutcome['result']['rustAnchor']
 
+/** No Rust Zero lesson has a ticket, so none offers a test-out: a solid or skipped anchor takes Rust Zero out of the plan, and its lessons stay open. */
 const ANCHOR_LINE: Record<RustAnchor, string> = {
-  solid: 'Rust reading: solid. The Rust Zero lessons are offered as test-outs instead of lessons.',
+  solid: 'Rust reading: solid. Rust Zero is not in your plan; every lesson stays open in the Curriculum.',
   missed: 'Rust reading: not yet. Rust Zero stays in your plan, braided in just before the lessons that need it.',
-  // the learner answered "Not sure" to the Rust item (on these paths it is never left out): it was asked, and skipped
-  skipped: 'Rust reading: skipped. The Rust Zero lessons are offered as test-outs, and each one is still in the Curriculum to take as a lesson.',
+  // the learner answered "Not sure" to the Rust item (on these paths it is never left out) after a walk with every
+  // other KC solid; after a weaker walk finishWalk reads it as missed
+  skipped: 'Rust reading: skipped. The rest of your walk was solid, so Rust Zero is not in your plan; every lesson stays open in the Curriculum.',
 }
 
 const isRust = (lessonId: string): boolean => lessonId.split('.')[0] === 'r'
@@ -85,7 +87,7 @@ const SERVING_ANCHOR_LINE: Record<RustAnchor, string> = {
 const SERVING_SKIPPED_SHOWN = 'Rust reading: skipped. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.'
 
 /**
- * The result's Rust line for the learner's path; the other two paths keep the test-out wording, and their missed line
+ * The result's Rust line for the learner's path; on the other two paths a solid or skipped anchor leaves Rust Zero out of the plan, and the missed line
  * counts the Rust Zero lessons in `plan` (the order the learner will walk, with the full ramp's braid pairing), so it
  * never promises a braid the plan does not have.
  */
