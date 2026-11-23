@@ -26,7 +26,7 @@ const lesson: Lesson = {
           correct: [1],
           why: [
             'The arithmetic is identical, but the memory traffic is not. Order decides how many bytes of each fetched line get used, so the times differ a lot.',
-            'Right: down a column, consecutive loads are a full row apart, so each one fetches a new 64-byte line and uses 8 bytes of it. The gap is about 20x on this matrix.',
+            'Right: down a column, consecutive loads are a full row apart, so each one fetches a new 64-byte line and uses 8 bytes of it. On one desktop chip the gap was 11x to 21x, depending on the core.',
             'Backwards. Walking along a row reads consecutive addresses, which is the case the cache and prefetcher are built for.',
             'A column is not fetched once: the matrix is 512 MiB, far larger than any cache, so each line is evicted before the next column returns to it.',
           ],
@@ -56,9 +56,9 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. Compiled C on one desktop (a 13th-generation Core i5, gcc 14.3 with -O2) took about **0.04 seconds** for one and about **0.85 seconds** for the other: roughly twenty times slower, and the slow one is arguably the more "natural" way to write it. Those are measured times, good to about 20%; other machines differ, and the ratio is the part to trust. The simulator below is a model, not a stopwatch: it prints round figures of 0.4 seconds and 8 seconds, ten times slower than the measurement and with the same twenty-fold gap.
+      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. Compiled C on one desktop (a 13th-generation Core i5, gcc 14.3 with -O2, on one of its performance cores) took about **0.04 seconds** for one and about **0.85 seconds** for the other: roughly twenty times slower, and the slow one is arguably the more "natural" way to write it. Those are measured times, good to about 20%, and other machines differ. Even the ratio moves: on the same chip's efficiency cores, both that C loop and the Python tab below ran about eleven times slower by column. Trust the order of magnitude, ten times or more, not the exact figure. The simulator below is a model, not a stopwatch: it prints about 0.4 seconds and 7 seconds, an 18-fold gap, roughly ten times slower than the measurement.
 
-The difference is a single loop-ordering decision: whether consecutive iterations touch consecutive *memory addresses*. This lesson makes you run that experiment yourself, then explains exactly why the hardware cares so much — cache lines, prefetchers, and the shape of 2D arrays in memory. It is the first time in the course you will feel a 20× penalty with your own hands, and it will not be the last.`,
+The difference is a single loop-ordering decision: whether consecutive iterations touch consecutive *memory addresses*. This lesson makes you run that experiment yourself, then explains exactly why the hardware cares so much — cache lines, prefetchers, and the shape of 2D arrays in memory. It is the first time in the course you will feel a tenfold penalty with your own hands, and it will not be the last.`,
     },
     {
       type: 'prose',
@@ -75,7 +75,7 @@ For a row-major matrix, element \`A[i][j]\` lives at address \`base + (i * ncols
     },
     {
       type: 'code',
-      filename: 'bench_rowcol — the 20× loop',
+      filename: 'bench_rowcol — the row/column loop',
       tabs: [
         {
           label: 'Python',
@@ -167,7 +167,7 @@ double col_sum(const double *A) {
     {
       type: 'callout',
       variant: 'warning',
-      md: `The transpose trap: "just store it column-major then" is not a free fix. Whatever order you choose, *someone's* access pattern becomes the bad one — a column-major matrix penalizes row walks by the same 20×. Pick the layout for your hottest traversal, or **tile** (T4.L6) so both are tolerable. There is no layout that makes every access pattern happy; there are only layouts matched to workloads.`,
+      md: `The transpose trap: "just store it column-major then" is not a free fix. Whatever order you choose, *someone's* access pattern becomes the bad one — a column-major matrix penalizes row walks by the same factor. Pick the layout for your hottest traversal, or **tile** (T4.L6) so both are tolerable. There is no layout that makes every access pattern happy; there are only layouts matched to workloads.`,
     },
     {
       type: 'prose',
