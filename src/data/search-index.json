@@ -455,6 +455,8 @@
 [7,"dynamo.kvbm.removal-target","Dynamo release that KVBM (KV Block Manager) is targeted for removal in","v1.7.0",""],
 [14,"release","The newest Dynamo release (the releases page marks it Latest)","v1.6.2",""],
 [8,"eepep.api","DeepEP expert-parallel API (V2 unified it, V2.5 removed V1)","one EPBuffer interface for high-throughput and low-latency EP; V1 removed",""],
+[11,"seek.production-drafter","DeepSeek's production speculative drafter before DSpark, and why it was kept at one token","MTP-1 (one draft token per step), superseded by DSpark",""],
+[16,"trtllm-mtp-depth","NVIDIA TensorRT-LLM's MTP depth for the DeepSeek-R1 min-latency recipe","three MTP layers, for single-concurrency DeepSeek-R1 on 8xB200",""],
 [7,"loadgen.llmperf","LLMPerf (Ray) repository status","archived 2025-12-17, read-only",""],
 [15,"genai-perf","GenAI-Perf (NVIDIA) status","being phased out; use AIPerf",""],
 [16,"uidellm","GuideLLM status and traffic profiles","live; recommended by the vLLM docs for production servers",""],

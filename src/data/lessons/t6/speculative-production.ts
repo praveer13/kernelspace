@@ -17,7 +17,7 @@ const lesson: Lesson = {
 
 - **Draft model** (T5.L8's version): a small sibling model. Simple, but the drafter is a second model to host, version, and keep distribution-aligned — and it doesn't share the target's KV cache, so verify cost includes extra bookkeeping.
 - **Medusa heads**: small extra output heads on the target model predicting tokens t+1..t+k in parallel. One model, one cache — but the heads are shallow predictors; acceptance drops on hard text.
-- **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with an extra MTP module — a transformer-block head fed by the target's hidden states, sharing its embedding and output head. DeepSeek-V3/R1 ship exactly one (config num_nextn_predict_layers = 1). The draft is nearly the same distribution as the target because it reads the target's own hidden states. Highest acceptance rates of the three; this is what DeepSeek-R1's production stack runs (MTP-3: that one module applied for 3 draft steps) and what every 2026 engine integrated (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
+- **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with an extra MTP module — a transformer-block head fed by the target's hidden states, sharing its embedding and output head. DeepSeek-V3/R1 ship exactly one (config num_nextn_predict_layers = 1). The draft is nearly the same distribution as the target because it reads the target's own hidden states. Highest acceptance rates of the three; DeepSeek's own serving drafted one token per step with it (MTP-1), because a static multi-token drafter lowered aggregate throughput under high concurrency, and has since replaced it with DSpark, a confidence-scheduled block drafter. Longer chains are a serving-time setting: NVIDIA's TensorRT-LLM recipe for DeepSeek-R1 at single concurrency (its min-latency case) applies the module three times (MTP-3), the best of the depths NVIDIA measured there. Every 2026 engine integrated this idea (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
     },
     {
       type: 'prose',
@@ -36,7 +36,7 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
         { value: '2–3×', label: 'MTP gain on DeepSeek-R1', hint: 'Up to, at some iso-interactivity points on GB200 NVL72 (SemiAnalysis InferenceX); NVIDIA reports 2.16× at batch 1 on 8 B200.' },
         { value: 'k = 2–4', label: 'typical draft length', hint: 'MTP depth. Each extra token costs draft time + verify FLOPs, and E = (1 − α^(k+1)) / (1 − α) flattens; a separate draft model (T5.L8) runs k ≈ 4–8.' },
         { value: '0%', label: 'quality loss', hint: 'Rejection sampling keeps output distributionally identical to the target model — speed, not approximation.' },
-        { value: 'MTP-3', label: 'DeepSeek-R1 production drafter', hint: 'One MTP module (num_nextn_predict_layers = 1) run for 3 draft steps, fed by the target hidden states — drafter as the model itself.' },
+        { value: 'MTP-1', label: 'DeepSeek drafter in production, before DSpark', hint: 'One MTP module (num_nextn_predict_layers = 1) for one draft token per step, fed by the target hidden states. MTP-3, the same module run three times, is NVIDIA\'s TensorRT-LLM setting for single-concurrency DeepSeek-R1.' },
       ],
     },
     {
