@@ -55,7 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useObserve } from '@/lib/sims/host'
+import { useObserve, useSimHost } from '@/lib/sims/host'
 import {
   BATCH_STEPS,
   CPU_GPU,
@@ -197,6 +197,10 @@ type HostMode = 'roofline' | 'cpu-gpu'
 
 export default function RooflineSim() {
   const { embed } = usePlaygroundContext()
+  /* This component renders the shell's children, so the shell's own embed flag is not visible to it: ask the SimHost.
+     In the lesson column (embed or phone mode) the chart stacks above its controls instead of beside them. */
+  const host = useSimHost()
+  const stacked = host !== null && host.mode !== 'lab'
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
   const { machine, from, selectMachine: selectMode } = useSimMachine()
@@ -1057,7 +1061,7 @@ export default function RooflineSim() {
             roofline lab
           </ChipButton>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className={`flex min-h-0 flex-1 flex-col ${stacked ? '' : 'lg:flex-row'}`}>
           {/* ------- stage + its data table ------- */}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="relative min-h-[420px] flex-1 bg-ink bg-blueprint">
@@ -1144,7 +1148,9 @@ export default function RooflineSim() {
           </div>
 
           {/* ------- control panel ------- */}
-          <aside className="w-full shrink-0 overflow-y-auto border-t border-line bg-surface-1 lg:w-[296px] lg:border-l lg:border-t-0">
+          <aside
+            className={`w-full shrink-0 overflow-y-auto border-t border-line bg-surface-1 ${stacked ? '' : 'lg:w-[296px] lg:border-l lg:border-t-0'}`}
+          >
             <ControlGroup label="hardware">
               <Select value={preset} onValueChange={applyPreset}>
                 <SelectTrigger aria-label="hardware" className="h-8 border-line bg-surface-2 font-mono text-[12px]">
