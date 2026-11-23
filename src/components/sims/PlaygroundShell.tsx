@@ -668,15 +668,15 @@ export function TransportBar({
 }: TransportBarProps) {
   const { embed } = usePlaygroundContext()
   useEffect(() => {
-    if (!keyboard) return
+    // Embedded in a lesson, the page owns the keys (Space scrolls, the arrows turn the page): the sim plays,
+    // steps and resets by its buttons there.
+    if (!keyboard || embed) return
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || isWidgetKeyTarget(document.activeElement)) return
       if (e.code === 'Space') {
         e.preventDefault()
         onTogglePlay()
       } else if (e.key === 'ArrowRight') {
-        // In a lesson the arrows belong to the lesson (previous / next), so the sim steps by its button there.
-        if (embed) return
         e.preventDefault()
         onStep()
       } else if (e.key === 'r' || e.key === 'R') {

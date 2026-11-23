@@ -34,7 +34,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
-import { isWidgetKeyTarget } from '@/lib/sims/host'
+import { isLessonKeyTarget } from '@/lib/sims/host'
 import { selectTrackPct, useProgress } from '@/lib/progress'
 import type { LessonStatus } from '@/lib/progress'
 import { MINUTES, localDateKey, selectRings } from '@/lib/economy'
@@ -610,13 +610,13 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
 
   if (load.status === 'error' || (load.status === 'ready' && !rec)) return <NextLessonLink lesson={lesson} trackColor={trackColor} />
   if (!rec) return <div data-up-next-slot aria-busy="true" className="min-h-[9.5rem] rounded-lg border border-line bg-surface-1" />
-  const also = alsoNext(rec, nextLesson(lesson))
+  const also = alsoNext(rec, lesson, nextLesson(lesson))
   if (!also) return <UpNextCard rec={rec} as="h2" />
   return (
     <div className="flex flex-col gap-2">
       <UpNextCard rec={rec} as="h2" />
       <Link to={lessonPath(also.lesson)} data-also-next className="font-mono text-[11px] text-text-3 underline-offset-2 hover:text-text-1 hover:underline">
-        Or continue the track: {also.label}
+        {also.lead}: {also.label}
       </Link>
     </div>
   )
@@ -927,7 +927,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   /* keyboard shortcuts (lesson.md §6) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || isWidgetKeyTarget(e.target)) return
+      if (e.defaultPrevented || isLessonKeyTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       switch (e.key) {
         case 'ArrowLeft':

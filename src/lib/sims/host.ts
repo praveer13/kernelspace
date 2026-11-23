@@ -665,3 +665,16 @@ export function isWidgetKeyTarget(el: unknown): boolean {
   const node = el as { closest?: (s: string) => unknown } | null
   return !!node && typeof node.closest === 'function' && node.closest(WIDGET_KEY_SELECTOR) !== null
 }
+
+/**
+ * A focusable scroll region: a lesson's code block or table that scrolls sideways, a code listing, a diagram's table.
+ * The browser scrolls it with the arrows, so the lesson's page keys stand aside there too. Only the lesson asks: in
+ * the lab, a sim's own focusable view keeps the transport's keys.
+ */
+export const SCROLL_REGION_SELECTOR = '[role="region"][tabindex="0"]'
+
+/** True when the lesson's page keys must stand aside for `el`: a control that owns its keys, or a scroll region. */
+export function isLessonKeyTarget(el: unknown): boolean {
+  const node = el as { closest?: (s: string) => unknown } | null
+  return isWidgetKeyTarget(el) || (!!node && typeof node.closest === 'function' && node.closest(SCROLL_REGION_SELECTOR) !== null)
+}
