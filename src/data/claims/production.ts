@@ -81,7 +81,7 @@ export const PRODUCTION_CLAIMS: Claim[] = [
     source: {
       ...GLIBC_MALLOC_C,
       quote: 'for the small bins, which all contain the same-sized chunks, but',
-      row: 'malloc.c line 1484 names the small bins, lines 1635 and 1645 the unsorted bin, line 4053 the large bins; 106 lines of malloc.c at tag glibc-2.42 contain fastbin (ignoring case), and none at glibc-2.43 or glibc-2.44 (tags read on the mirror)',
+      row: 'malloc.c line 1484 names the small bins, lines 1635 and 1645 the unsorted bin, line 4053 the large bins; line 1478 says no consolidated chunk physically borders another one, and free returns at tcache_put (line 3372) before _int_free_chunk, so chunks in the tcache are not merged; 106 lines of malloc.c at tag glibc-2.42 contain fastbin (ignoring case), and none at glibc-2.43 or glibc-2.44 (tags read on the mirror)',
     },
     verifiedAt: '2026-11-22',
     ttlDays: 365,
