@@ -361,6 +361,18 @@ export function eligibleKcs(
 }
 
 /**
+ * Whether "Keep going" has anything to serve, so Today offers the button: a carded KC that is eligible (see
+ * `eligibleKcs`) and has a generator family. After Boot alone nothing is, so there is no button.
+ */
+export function canKeepGoing(
+  cards: Pick<CardSet, 'cards'>,
+  eligible: ReadonlySet<KcId>,
+  pool: { families: (kc: KcId) => readonly unknown[] },
+): boolean {
+  return Object.keys(cards.cards).some((kc) => eligible.has(kc) && pool.families(kc).length > 0)
+}
+
+/**
  * "Keep going" (spec §6.3 step 5): `count` generated items on introduced (carded) KCs, lowest recall first,
  * cycling when fewer KCs can be served. They pay XP under the daily cap and still update cards. `eligible`, when
  * given, limits the draw to KCs the learner has earned (see `eligibleKcs`); Boot's own cards alone never qualify.
