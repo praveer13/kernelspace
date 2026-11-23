@@ -146,6 +146,11 @@ for (const width of WIDTHS) {
     await expect(block).toContainText('Which error does rustc report for this code, if any?')
     await expect(block).toContainText('compiles with 0 errors')
     await expect(block.locator('[data-item-progress]')).toHaveText('0/3')
+    // one fixed note says what a reading item is and what "moved" means: once in the reading block, never in an item block
+    await expect(block.locator('[data-reading-note]')).toHaveCount(1)
+    await expect(block.locator('[data-reading-note]')).toContainText('You do not write Rust here')
+    await expect(block.locator('[data-reading-note]')).toContainText('is "moved" when it has been handed to a function')
+    await expect(page.locator('[data-block="item"] [data-reading-note]')).toHaveCount(0)
     expect(await noSidewaysScroll(page), 'the verdict item scrolls sideways').toBe(true)
 
     // Tab alone reaches the first option; a letter picks it and Enter sends it
@@ -198,6 +203,7 @@ for (const width of WIDTHS) {
     await expect(block.getByText('Rust Zero covers this on your path. Practice anyway?')).toBeVisible()
     await expect(block.locator('[data-ks-option]')).toHaveCount(0)
     await expect(block.locator('[data-item-progress]')).toHaveText('')
+    await expect(block.locator('[data-reading-note]'), 'a collapsed reading block shows no note').toHaveCount(0)
     expect(await noSidewaysScroll(page), 'the collapsed block scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, collapsed`)
     expect(await compileEvents(page), 'nothing is written while the block is collapsed').toEqual([])
@@ -206,6 +212,7 @@ for (const width of WIDTHS) {
     await tabUntil(page, (a) => a.inBlock && a.name === 'Practice anyway', 400, 'the Practice anyway button')
     await page.keyboard.press('Enter')
     await expect(block.locator('[data-ks-option]').first()).toBeVisible()
+    await expect(block.locator('[data-reading-note]'), 'opened, the block shows the note once').toHaveCount(1)
     expect(await compileEvents(page), 'opening the block writes nothing').toEqual([])
     expect(await noSidewaysScroll(page), 'the opened block scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, opened from the collapsed line`)
