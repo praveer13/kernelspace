@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { ALL_LESSONS } from '@/data/lessons'
 import { ANCHOR_ALIASES, resolveAnchor } from '@/pages/lesson/anchor-aliases'
 import { extractHeadings } from '@/pages/lesson/markdown'
+import published from '../fixtures/lesson-headings/slugs.json'
 
 const idsOf = (lessonId: string) => {
   const lesson = ALL_LESSONS.find((l) => l.id === lessonId)
@@ -37,5 +38,33 @@ describe('old heading links land on the renamed heading (K0-E7)', () => {
         expect(live).not.toContain(old)
       }
     }
+  })
+})
+
+// Every heading slug a saved link may name: the headings of the published course and of this branch. A heading that
+// is renamed or removed leaves its slug here, so the test asks for an alias row that lands its old links.
+describe('a renamed heading keeps its old links (K0-FIX-LESSON-APP)', () => {
+  const snapshot = published as Record<string, string[]>
+
+  test('every lesson in the snapshot still exists', () => {
+    for (const lessonId of Object.keys(snapshot)) expect(ALL_LESSONS.some((l) => l.id === lessonId)).toBe(true)
+  })
+
+  test('every slug in the snapshot is a live heading or has an alias row to one', () => {
+    const lost: string[] = []
+    for (const [lessonId, slugs] of Object.entries(snapshot)) {
+      const live = idsOf(lessonId)
+      for (const slug of slugs) if (resolveAnchor(lessonId, `#${slug}`, live) === null) lost.push(`${lessonId}#${slug}`)
+    }
+    expect(lost).toEqual([])
+  })
+
+  test('the two headings renamed before E7 land on their new slugs', () => {
+    expect(resolveAnchor('t6.l2', '#mechanism-3-dual-batch-overlap-hide-the-network-under-compute', idsOf('t6.l2'))).toBe(
+      'mechanism-3-overlap-hide-the-network-under-compute',
+    )
+    expect(resolveAnchor('r.l8', '#mutex-the-same-rule-across-threads', idsOf('r.l8'))).toBe(
+      'mutex-and-rwlock-the-rule-across-threads',
+    )
   })
 })
