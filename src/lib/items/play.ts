@@ -178,9 +178,16 @@ function authoredView(q: QuizQuestion, seed: number): Pick<ChoiceView, 'kind' | 
   }
 }
 
-/** Lower-case words of a sentence, the leading "Right:" or "Correct:" label dropped, punctuation read as a space. */
+/**
+ * A reference to a track or lesson of the course ("T2.L4", "T6.L4's", "(T4)", "T6/T7"): it points at a lesson and
+ * says nothing of its own, so it is neither a word nor a number. Upper-case T only, so a cache level ("L2") stays a number.
+ */
+const LESSON_REF = /\bT\d+(?:\.L\d+)?\b/g
+
+/** Lower-case words of a sentence, the leading "Right:" or "Correct:" label and any lesson reference dropped, punctuation read as a space. */
 function wordsOf(text: string): string[] {
   return text
+    .replace(LESSON_REF, ' ')
     .toLowerCase()
     .replace(/^\s*(right|correct)\s*:\s*/, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
@@ -201,13 +208,22 @@ const NEAR_COPY_MIN = 3
 const NEW_WORDS_MAX = 2
 /** ...and at most this share of its content words. Three new words ("and cycles still leak") is something the why lacks. */
 const NEW_SHARE_MAX = 1 / 3
+/**
+ * A long sentence is a near-copy, whatever its count of new words, when fewer than this share of its content words
+ * are new: three rewordings in a 21-word restatement ("Layout must match the access pattern: row-wise access ...")
+ * add nothing, while four new words in sixteen ("Trie-shaped sharing beats hash-map sharing ...") make a comparison
+ * the why lacks.
+ */
+const NEW_SHARE_LONG = 1 / 4
 
 /**
- * True when one sentence of an explanation says nothing the key's why does not: it brings no number the why lacks,
- * and either the why, label removed, contains it, or it is a near-copy of NEAR_COPY_MIN content words or more, all
- * but NEW_WORDS_MAX of them (and no more than NEW_SHARE_MAX of them) occurring in the why. "Engines gate speculation on batch occupancy for
- * exactly this reason" repeats a why that says "Engines gate speculation on occupancy"; "That is the price of
- * crossing threads, and cycles still leak" adds to one that ends at "the price of crossing threads".
+ * True when one sentence of an explanation says nothing the key's why does not: it brings no number the why lacks
+ * (a lesson reference, LESSON_REF, is not one), and either the why, label removed, contains it, or it is a near-copy
+ * of NEAR_COPY_MIN content words or more whose new words are few: all but NEW_WORDS_MAX of them (and no more than
+ * NEW_SHARE_MAX of them) occur in the why, or, in a long sentence, fewer than NEW_SHARE_LONG of them are new.
+ * "Engines gate speculation on batch occupancy for exactly this reason" repeats a why that says "Engines gate
+ * speculation on occupancy"; "That is the price of crossing threads, and cycles still leak" adds to one that ends at
+ * "the price of crossing threads".
  */
 export function sentenceRepeatsWhy(sentence: string, why: string): boolean {
   const e = wordsOf(sentence)
@@ -219,7 +235,7 @@ export function sentenceRepeatsWhy(sentence: string, why: string): boolean {
   if (` ${w.join(' ')} `.includes(` ${e.join(' ')} `)) return true
   if (mine.length < NEAR_COPY_MIN) return false
   const added = mine.filter((t) => !have.has(t)).length
-  return added <= NEW_WORDS_MAX && added <= mine.length * NEW_SHARE_MAX
+  return (added <= NEW_WORDS_MAX && added <= mine.length * NEW_SHARE_MAX) || added < mine.length * NEW_SHARE_LONG
 }
 
 const SENTENCE_END = /(?<=[.!?])\s+/

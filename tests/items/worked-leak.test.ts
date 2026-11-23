@@ -12,7 +12,8 @@ import { formatNumber } from '../../src/lib/items/units'
 const families = await loadAllFamilies()
 /**
  * Families whose level 1 blanks a middle step and shows steps after it, the plan's "middle one blank" form: the steps
- * after the blank never show the final answer (asserted below for them too), but they can use the blank's value. They
+ * after the blank do not show the final answer at these seeds (asserted below for them too; rollout/long-tail does where its
+ * busy share is 50 %, three of the 4,000 instances verify:generators draws), but they can use the blank's value. They
  * have their own workedFor, outside K0-A6's four families; docs/specs/k0.md records the exemption from "nothing visible
  * after the blank" as a decision. Every other family, and any new one, is held to it.
  */
