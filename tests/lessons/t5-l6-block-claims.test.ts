@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { claimNumber } from '@/data/claims'
-import { claimCite } from '@/data/claims/cite'
+// The lessons' own claim reader (the generated snapshot), as t5.l6 reads them: the paper's block is a lazy kvpool
+// claim, which the eager registry knows only after some other file has loaded that group.
+import { claimCite, claimNumber } from '@/data/lessons/claims'
 import { ALL_LESSONS } from '@/data/lessons'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't5.l6')
