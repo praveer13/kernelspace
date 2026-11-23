@@ -47,6 +47,16 @@ describe('anchorLine', () => {
     for (const a of ['solid', 'missed'] as const) expect(anchorLine(a, 'serving-first', PLAN, true)).toBe(anchorLine(a, 'serving-first', PLAN, false))
   })
 
+  test('serving-first: "Not sure" after a weak walk is stored as a miss and still reads "skipped" (K0-CLOSE-E)', () => {
+    const skipped = 'Rust reading: skipped. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.'
+    expect(anchorLine('missed', 'serving-first', PLAN, true, true)).toBe(skipped)
+    expect(anchorLine('skipped', 'serving-first', PLAN, true, true)).toBe(skipped)
+    // a wrong answer is a miss and keeps the spec string
+    expect(anchorLine('missed', 'serving-first', PLAN, true, false)).toBe(anchorLine('missed', 'serving-first', PLAN))
+    // the other paths read the stored anchor alone: a miss there counts Rust Zero lessons in the plan
+    for (const p of OTHER) expect(anchorLine('missed', p, PLAN, true, true)).toBe(anchorLine('missed', p, PLAN, true, false))
+  })
+
   test('serving-first never promises R lessons in the plan or test-outs', () => {
     for (const a of ANCHORS) {
       const line = anchorLine(a, 'serving-first', PLAN)

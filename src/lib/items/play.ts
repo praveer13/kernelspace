@@ -217,8 +217,37 @@ const NEW_SHARE_MAX = 1 / 3
 const NEW_SHARE_LONG = 1 / 4
 
 /**
+ * An operator of a formula: "tokens/s ≈ BW ÷ bytes-per-token". "=" is left out: between words the explanations use it
+ * for "means" ("Three wide wait bars + one absent = rank 4 is the straggler"), and between numbers the digit rule
+ * already reads it.
+ */
+const FORMULA_OPERATOR = /[÷×≈]/g
+/** A why that states a formula of its own ("tokens/s ≈ bandwidth ÷ bytes per token", "AI × bandwidth", "2,250 / 8 = 281.25"). */
+const WHY_FORMULA = /[÷×≈=]/
+
+/**
+ * The words of each operand next to a formula operator ("tokens/s ≈ BW ÷ bytes-per-token" gives tokens, s, bw, bytes,
+ * per, token), of any length: a formula's operands are often short ("BW", "k", "N"), which contentWords does not see.
+ */
+function operandWords(sentence: string): string[] {
+  const out: string[] = []
+  for (const m of sentence.matchAll(FORMULA_OPERATOR)) {
+    const at = m.index ?? 0
+    const left = /(\S+)\s*$/.exec(sentence.slice(0, at).replace(FORMULA_OPERATOR, ' '))?.[1] ?? ''
+    const right = /^\s*(\S+)/.exec(sentence.slice(at + 1).replace(FORMULA_OPERATOR, ' '))?.[1] ?? ''
+    out.push(...wordsOf(left), ...wordsOf(right))
+  }
+  return out
+}
+
+/** A formula the why lacks: the sentence holds one with an operand the why does not name, and the why states none (t6.l1#0). */
+const addsFormula = (sentence: string, why: string, have: ReadonlySet<string>): boolean =>
+  !WHY_FORMULA.test(why) && operandWords(sentence).some((t) => !have.has(t))
+
+/**
  * True when one sentence of an explanation says nothing the key's why does not: it brings no number the why lacks
- * (a lesson reference, LESSON_REF, is not one), and either the why, label removed, contains it, or it is a near-copy
+ * (a lesson reference, LESSON_REF, is not one) and no formula the why lacks (addsFormula: the formula is the relation
+ * the why only names), and either the why, label removed, contains it, or it is a near-copy
  * of NEAR_COPY_MIN content words or more whose new words are few: all but NEW_WORDS_MAX of them (and no more than
  * NEW_SHARE_MAX of them) occur in the why, or, in a long sentence, fewer than NEW_SHARE_LONG of them are new.
  * "Engines gate speculation on batch occupancy for exactly this reason" repeats a why that says "Engines gate
@@ -232,6 +261,7 @@ export function sentenceRepeatsWhy(sentence: string, why: string): boolean {
   if (mine.length === 0 || w.length === 0) return false
   const have = new Set(w)
   if (mine.some((t) => /\d/.test(t) && !have.has(t))) return false
+  if (addsFormula(sentence, why, have)) return false
   if (` ${w.join(' ')} `.includes(` ${e.join(' ')} `)) return true
   if (mine.length < NEAR_COPY_MIN) return false
   const added = mine.filter((t) => !have.has(t)).length

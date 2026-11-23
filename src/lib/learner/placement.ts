@@ -386,6 +386,8 @@ export interface WalkOutcome {
   slips: { id: string; message: string }[]
   /** The walk showed the Rust anchor item (answered, or "Not sure"); false when serving-first left it out. Not stored. */
   anchorShown: boolean
+  /** The walk showed the Rust anchor item and every answer to it was "Not sure" (no blind pattern). Not stored. */
+  anchorNotSure: boolean
 }
 
 /**
@@ -397,16 +399,20 @@ export interface WalkOutcome {
 export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now: IsoInstant): WalkOutcome {
   const pattern = blindPattern(state)
   const verdict = (kc: KcId): KcVerdict | undefined => (pattern && state.verdicts[kc] ? 'missed' : state.verdicts[kc])
-  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it. That reads as
-  // skipped, not a miss, on serving-first (no Rust Zero lessons) or after a walk in which every other KC was solid;
+  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it. The stored anchor
+  // reads skipped (Rust Zero leaves the plan) only after a walk in which every other KC was solid, on every path;
   // otherwise it stays a miss, as a skipped core item does, so the paths with Rust Zero keep its lessons in the plan
-  // (no Rust Zero lesson has a test-out to stand in for them).
+  // (no Rust Zero lesson has a test-out to stand in for them). The result is stored without its path, and a later
+  // switch from serving-first to a path with Rust Zero reads this same anchor (paths.ts pathPlan). Serving-first has
+  // no Rust Zero lessons, so there a "not sure" reads skipped after any walk: its Rust line says so (`anchorNotSure`)
+  // and the KC is not listed to work on.
   const anchorAnswers = state.answers[RUST_ANCHOR_KC] ?? []
   const restSolid = state.probes.every((kc) => kc === RUST_ANCHOR_KC || verdict(kc) === 'solid')
-  const anchorNotAsked =
-    !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true) && (anchorOptional(state.path) || restSolid)
+  const anchorNotSure = !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true)
+  const anchorSkipped = anchorNotSure && restSolid
+  const anchorUnlisted = anchorNotSure && (anchorOptional(state.path) || restSolid)
   const solidKcs = state.probes.filter((kc) => verdict(kc) === 'solid')
-  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed' && !(anchorNotAsked && kc === RUST_ANCHOR_KC))
+  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed' && !(anchorUnlisted && kc === RUST_ANCHOR_KC))
 
   const firstMissed = THRESHOLD_KCS.find((kc) => verdict(kc) === 'missed')
   const entryTrack: TrackId = pattern ? 't0' : firstMissed ? trackOf(firstMissed) : 't5'
@@ -423,12 +429,13 @@ export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now
       solidKcs,
       missedKcs,
       misconceptions: [...slips.keys()],
-      rustAnchor: anchorNotAsked ? 'skipped' : (anchor ?? 'skipped'),
+      rustAnchor: anchorSkipped ? 'skipped' : (anchor ?? 'skipped'),
       items: state.asked,
     },
     pattern,
     slips: [...slips].map(([id, message]) => ({ id, message })),
     anchorShown: anchorAnswers.length > 0,
+    anchorNotSure,
   }
 }
 

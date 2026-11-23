@@ -97,7 +97,13 @@ export const anchorLine = (
   plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] },
   /** The walk showed the Rust item (`WalkOutcome.anchorShown`); only serving-first can leave it out. */
   anchorShown = path !== 'serving-first',
+  /**
+   * Every answer to the Rust item was "Not sure" (`WalkOutcome.anchorNotSure`). On serving-first that reads skipped after
+   * any walk, though the stored anchor is a miss unless the rest of the walk was solid (so a later switch to a path with
+   * Rust Zero keeps its lessons). The other paths read the stored anchor alone.
+   */
+  anchorNotSure = false,
 ): string => {
-  if (path === 'serving-first') return rustAnchor === 'skipped' && anchorShown ? SERVING_SKIPPED_SHOWN : SERVING_ANCHOR_LINE[rustAnchor]
+  if (path === 'serving-first') return (rustAnchor === 'skipped' || anchorNotSure) && anchorShown ? SERVING_SKIPPED_SHOWN : SERVING_ANCHOR_LINE[rustAnchor]
   return rustAnchor === 'missed' ? missedLine(plan) : ANCHOR_LINE[rustAnchor]
 }

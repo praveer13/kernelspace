@@ -280,8 +280,32 @@ describe('"Not sure" on the Rust item keeps Rust Zero in the plan unless the res
     }
   })
 
-  test('serving-first has no Rust Zero lessons: "Not sure" there still reads skipped after any walk', () => {
-    expect(drive(real, () => 'skip', 5, 'serving-first').outcome.result.rustAnchor).toBe('skipped')
+  test('serving-first has no Rust Zero lessons: "Not sure" there reads skipped after any walk, and the stored anchor is skipped only after a solid walk (K0-CLOSE-E)', () => {
+    // a weak walk: the result's Rust line reads skipped, but the stored anchor is a miss, so a later path switch keeps Rust Zero
+    const weak = drive(real, () => 'skip', 5, 'serving-first').outcome
+    expect(weak.anchorShown).toBe(true)
+    expect(weak.anchorNotSure).toBe(true)
+    expect(weak.result.rustAnchor).toBe('missed')
+    expect(weak.result.missedKcs).not.toContain(RUST_ANCHOR_KC)
+    // a solid walk: skipped, as on the other two paths
+    const solid = drive(real, (v, step) => (step.kc === RUST_ANCHOR_KC ? 'skip' : expert(v, step)), 5, 'serving-first').outcome
+    expect(solid.anchorNotSure).toBe(true)
+    expect(solid.result.rustAnchor).toBe('skipped')
+    // answered: not "Not sure"
+    expect(drive(real, expert, 5, 'serving-first').outcome.anchorNotSure).toBe(false)
+  })
+
+  test('serving-first, every item "Not sure", then a switch to the full ramp or rust-systems: the ten R lessons stay lessons (K0-CLOSE-E)', () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const r = drive(real, () => 'skip', seed, 'serving-first').outcome.result
+      for (const path of ['full-ramp', 'rust-systems'] as const) {
+        const plan = cachedPathPlan(path, graph(), r)
+        expect(plan.lessons).toContain('r.l1')
+        expect(plan.testOut).toEqual([])
+        for (const id of R_IDS) expect(plan.lessons).toContain(id)
+      }
+      expect(R_IDS.length).toBe(10)
+    }
   })
 })
 
