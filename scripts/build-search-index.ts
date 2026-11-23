@@ -114,7 +114,9 @@ export function buildSearchIndex(hookMax = HOOK_MAX, canMax = CAN_MAX): SearchIn
 
 /**
  * `index` in the committed encoding (`EncodedSearchIndex`, src/lib/search.ts; K0-Z3): `decodeSearchIndex` gives back
- * every row exactly, which tests/search/k0-z3-encoding.test.ts checks row for row. It took the file from 20,475 B of gzip to 18,855 B (K0-Z3 measured each part: docs/specs/k0.md K0-Z-D16).
+ * every row exactly, which tests/search/k0-z3-encoding.test.ts checks row for row. It took the file from 20,475 B of gzip to 18,855 B
+ * (K0-Z3 measured each part: docs/specs/k0.md K0-Z-D16). The wave's later claim rows spent that room: on 2026-11-23 the file
+ * is 20,417 B of gzip, 63 B under the 20,480 B budget, about one claim row (docs/specs/k0.md section 10).
  */
 export function encodeSearchIndex(index: SearchIndex): EncodedSearchIndex {
   const h2sOf = new Map(index.lessons.map(([id, , , h2s]) => [id, h2s]))
