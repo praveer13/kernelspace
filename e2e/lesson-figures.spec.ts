@@ -61,3 +61,44 @@ for (const lesson of ['t1.l3', 't5.l8', 't6.l4', 't6.l10']) {
     }
   })
 }
+
+// Node text is centred on its box with no fitting, so text wider than its box spills past both edges, and two
+// spilled words on a row of narrow boxes read as one ("freefree"); an edge label beside spilled text runs into it
+// ('" brown"verify'). The figures these lessons own fit within half a unit each side (diagram-fit allows w + 1).
+for (const lesson of ['t1.l3', 't2.l5', 't5.l8']) {
+  test(`every node text in ${lesson} fits its own box, and no edge label meets node text`, async ({ page }) => {
+    await page.goto(`/lesson/${lesson}`)
+    const figures = page.locator('figure svg[role="img"]')
+    await expect(figures.first()).toBeAttached()
+    await page.evaluate(() => document.fonts.ready)
+    const count = await figures.count()
+    for (let i = 0; i < count; i++) {
+      const out = await figures.nth(i).evaluate((svg: SVGSVGElement) => {
+        const box = (b: DOMRect) => [b.x, b.y, b.x + b.width, b.y + b.height]
+        const over = (a: number[], b: number[]) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+        const bad: string[] = []
+        const nodeText: { t: string; b: number[] }[] = []
+        for (const g of Array.from(svg.querySelectorAll('g'))) {
+          const rect = g.querySelector(':scope > rect')
+          if (!rect) continue
+          const r = box((rect as SVGRectElement).getBBox())
+          for (const t of Array.from(g.querySelectorAll(':scope > text'))) {
+            const tb = box((t as SVGTextElement).getBBox())
+            nodeText.push({ t: t.textContent ?? '', b: tb })
+            if (tb[0] < r[0] - 0.5 || tb[2] > r[2] + 0.5)
+              bad.push(`${t.textContent}: x ${tb[0].toFixed(1)}..${tb[2].toFixed(1)} in a box ${r[0].toFixed(1)}..${r[2].toFixed(1)}`)
+          }
+        }
+        for (const g of Array.from(svg.querySelectorAll('g'))) {
+          if (!g.querySelector(':scope > line')) continue
+          for (const t of Array.from(g.querySelectorAll(':scope > text'))) {
+            const tb = box((t as SVGTextElement).getBBox())
+            for (const n of nodeText) if (over(tb, n.b)) bad.push(`edge label ${t.textContent} meets ${n.t}`)
+          }
+        }
+        return bad
+      })
+      expect(out, `${lesson} figure ${i + 1}`).toEqual([])
+    }
+  })
+}
