@@ -12,6 +12,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 342000000000,
     cite: "342000000000",
   },
+  "bench.deepseek-day6.cost-profit-margin": {
+    value: 545,
+    cite: "545",
+  },
   "bench.deepseek-day6.daily-cost": {
     value: 87072,
     cite: "87072",
@@ -91,8 +95,8 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "3.96",
   },
   "price.h100.median-2026-11": {
-    value: 3.91,
-    cite: "3.91",
+    value: 3.98,
+    cite: "3.98",
   },
   "production.sglang.chunked-prefill-size": {
     value: 8192,
@@ -149,6 +153,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 8,
     cite: "8",
   },
+  "serving.sglang-deepseek.input-tps-per-node": {
+    value: 52300,
+    cite: "52300",
+  },
   "serving.sglang-deepseek.output-tps-per-node": {
     value: 22300,
     cite: "22300",
@@ -194,14 +202,14 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     release: "llm-d/llm-d v1.0.0",
   },
   "status.loadgen.aiperf": {
-    cite: "live; NVIDIA's replacement for GenAI-Perf as of ai-dynamo/aiperf v0.14.0, read 2026-11-21",
+    cite: "live as of ai-dynamo/aiperf v0.14.0, read 2026-11-23",
     release: "ai-dynamo/aiperf v0.14.0",
   },
   "status.loadgen.genai-perf": {
     cite: "being phased out; use AIPerf",
   },
   "status.loadgen.guidellm": {
-    cite: "live; recommended by the vLLM docs for production servers as of vllm-project/guidellm v0.8.1, read 2026-11-21",
+    cite: "live as of vllm-project/guidellm v0.8.1, read 2026-11-23",
     release: "vllm-project/guidellm v0.8.1",
   },
   "status.loadgen.llmperf": {
