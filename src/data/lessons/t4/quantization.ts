@@ -136,7 +136,7 @@ const SPIRAL: AuthoredItem[] = [
       explanation:
         'Occupancy is set by the tightest per-multiprocessor budget; relaxing the binding one, here shared memory, lets more warps hide the wait.',
       why: [
-        'Right: shared memory binds, since two 100 KiB blocks fill it and give four warps, while the registers alone would allow sixteen. Trimming it keeps more warps resident for a stalled one to hand over to.',
+        'Right: shared memory binds, since only two 100 KiB blocks fit in it, giving four warps, while the registers alone would allow sixteen. Trimming it keeps more warps resident for a stalled one to hand over to.',
         'Misconception: more shared memory helps. It is the budget that already binds here, and raising it per block fits fewer blocks, not more.',
         'Misconception: more blocks mean more warps. Extra blocks wait in a queue until resident ones finish; residency, not the launch size, hides latency.',
         'Misconception: shorter latency removes the need for warps. L2 still takes tens of cycles and the data does not fit there; other warps remain the cover.',
