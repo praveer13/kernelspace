@@ -1,5 +1,5 @@
 import type { Lesson } from '../types'
-import { claimCite } from '../claims'
+import { claimCite, claimNumber } from '../claims'
 
 const lesson: Lesson = {
   id: 't6.l2',
@@ -167,7 +167,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
     {
       type: 'deepdive',
       title: 'Read the reproduction',
-      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers, including the day's "cost profit margin of 545%" (profit over cost, at R1 list prices) and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
+      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers, including the day's "cost profit margin of ${claimNumber('bench.deepseek-day6.cost-profit-margin')}%" (profit over cost, at R1 list prices) and the ${claimNumber('bench.deepseek-day6.cache-hit-rate')}% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, ${claimNumber('serving.sglang-deepseek.input-tps-per-node') / 1e3}k input / ${claimNumber('serving.sglang-deepseek.output-tps-per-node') / 1e3}k output tok/s/node, ~$${claimNumber('serving.sglang-deepseek.cost-per-mtok').toFixed(2)}/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
     },
   ],
   kcs: ['t6.ep-economics', 't6.expert-load-balance', 't6.comm-overlap'],

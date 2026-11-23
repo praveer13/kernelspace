@@ -59,14 +59,20 @@ describe('t6.l1 MoE arithmetic', () => {
     expect(text).toContain('cost profit margin')
     expect(erratum.lessons).toEqual(['t6.l1'])
   })
-  test('the lesson builds the sizes and the layer counts from the claims, and types none of them', () => {
+  test('the lesson builds the sizes, the layer counts and the all-to-all count from the claims, and types none of them', () => {
     const text = JSON.stringify(lessonById('t6.l1'))
     expect(text).toContain(`whole model at batch 1 (${TOTAL}B ÷ ${ACTIVE}B)`)
     expect(text).toContain(`for the whole model (${TOTAL}B ÷ ${ACTIVE}B)`)
     expect(text).toContain(`DeepSeek-V3 has ${LAYERS} layers, but the first ${DENSE} are dense`)
+    expect(text).toContain(`2 × ${LAYERS - DENSE} = ${2 * (LAYERS - DENSE)} trips per forward pass`)
+    expect(text).toContain(`about ${ACTIVE} GB of weights`)
+    expect(text).toContain(`about ${TOTAL} GB of weights in HBM`)
     const source = readFileSync(new URL('../../src/data/lessons/t6/moe-anatomy.ts', import.meta.url), 'utf8')
     for (const typed of ['671B ÷ 37B', '671B / 37B', 'Total parameters: 671B', 'has 61 layers', '58 of 61', "value: '2 × 58'"]) {
       expect(source).not.toContain(typed)
     }
+    // K0-CLOSE-B: no other spelling of the totals, the active count, the layer counts or the all-to-all count either
+    // (671, 37, 61, 58 and 116, and the 74 GB and 296 GB lures worked from 37), in prose, items, comments or the ticket.
+    expect(source.match(/\b(671|37|61|58|116|74|296)\b/g) ?? []).toEqual([])
   })
 })
