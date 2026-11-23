@@ -315,7 +315,7 @@ The simulator is a live roofline: predict and place each row of the B200 table, 
           ],
           correct: [1],
           explanation:
-            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode, the bandwidth floor that makes each token take at least about 5 ms.',
+            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode, the bandwidth floor behind the 8B FP16 model\'s at-least-about-5 ms per token.',
           why: [
             'Peak applies only above the ridge, near 295 FLOP/byte. Below it attainable performance is AI × bandwidth, and AI = 1 is far below.',
             'Right: the ridge is about 295 FLOP/byte, so AI = 1 sits far left on the slope. Attainable is AI × bandwidth, a fraction of one percent of peak.',
