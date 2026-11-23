@@ -126,12 +126,12 @@ Blocks also carry a **refcount** for sharing. When refcount hits zero, the block
       caption: 'fig 1 — a beam fork, block by block (the 2023 paper\'s design, and lab 02\'s)',
       height: 46,
       nodes: [
-        { id: 'seqA', x: 2, y: 6, w: 24, h: 9, label: 'beam A table', sub: '[7, 3, 9]' },
-        { id: 'seqB', x: 2, y: 20, w: 24, h: 9, label: 'beam B table', sub: '[7, 3, 12]' },
-        { id: 'b7', x: 38, y: 2, w: 18, h: 8, label: 'block 7', sub: 'ref=2 · full', color: '#22D3EE' },
-        { id: 'b3', x: 38, y: 13, w: 18, h: 8, label: 'block 3', sub: 'ref=2 · full', color: '#22D3EE' },
-        { id: 'b12', x: 38, y: 24, w: 18, h: 8, label: 'block 12', sub: '8 tokens · ref 2→1', color: '#22D3EE' },
-        { id: 'b9', x: 38, y: 35, w: 18, h: 8, label: 'block 9', sub: 'ref=1 · A\'s copy', color: '#FB7185' },
+        { id: 'seqA', x: 2, y: 6, w: 32, h: 9, label: 'beam A table', sub: '[7, 3, 12] → [7, 3, 9]' },
+        { id: 'seqB', x: 2, y: 20, w: 32, h: 9, label: 'beam B table', sub: '[7, 3, 12]' },
+        { id: 'b7', x: 38, y: 2, w: 26, h: 8, label: 'block 7', sub: 'ref=2 · full', color: '#22D3EE' },
+        { id: 'b3', x: 38, y: 13, w: 26, h: 8, label: 'block 3', sub: 'ref=2 · full', color: '#22D3EE' },
+        { id: 'b12', x: 38, y: 24, w: 26, h: 8, label: 'block 12', sub: '8 tokens · ref 2→1', color: '#22D3EE' },
+        { id: 'b9', x: 38, y: 35, w: 26, h: 8, label: 'block 9', sub: 'ref=1 · A\'s copy', color: '#FB7185' },
         { id: 'free', x: 70, y: 20, w: 24, h: 12, label: 'free queue', sub: '[1,2,4,5,6,8,…]', color: '#3EF2A4' },
       ],
       edges: [
@@ -142,7 +142,7 @@ Blocks also carry a **refcount** for sharing. When refcount hits zero, the block
         { from: 'b9', to: 'free' },
       ],
       steps: [
-        { caption: 'One sequence has a 40-token prompt in blocks of 16: blocks 7 and 3 are full, block 12 holds the last 8 tokens. Beam search forks it: the child gets a COPY OF THE BLOCK TABLE and every block goes to refcount=2. No KV is copied.', active: ['seqA', 'seqB', 'b7', 'b3', 'b12'], edges: ['seqA->b7', 'seqB->b7'] },
+        { caption: `One sequence has a 40-token prompt in blocks of ${PAPER_BLOCK}: blocks 7 and 3 are full, block 12 holds the last 8 tokens. Beam search forks it: the child gets a COPY OF THE BLOCK TABLE, [7, 3, 12] in both, and every block goes to refcount=2. No KV is copied.`, active: ['seqA', 'seqB', 'b7', 'b3', 'b12'], edges: ['seqA->b7', 'seqB->b7'] },
         { caption: 'Both beams read the same three blocks. Sharing costs nothing until someone WRITES a shared block, and a full block is never written again: new tokens go to the tail…', active: ['b7', 'b3', 'b12'] },
         { caption: '…and the tail, block 12, is partly filled and shared. Beam A appends first, so copy-on-write: allocate block 9, copy the 8 tokens of KV, write the new token there, point A\'s table at it, drop block 12 to refcount=1. Beam B then writes in place. The fork() trick from T2.L2, per block.', active: ['b12', 'b9'], edges: ['seqA->b9', 'seqB->b12'] },
         { caption: 'Beam A finishes: decrement all its blocks\' refcounts; ref=0 blocks join the free queue in O(1) but stay cached, evictable and reusable on a prefix hit until reallocated. No compaction, no fragmentation — the T1.L4 fixed-block maneuver, live in production.', active: ['free'], edges: ['b9->free'] },
@@ -170,7 +170,7 @@ Blocks also carry a **refcount** for sharing. When refcount hits zero, the block
       type: 'prose',
       md: `## The allocation lifecycle, end to end
 
-Fig 1 is the 2023 paper's design, and lab 02's. In vLLM ${ENGINE_RELEASE} the V1 core has no fork: beam search runs in the entrypoints as repeated one-token requests, so what beams share are full blocks found as prefix hits. Its one copy-on-write today is a prefix hit that ends inside a block, enabled for hybrid models with Mamba state; for pure-attention models it caches full blocks only, as T5.L6 says.
+Fig 1 is the 2023 paper's design, and lab 02's. In ${ENGINE_RELEASE} the V1 core has no fork: beam search runs in the entrypoints as repeated one-token requests, so what beams share are full blocks found as prefix hits. Its one copy-on-write today is a prefix hit that ends inside a block, enabled for hybrid models with Mamba state; for pure-attention models it caches full blocks only, as T5.L6 says.
 
 Watch one request through the manager:
 
