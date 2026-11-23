@@ -52,19 +52,32 @@ describe('DeepSeek day six, from the claims', () => {
 })
 
 describe('the SGLang node-day', () => {
-  const tokens = 22.3e3 * 86_400
-  const perM = (rent: number) => ((rent * 8 * 24) / tokens) * 1e6
-  test('$2 gives $0.20 per million output tokens', () => {
-    expect(perM(2).toFixed(2)).toBe('0.20')
+  // K0-FIX-T7: every input is read from its claim, so a re-read median or a re-measured rate moves the expectation with it
+  const tps = n('serving.sglang-deepseek.output-tps-per-node')
+  const gpus = n('serving.sglang-deepseek.gpus-per-node')
+  const rent = n('synthetic.cost.gpu-hourly')
+  const median = n('price.h100.median-2026-11')
+  const tokens = tps * 86_400
+  const perM = (r: number) => ((r * gpus * 24) / tokens) * 1e6
+  test('the assumed rent gives the blog\'s own $/Mtok estimate, to the cent', () => {
+    expect(perM(rent).toFixed(2)).toBe(n('serving.sglang-deepseek.cost-per-mtok').toFixed(2))
   })
-  test('the dated median gives about $0.39 per million', () => {
-    expect(n('price.h100.median-2026-11')).toBe(3.91)
-    expect(perM(n('price.h100.median-2026-11')).toFixed(2)).toBe('0.39')
-    expect(8 * n('price.h100.median-2026-11') * 24).toBeCloseTo(750.72, 6)
+  test('the lesson prints the node-day from the claims', () => {
+    expect(text).toContain(`reports ${tps / 1e3}k output tok/s per node on ${gpus}×H100 nodes`)
+    expect(text).toContain(`${tps / 1e3}e3 × 86400 = ${(tokens / 1e9).toFixed(2)}G output tokens`)
+    expect(text).toContain(`At $${rent}/GPU/hr × ${gpus} GPUs × 24 = $${rent * gpus * 24}/node-day → **$${perM(rent).toFixed(2)}/M output tokens**`)
   })
-  test('the older median claim is untouched', () => {
-    expect(n('price.h100.median')).toBe(3.49)
-    expect(getClaim('price.h100.median').verifiedAt).toBe('2026-10-04')
+  test('the dated median gives its own $/Mtok and node-day, computed, not typed', () => {
+    expect(text).toContain(`$${median.toFixed(2)} per GPU-hour`)
+    expect(text).toContain(`is ${gpus} × ${median.toFixed(2)} × 24 = $${(gpus * median * 24).toFixed(2)}, or **$${perM(median).toFixed(2)}/M**`)
+    expect(text).toContain(`the same tokens at ${(median / rent).toFixed(1)}× the cost`)
+    expect(text).not.toContain('the rent is the input that moved')
+  })
+  test('the cost stack prints the older median as its claim holds it, with its read date, and it is an earlier reading', () => {
+    const older = getClaim('price.h100.median')
+    expect(text).toContain(`a median $${(older.value as number).toFixed(2)} per GPU-hour`)
+    expect(text).toContain(`on ${older.verifiedAt} per [GetDeploying]`)
+    expect(older.verifiedAt < getClaim('price.h100.median-2026-11').verifiedAt).toBe(true)
   })
   test('the new median has a 30-day ttl and no pin', () => {
     expect(getClaim('price.h100.median-2026-11').ttlDays).toBe(30)
@@ -73,8 +86,11 @@ describe('the SGLang node-day', () => {
 })
 
 describe('the napkin relation', () => {
-  test('tok/s to earn gross margin m at price P: C x 1e6 / (3600 x P x (1 - m)) = about 1,850 at $2, $0.60, 50%', () => {
-    expect(Math.round((2 * 1e6) / (3600 * 0.6 * 0.5))).toBe(1852)
+  test('tok/s to earn gross margin m at price P: C x 1e6 / (3600 x P x (1 - m)), about 1,850 at the assumed rent, $0.60, 50%', () => {
+    const rent = n('synthetic.cost.gpu-hourly')
+    const tps = (rent * 1e6) / (3600 * 0.6 * 0.5)
+    expect(text).toContain(`at C = $${rent} (the round rent this lesson assumes), P = $0.60 and m = 50%, that is ${rent} × 10⁶ ÷ (3,600 × 0.60 × 0.5)`)
+    expect(text).toContain(`≈ **${(Math.round(tps / 50) * 50).toLocaleString('en-US')} tok/s per GPU**`)
   })
 })
 
@@ -100,6 +116,15 @@ describe('the lesson text', () => {
     const src = readFileSync('src/data/lessons/t7/unit-economics.ts', 'utf8')
     expect(src).toContain("from '../claims'")
     expect(src).not.toMatch(/from '@\/data\/claims/)
+  })
+  test('the SGLang and napkin figures are read from their claims, not typed (K0-FIX-T7)', () => {
+    const src = readFileSync('src/data/lessons/t7/unit-economics.ts', 'utf8')
+    for (const id of ['serving.sglang-deepseek.output-tps-per-node', 'serving.sglang-deepseek.gpus-per-node', 'serving.sglang-deepseek.cost-per-mtok', 'synthetic.cost.gpu-hourly']) {
+      expect(src).toContain(`claimNumber('${id}')`)
+    }
+    expect(src).not.toContain('22.3e3 * 86_400')
+    expect(src).not.toContain('perMtok(2)')
+    expect(src).not.toContain('gpuHour * 8 * 24')
   })
   test('the lesson index blurb carries the label', () => {
     expect(readFileSync('src/data/lessons/index.ts', 'utf8')).toContain('the 545% cost profit margin day')
