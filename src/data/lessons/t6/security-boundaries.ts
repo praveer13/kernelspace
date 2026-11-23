@@ -222,11 +222,11 @@ One control cannot cover all four. Grammar-constrained decoding proves shape, no
       caption: 'fig 1 — deny by default at every agentic boundary',
       height: 70,
       nodes: [
-        { id: 'prompt', x: 2, y: 8, w: 44, h: 14, label: 'untrusted input', sub: 'prompt · upload · tool result' },
-        { id: 'model', x: 54, y: 8, w: 44, h: 14, label: 'model server', sub: 'tenant-scoped KV' },
-        { id: 'broker', x: 54, y: 29, w: 44, h: 14, label: 'capability broker', sub: 'schema · policy · audit' },
-        { id: 'microvm', x: 2, y: 29, w: 44, h: 14, label: 'ephemeral microVM', sub: 'tool + scratch only' },
-        { id: 'secrets', x: 54, y: 50, w: 44, h: 12, label: 'secret broker', sub: 'short-lived grants' },
+        { id: 'prompt', x: 2, y: 6, w: 42, h: 12, label: 'untrusted input', sub: 'prompt · upload · tool result' },
+        { id: 'model', x: 56, y: 6, w: 42, h: 12, label: 'model server', sub: 'tenant-scoped KV' },
+        { id: 'broker', x: 56, y: 28, w: 42, h: 12, label: 'capability broker', sub: 'schema · policy · audit' },
+        { id: 'microvm', x: 2, y: 50, w: 42, h: 12, label: 'ephemeral microVM', sub: 'tool + scratch only' },
+        { id: 'secrets', x: 56, y: 50, w: 42, h: 12, label: 'secret broker', sub: 'short-lived grants' },
       ],
       edges: [
         { from: 'prompt', to: 'model', label: 'tokens' },

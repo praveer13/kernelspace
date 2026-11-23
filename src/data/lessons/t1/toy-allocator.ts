@@ -191,17 +191,17 @@ Look past the pointer plumbing; the algorithm is two ideas.
       height: 56,
       nodes: [
         { id: 'a', x: 4, y: 8, w: 60, h: 8, label: 'FREE 1 MiB', sub: 'the initial slab' },
-        { id: 'b1', x: 4, y: 24, w: 12, h: 8, label: 'used 4 KiB', color: '#FB7185' },
+        { id: 'b1', x: 4, y: 24, w: 12, h: 8, label: 'used', sub: '4 KiB', color: '#FB7185' },
         { id: 'b2', x: 18, y: 24, w: 46, h: 8, label: 'FREE ~1 MiB', sub: 'tail after split' },
-        { id: 'c1', x: 4, y: 40, w: 12, h: 8, label: '4 KiB', color: '#FB7185' },
-        { id: 'c2', x: 18, y: 40, w: 8, h: 8, label: '1 KiB', color: '#FB7185' },
+        { id: 'c1', x: 4, y: 40, w: 12, h: 8, label: 'used', sub: '4 KiB', color: '#FB7185' },
+        { id: 'c2', x: 18, y: 40, w: 8, h: 8, label: 'used', sub: '1 KiB', color: '#FB7185' },
         { id: 'c3', x: 28, y: 40, w: 6, h: 8, label: 'free', color: '#34D399' },
         { id: 'c4', x: 36, y: 40, w: 5, h: 8, label: 'free', color: '#34D399' },
         { id: 'c5', x: 43, y: 40, w: 21, h: 8, label: 'free (rest)', color: '#34D399' },
       ],
       edges: [
         { from: 'a', to: 'b2', label: 'split' },
-        { from: 'c3', to: 'c4', label: 'coalesce' },
+        { from: 'c3', to: 'c4' },
       ],
       steps: [
         { caption: 'Startup: the whole slab is ONE free block. free_list = [1 MiB]. Any request fits; the only question is how much to give away.', active: ['a'] },
