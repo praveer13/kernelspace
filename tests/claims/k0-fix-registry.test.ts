@@ -24,7 +24,7 @@ describe('production.glibc.bins', () => {
   })
 
   test('the play row says the bins hold coalesced chunks, and that fastbins deferred coalescing', () => {
-    expect(row().tail).toContain('borders another free chunk')
+    expect(row().tail).toContain('borders another chunk in them')
     expect(row().tail).toContain('deferred coalescing')
     expect(row().tail).not.toContain('skipped coalescing')
   })
