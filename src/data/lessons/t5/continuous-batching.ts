@@ -81,7 +81,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `T2.L4 ended with a promise: continuous batching is a 1960s scheduler wearing a GPU. This lesson pays it off. The problem it solves is the **convoy effect** you met in the scheduling lab: with *static* batching, a batch of sequences runs together until the **longest** finishes — a 500-token generation convoying 20-token generations, the GPU idling on padding and finished slots. Utilization numbers for naive static serving were dreadful (often <30%), and every finished request sat in the batch, burning KV space and compute, until the slowest sibling completed.
 
-The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones are evicted and later resumed by recomputation. No one waits for anyone. The batch is the timeslice; the iteration is the quantum; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
+The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones are evicted and later resumed by recomputation. No one waits for anyone. The decode step is the scheduling boundary, not a quantum, and nothing is time-sliced; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
     },
     {
       type: 'play',
@@ -110,7 +110,7 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
         { caption: 'Static batching: A (8 tokens) finishes at step 8 but its slot — and KV blocks — are held hostage until D finishes at step 40. GPU rows idle; waiting requests watch.', active: ['s1'] },
         { caption: 'Continuous: after EVERY step the scheduler edits the batch. Step 9: A has gone (its blocks freed instantly) and E joins; B leaves at 12 and C at 20, and F and G take their places.', active: ['c1', 'c2'], edges: ['c1->c2'] },
         { caption: `The batch is always full of *live* work: utilization tracks demand, not the longest sequence. Same GPU, same model: how much goodput that buys depends on how uneven the output lengths are. The paper reports ${GAIN_LOW}–${GAIN_HIGH}× at the same latency over FasterTransformer and Orca; the 2023 launch post reported much larger gains over Hugging Face Transformers.`, active: ['c3', 'legend'], edges: ['c2->c3'] },
-        { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (vLLM V1 frees the victim\'s blocks and recomputes its prefill on resume, T5.L5) and resumes later — timesharing with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
+        { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (vLLM V1 frees the victim\'s blocks and recomputes its prefill on resume, T5.L5) and resumes later — eviction under memory pressure, with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
       ],
       predictAt: {
         step: 1,
@@ -139,7 +139,7 @@ Each iteration, the engine runs the same loop — annotate it with T2 names:
 
 1. **Pick the running set** for this step: the running queue (already admitted) plus admissions from the waiting queue — FCFS by default, priorities possible. *Scheduling decision.*
 2. **Check capacity:** free blocks must cover every running sequence's potential next block (one per sequence, worst case). If not, **preempt** the lowest-priority/youngest sequences — free their KV blocks and recompute their prefill when they resume (vLLM V1; the older V0 engine could also swap KV to CPU RAM, trading PCIe bandwidth for compute). *Eviction under pressure.*
-3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The quantum of work.*
+3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The boundary between scheduling decisions, not a quantum: no timer cuts it short.*
 4. **Sample, append tokens, free the finished:** sequences hitting EOS/length limits exit immediately; their blocks' refcounts drop and return to the free queue in O(1). *Reclamation.*
 
 Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L8) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.
@@ -156,7 +156,7 @@ Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: 
     {
       type: 'statline',
       stats: [
-        { value: '11.8 ms', label: 'mean time per output token', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, not one step, but the scale of this timesharing system\'s quantum. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },
+        { value: '11.8 ms', label: 'mean time per output token', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, not one step, but the scale of one, the boundary at which the batch is re-decided. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },
         { value: '2–8×', label: 'goodput gain (course estimate)', hint: `The course's own rough range for continuous vs static batching, not a measured or sourced figure. The PagedAttention paper reports ${GAIN_LOW}–${GAIN_HIGH}× at the same latency over FasterTransformer and Orca, not over static batching alone.` },
         { value: 'O(1)', label: 'slot recycle', hint: 'Finished sequence\'s blocks return to the free queue instantly — the T1 fixed-block win.' },
         { value: '1 step', label: 'preemption latency', hint: 'Eviction decisions happen between iterations, never mid-kernel.' },
@@ -230,12 +230,12 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           ],
           correct: [1],
           explanation:
-            'Iteration-level scheduling: the batch is edited after every model step (InferenceX measured a mean 11.8 ms per output token for a 70B FP8 model on 4 H100s at 4 users, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, so the scale of a step, not one step). The quantum is small because switching is metadata (block tables), not a context switch — the main enabler.',
+            'Iteration-level scheduling: the batch is edited after every model step (InferenceX measured a mean 11.8 ms per output token for a 70B FP8 model on 4 H100s at 4 users, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, so the scale of a step, not one step). Steps can be this short because switching is metadata (block tables), not a context switch — the main enabler.',
           why: [
             'That is static batching. Per-request granularity keeps the batch fixed until it drains, so finished sequences wait for slow ones.',
-            'Right: the batch is edited after every step, and the mean time per output token InferenceX measured for a 70B model on 4 H100s at 4 users, 11.8 ms, sets the scale. The quantum can be this small because switching only updates block tables, not a context.',
+            'Right: the batch is edited after every step, and the mean time per output token InferenceX measured for a 70B model on 4 H100s at 4 users, 11.8 ms, sets the scale. A step boundary can come this often because switching only updates block tables, not a context.',
             'That is vLLM V0\'s optional multi-step scheduling, not the definition. It re-formed the batch only every n steps to cut CPU scheduling cost, but new requests waited for the block to end and TTFT rose at low request rates. Continuous batching edits it after every step, and V1 cuts the CPU overhead instead.',
-            'The quantum is one model step, not a wall-clock tick. A one-second period would leave a finished slot idle for up to about 85 steps (1 s ÷ 11.8 ms), counting each step at the mean time per output token InferenceX measured for a 70B model on 4 H100s.',
+            'The boundary is one model step, not a wall-clock tick, and nothing is time-sliced. A one-second period would leave a finished slot idle for up to about 85 steps (1 s ÷ 11.8 ms), counting each step at the mean time per output token InferenceX measured for a 70B model on 4 H100s.',
           ],
           kcs: ['t5.continuous-batching'],
           miss: ['t5.batch-per-request', '', 't5.batch-per-block', 't5.batch-per-time-slice'],
@@ -250,10 +250,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           ],
           correct: [1],
           explanation:
-            'You cannot preempt a thread and park its mind cheaply; you CAN with KV blocks (T5.L5): free them and recompute the prefill later. V1 does exactly that (V0 could also swap to host RAM). Evictable state is what turns an executor into a timesharing system — T2.L3\'s paging, repurposed.',
+            'You cannot preempt a thread and park its mind cheaply; you CAN with KV blocks (T5.L5): free them and recompute the prefill later. V1 does exactly that (V0 could also swap to host RAM). Evictable state is what makes preemption affordable — T2.L3\'s paging, repurposed.',
           why: [
             'GPUs do not preempt a sequence by saving register state; decisions happen between iterations. Preemption works because the sequence\'s state is KV blocks the engine can free and rebuild.',
-            'Right: evictable state enables timesharing. Free the blocks and recompute the prefill later (V1), or in V0 swap to host RAM. A thread\'s state cannot be parked this cheaply.',
+            'Right: evictable state makes preemption cheap. Free the blocks and recompute the prefill later (V1), or in V0 swap to host RAM. A thread\'s state cannot be parked this cheaply.',
             'A sequence is not stateless: its KV cache is large and unique. Preemption is practical because that state can be freed and recomputed, and recompute still costs real prefill FLOPs.',
             'Scheduling decisions are made between iterations, never mid-kernel or mid-layer. Preemption does not resume partial forward passes; it frees blocks and recomputes the prefill.',
           ],
