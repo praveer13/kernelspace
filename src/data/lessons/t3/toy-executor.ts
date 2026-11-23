@@ -53,7 +53,7 @@ trait Future {
         { caption: 'The executor pops task #7 and calls poll(). The future runs — real code executing on the executor\'s thread — until it needs the socket.', active: ['exec', 'fut'], edges: ['exec->fut'] },
         { caption: 'Socket not ready (EAGAIN). The future registers its WAKER with the reactor (epoll/io_uring interest list) and returns Pending. The thread is now FREE to poll other tasks — this is the whole trick.', active: ['fut', 'io', 'wake'], edges: ['fut->io', 'fut->wake'] },
         { caption: 'Bytes arrive; the reactor fires; wake() pushes task #7 back to the executor\'s queue. No thread slept for this connection — one thread multiplexes thousands.', active: ['wake', 'requeue'], edges: ['wake->requeue', 'requeue->exec'] },
-        { caption: 'Re-polled, the future resumes at its saved state, reads the bytes, and either finishes (Ready) or parks at the next await. A task is just a resumable function with ~300 B of state.', active: ['exec', 'fut'], edges: ['exec->fut'] },
+        { caption: 'Re-polled, the future resumes at its saved state, reads the bytes, and either finishes (Ready) or parks at the next await. A task is just a resumable function whose state is the locals live across its awaits: about 1 KiB for T2.L6\'s echo task, most of it the read buffer.', active: ['exec', 'fut'], edges: ['exec->fut'] },
       ],
     },
     {

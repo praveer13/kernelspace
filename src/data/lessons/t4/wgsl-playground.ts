@@ -201,10 +201,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
           ],
           correct: [1],
           explanation:
-            'Both compute "which copy of the kernel am I" across the entire dispatch. Workgroups ≡ blocks, local ids ≡ threadIdx, global ids ≡ the flattened global index.',
+            'Both are the workgroup index times the workgroup size plus the local index along x. Workgroups ≡ blocks, local ids ≡ threadIdx. On a 1-D grid gid.x is the index across the dispatch; on a 2-D dispatch the index joins gid.y and gid.x, as the listing does.',
           why: [
             'That is local_invocation_id. global_invocation_id adds the workgroup offset, so it is unique across the whole dispatch.',
-            'Right: workgroup index times workgroup size plus the local index gives each invocation a unique position across the dispatch.',
+            'Right: workgroup index times workgroup size plus the local index. On a 1-D grid that is each invocation\'s index across the dispatch; the listing\'s 2-D dispatch repeats each gid.x once per gid.y.',
             'The workgroup index is scaled by workgroup size (blockDim), not by the number of workgroups. Scaling by gridDim would collide and skip elements.',
             'It indexes invocations, not warps. Warp-scoped ids come from a separate, optional subgroup feature, not from this built-in.',
           ],
