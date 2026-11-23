@@ -1,14 +1,16 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { byId } from '@/data/claims/all'
 import { MOE_CLAIMS } from '@/data/claims/lazy/moe'
 import erratum from '@/data/errata/2026-11-22-t6-l1-moe-18x-is-batch-1-and-round-trips'
 import { lessonById } from '@/data/lessons'
 
 /**
- * K0-C25: t6.l1's three figures. Total and active parameters, routed experts and experts per token come from the DeepSeek-V3
- * claims. No claim holds the other five config fields, so they are typed below: hidden_size, moe_intermediate_size,
- * num_hidden_layers, first_k_dense_replace and n_shared_experts, as config.json at e815299 gives them (read 2026-11-22 and
- * again 2026-11-23). Nothing ties these constants to the pin; a re-read of the config must check them.
+ * K0-C25: t6.l1's three figures. Total and active parameters, routed experts, experts per token and num_hidden_layers
+ * come from the DeepSeek-V3 claims (zoo.deepseek-v3.layers holds the layer count). No claim holds the other four config
+ * fields, so they are typed below: hidden_size, moe_intermediate_size, first_k_dense_replace and n_shared_experts, as
+ * config.json at e815299 gives them (read 2026-11-22 and again 2026-11-23). Nothing ties these four constants to the pin;
+ * a re-read of the config must check them.
  */
 const num = (id: string): number => {
   const c = byId[id] ?? MOE_CLAIMS.find((m) => m.id === id)
@@ -21,7 +23,7 @@ const ROUTED = num('model.deepseek-v3.routed-experts')
 const TOPK = num('model.deepseek-v3.experts-per-token')
 const HIDDEN = 7168
 const MOE_FF = 2048
-const LAYERS = 61
+const LAYERS = num('zoo.deepseek-v3.layers')
 const DENSE = 3
 const SHARED = 1
 
@@ -56,5 +58,15 @@ describe('t6.l1 MoE arithmetic', () => {
     expect(text).not.toContain('every frontier open model')
     expect(text).toContain('cost profit margin')
     expect(erratum.lessons).toEqual(['t6.l1'])
+  })
+  test('the lesson builds the sizes and the layer counts from the claims, and types none of them', () => {
+    const text = JSON.stringify(lessonById('t6.l1'))
+    expect(text).toContain(`whole model at batch 1 (${TOTAL}B ÷ ${ACTIVE}B)`)
+    expect(text).toContain(`for the whole model (${TOTAL}B ÷ ${ACTIVE}B)`)
+    expect(text).toContain(`DeepSeek-V3 has ${LAYERS} layers, but the first ${DENSE} are dense`)
+    const source = readFileSync(new URL('../../src/data/lessons/t6/moe-anatomy.ts', import.meta.url), 'utf8')
+    for (const typed of ['671B ÷ 37B', '671B / 37B', 'Total parameters: 671B', 'has 61 layers', '58 of 61', "value: '2 × 58'"]) {
+      expect(source).not.toContain(typed)
+    }
   })
 })
