@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { byId } from '@/data/claims/all'
 import { MOE_CLAIMS } from '@/data/claims/lazy/moe'
 import erratum from '@/data/errata/2026-11-22-t6-l1-moe-18x-is-batch-1-and-round-trips'
-import { lessonById } from '@/data/lessons'
+import { ALL_LESSONS, lessonById } from '@/data/lessons'
 
 /**
  * K0-C25: t6.l1's three figures. Total and active parameters, routed experts, experts per token and num_hidden_layers
@@ -74,5 +74,23 @@ describe('t6.l1 MoE arithmetic', () => {
     // K0-CLOSE-B: no other spelling of the totals, the active count, the layer counts or the all-to-all count either
     // (671, 37, 61, 58 and 116, and the 74 GB and 296 GB lures worked from 37), in prose, items, comments or the ticket.
     expect(source.match(/\b(671|37|61|58|116|74|296)\b/g) ?? []).toEqual([])
+  })
+  // K0-CLOSE2-B: the MLA quiz explanation once held a ${...} placeholder inside a single-quoted string, so the learner
+  // read the raw template text after submitting. The ratio is worked here from the same bytes the lesson uses: a
+  // 576-element BF16 latent in every layer against Llama-3-70B's 327,680 B per token.
+  test("the MLA explanation renders the ratio, ~4.7× against Llama-3-70B, not the template text", () => {
+    const ratio = (327_680 / (576 * 2 * LAYERS)).toFixed(1)
+    expect(ratio).toBe('4.7')
+    const quiz = lessonById('t6.l1')!.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : []))
+    const mla = quiz.find((q) => q.q.startsWith("MLA's contribution"))
+    expect(mla?.explanation).toContain(`It shrinks the cache ~${ratio}× against Llama-3-70B`)
+    expect(mla?.explanation).not.toContain('${')
+  })
+})
+
+describe('every lesson renders its template text', () => {
+  test("no lesson's data holds a raw ${ placeholder", () => {
+    const leaks = ALL_LESSONS.filter((l) => JSON.stringify(l).includes('${')).map((l) => l.id)
+    expect(leaks).toEqual([])
   })
 })

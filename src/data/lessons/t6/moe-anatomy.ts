@@ -235,7 +235,7 @@ Run T5.L4's arithmetic again with ${bytes(MLA_BYTES)} B per token: the "cache is
           ],
           correct: [1],
           explanation:
-            'MLA caches one low-rank latent vector per token per layer (512 compressed dims plus a 64-dim RoPE key) instead of per-head K/V. It shrinks the cache ~${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
+            `MLA caches one low-rank latent vector per token per layer (512 compressed dims plus a 64-dim RoPE key) instead of per-head K/V. It shrinks the cache ~${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.`,
           why: [
             'MLA changes what is cached, not how fast it is read. Faster kernels do not shrink KV bytes per token, so they do not raise how many sequences fit in HBM.',
             `Right: the ~576-element latent is cached per layer (576 × 2 B = 1,152 B), so ${LAYERS} layers give ${bytes(MLA_BYTES)} B per token, about ${(LLAMA70_BYTES / MLA_BYTES).toFixed(1)}× less than Llama-3-70B's ${bytes(LLAMA70_BYTES)} B, and much bigger batches fit.`,
