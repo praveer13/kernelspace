@@ -226,7 +226,7 @@ The compile items for the lifetimes group have no page of their own, so practise
 
 ## Prove borrowed views
 
-The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between borrowed strings, defines **Block<'a>**, separates two unrelated lifetimes, and replaces an impossible escaping reference with owned data. T3.L1 picks up this Block, so after the drill it is a reminder, not a cliff.
+The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between borrowed strings, defines **Block<'a>**, separates two unrelated lifetimes, and replaces an impossible escaping reference with owned data. T3.L1 picks up ownership, borrowing and lifetimes again at systems scale, so after the drill they are a reminder, not a cliff.
 
 ---
 

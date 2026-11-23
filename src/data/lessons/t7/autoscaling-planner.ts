@@ -386,7 +386,7 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
     {
       type: 'deepdive',
       title: 'Where the course ends',
-      md: `Look at the Planner's dependencies: the scheduler (T5.L7, lab 06), the block manager (T5.L5, lab 02), the queue (T2.L5, lab 04), the fleets (T6.L3–L4), the frontier (T7.L3), the cost model (T7.L4). The Planner is the course wearing a job title — the loop that turns everything you built into a business. Fleet Week (the plan's capstone 2.0) puts you in its chair: allocate a fleet, pick the split, survive the incident, defend the $/Mtok. You are ready.`,
+      md: `Look at the Planner's dependencies: the scheduler (T5.L7, lab 06), the block manager (T5.L5, lab 02), the queue (T2.L5, lab 04), the fleets (T6.L3–L4), the frontier (T7.L3), the cost model (T7.L4). The Planner is the course wearing a job title — the loop that turns everything you built into a business. Fleet Week puts you in its chair: allocate a fleet, pick the split, survive the incident, defend the $/Mtok. You are ready.`,
     },
   ],
   kcs: ['t7.capacity-planning', 't7.incident-diagnosis', 't7.leading-signals'],
