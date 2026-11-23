@@ -6,8 +6,10 @@ import prefill from '@/data/errata/2026-11-22-t4-l3-prefill-ai-and-5ms-floor'
 /**
  * Lane t4, second fix round. (A) t4.l5's reduce.wgsl listing flattens a two-dimensional dispatch, so the 256 x 256 first
  * pass the prose describes sums every element once, and the prose says it is the first pass's workgroups that launch in
- * two dimensions. (B) the at-least-about-5 ms per token is the 8B FP16 model's floor, and both the erratum and the
- * t4.l3 quiz explanation say so.
+ * two dimensions. (B) the about-5 ms is the 8B FP16 model's floor per decode step on one H100, and the erratum, the
+ * fig 1 caption and the t4.l3 quiz explanation say so. (C, K0-CLOSE-C) at one token per step that is the per-token floor,
+ * which more tokens per weight read (speculative decoding) or fewer bytes (quantization) lower, so no place says that
+ * engineering can only add to it.
  */
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8')
 
@@ -57,16 +59,36 @@ describe('t4.l5 reduce.wgsl over a 256 x 256 first pass', () => {
 })
 
 describe('the 5 ms floor names its model', () => {
-  test('the erratum after says the floor is for an 8B FP16 model, 16 GB of weights', () => {
-    expect(prefill.after).toContain('at least about 5 ms per token for an 8B FP16 model (16 GB of weights)')
+  test('the erratum after says the floor is per decode step of an 8B FP16 model, 16 GB of weights', () => {
+    expect(prefill.after).toContain('each decode step of an 8B FP16 model (16 GB of weights) takes at least about 5 ms')
+    expect(prefill.after).toContain('only more tokens per weight read or fewer bytes lower it')
+    expect(prefill.after).not.toContain('engineering can only add')
     expect(prefill.after.length).toBeLessThanOrEqual(240)
   })
 
-  test("the t4.l3 AI = 1 explanation ties the 5 ms to the 8B model, not to every AI = 1 kernel", () => {
+  test('the erratum title says per-step floor, not "not physics"', () => {
+    expect(prefill.title).not.toContain('not physics')
+    expect(prefill.title).toContain('the 5 ms is a per-step floor that only more tokens per weight read or fewer bytes lower')
+    expect(prefill.title.length).toBeLessThanOrEqual(240)
+  })
+
+  test("the t4.l3 AI = 1 explanation ties the 5 ms to the 8B model's decode step, not to every AI = 1 kernel", () => {
     const l3 = ALL_LESSONS.find((l) => l.id === 't4.l3')
     if (!l3) throw new Error('t4.l3 not found')
     const text = JSON.stringify(l3.blocks)
     expect(text).not.toContain('the bandwidth floor that makes each token take at least about 5 ms')
-    expect(text).toContain("the bandwidth floor behind the 8B FP16 model's at-least-about-5 ms per token")
+    expect(text).not.toContain("at-least-about-5 ms")
+    expect(text).toContain('the bandwidth floor that keeps an 8B FP16 model on one H100 at about 5 ms per decode step or more')
+  })
+
+  test('the fig 1 decode caption gives the floor per step and names the levers that lower it', () => {
+    const l3 = ALL_LESSONS.find((l) => l.id === 't4.l3')
+    if (!l3) throw new Error('t4.l3 not found')
+    const text = JSON.stringify(l3.blocks)
+    expect(text).not.toContain('engineering can only add to that')
+    expect(text).toContain('each decode step re-reads all ~16 GB of weights, so a step takes at least about 5 ms')
+    expect(text).toContain(
+      'which only more tokens per weight read (speculative decoding, T5.L8) or fewer bytes per weight (quantization) can lower',
+    )
   })
 })

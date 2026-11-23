@@ -112,7 +112,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       steps: [
         { caption: 'Left of the ridge, the bandwidth slope rules: performance is AI × 3.35 TB/s, period. The ALUs are starved.', active: ['slope'] },
         { caption: 'Right of the ridge, the flat roof: you\'re doing enough math per byte that FLOPs, not bandwidth, are the binding constraint.', active: ['roof'] },
-        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: at batch 1 on an H100 a token takes at least about 5 ms, and engineering can only add to that.', active: ['decode'] },
+        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: on one H100 each decode step re-reads all ~16 GB of weights, so a step takes at least about 5 ms. At batch 1 that is the floor per token, which only more tokens per weight read (speculative decoding, T5.L8) or fewer bytes per weight (quantization) can lower.', active: ['decode'] },
         { caption: 'PREFILL and big-batch matmul live at the roof: each weight participates in hundreds of MACs (batch × seq), AI ≈ 100–1000+. This is why prefill and decode have different economics, metrics (TTFT vs ITL), and optimizations.', active: ['prefill'] },
       ],
       predictAt: {
@@ -315,7 +315,7 @@ The simulator is a live roofline: predict and place each row of the B200 table, 
           ],
           correct: [1],
           explanation:
-            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode, the bandwidth floor behind the 8B FP16 model\'s at-least-about-5 ms per token.',
+            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode: the bandwidth floor that keeps an 8B FP16 model on one H100 at about 5 ms per decode step or more.',
           why: [
             'Peak applies only above the ridge, near 295 FLOP/byte. Below it attainable performance is AI × bandwidth, and AI = 1 is far below.',
             'Right: the ridge is about 295 FLOP/byte, so AI = 1 sits far left on the slope. Attainable is AI × bandwidth, a fraction of one percent of peak.',

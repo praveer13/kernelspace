@@ -47,7 +47,7 @@ const lesson: Lesson = {
             'That would hold if the counters were on separate lines. Here they share one 64-byte line, and coherence works per line, not per variable.',
             'Thread startup is a one-off cost. The loss here is on every increment, so it cannot be a small fixed overhead.',
             'The OS schedules these threads on separate cores that run in parallel. If the total comes out near one thread\'s, the time went to the cores fighting over the line, not to the scheduler.',
-            'Right: each write takes the line away from every other core, so ownership ping-pongs on every increment. The result can be slower than one thread: about 1.6x slower in the run measured for this lesson, on six hyperthreaded performance cores. How much depends on the chip: on some, such as the quad-core Drepper measured, the penalty stays small.',
+            'Right: each write takes the line away from every other core, so ownership ping-pongs on every increment. The result can be slower than one thread: about 1.6x slower in the run measured for this lesson, on six hyperthreaded performance cores. How much depends on the chip: on some older chips, such as the quad-core Drepper measured, the penalty stayed small and the threads came close to scaling, so the slowdown is this run\'s result, not every chip\'s.',
           ],
           revealAt: 'False sharing: the line you did not know you were sharing',
           kcs: ['t0.false-sharing'],
