@@ -113,7 +113,7 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         { id: 'coal', x: 30, y: 4, w: 30, h: 9, label: 'coalesced', sub: 'lanes → consecutive 4 B' },
         { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '4 transactions', sub: '4 × 32 B, full BW', color: '#3EF2A4' },
         { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KiB' },
-        { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '1 KiB, ~1/8 peak BW', color: '#FF5C6C' },
+        { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '1 KiB moved · ~1/8 BW', color: '#FF5C6C' },
       ],
       edges: [
         { from: 'warp', to: 'coal' },

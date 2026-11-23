@@ -34,7 +34,7 @@ const lesson: Lesson = {
         { id: 'pcie', x: 2, y: 20, w: 44, h: 9, label: 'PCIe gen5 x16', sub: '~64 GB/s — CPU, offload tier', color: '#FBBF24' },
         { id: 'rdma', x: 2, y: 34, w: 44, h: 9, label: 'RDMA (RoCE / InfiniBand)', sub: '25–100 GB/s — PP, DP, KV, racks', color: '#5CA8FF' },
         { id: 'tp', x: 54, y: 6, w: 20, h: 9, label: 'TP', sub: 'all-reduce', color: '#3EF2A4' },
-        { id: 'epcp', x: 54, y: 20, w: 20, h: 9, label: 'EP / CP', sub: 'all-to-all/ring', color: '#A78BFA' },
+        { id: 'epcp', x: 54, y: 24, w: 20, h: 9, label: 'EP / CP', sub: 'all-to-all/ring', color: '#A78BFA' },
         { id: 'kv', x: 54, y: 34, w: 20, h: 9, label: 'PP / DP / KV xfer', sub: 'acts, replicas, blocks', color: '#5CA8FF' },
       ],
       edges: [
