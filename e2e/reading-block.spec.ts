@@ -150,6 +150,8 @@ for (const width of WIDTHS) {
     await expect(block.locator('[data-reading-note]')).toHaveCount(1)
     await expect(block.locator('[data-reading-note]')).toContainText('You do not write Rust here')
     await expect(block.locator('[data-reading-note]')).toContainText('is "moved" when it has been handed to a function')
+    // Rust book ch. 4.1: a Copy type is "trivially copied, making them still valid after assignment to another variable"
+    await expect(block.locator('[data-reading-note]')).toContainText('a Copy type (integers such as u32, floats, bool, char) is copied instead, so the old name still works')
     await expect(page.locator('[data-block="item"] [data-reading-note]')).toHaveCount(0)
     expect(await noSidewaysScroll(page), 'the verdict item scrolls sideways').toBe(true)
 

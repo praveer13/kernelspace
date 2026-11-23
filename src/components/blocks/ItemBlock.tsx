@@ -210,9 +210,11 @@ export default function ItemBlock({ lessonId, blockIndex, block, trackColor, rea
 
       {reading && (stage.kind === 'predict' || stage.kind === 'practice') && (
         <p data-reading-note className="mt-3 text-body-sm text-text-2">
-          You do not write Rust here: rustc is Rust&apos;s compiler, and each item shows a few lines and asks what it says about them. An
-          error code names the kind of refusal, and the legend lists the codes in this item. A value is &quot;moved&quot; when it has been
-          handed to a function, a channel or another name, and the old name can no longer be used.
+          You do not write Rust here: rustc is Rust&apos;s compiler, and each item shows a few lines and asks what rustc does with them,
+          or which one-line change it accepts. An error code names the kind of refusal, and the item explains each code it uses, under
+          the snippet or beside the code. A value is &quot;moved&quot; when it has been handed to a function, a channel or another name,
+          and the old name can no longer be used; a Copy type (integers such as u32, floats, bool, char) is copied instead, so the old
+          name still works.
         </p>
       )}
 
