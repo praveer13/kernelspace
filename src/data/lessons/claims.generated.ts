@@ -189,6 +189,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "TCP as of Dynamo v1.6.2, read 2026-11-21",
     release: "Dynamo v1.6.2",
   },
+  "status.llm-d.founders": {
+    cite: "CNCF sandbox; founded by Red Hat, Google Cloud, IBM Research, CoreWeave, NVIDIA as of llm-d/llm-d v1.0.0, read 2026-11-23",
+    release: "llm-d/llm-d v1.0.0",
+  },
   "status.loadgen.aiperf": {
     cite: "live; NVIDIA's replacement for GenAI-Perf as of ai-dynamo/aiperf v0.14.0, read 2026-11-21",
     release: "ai-dynamo/aiperf v0.14.0",
@@ -253,8 +257,20 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   "status.rust.polonius": {
     cite: "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
   },
+  "status.sglang.hardware": {
+    cite: "NVIDIA, AMD, TPU, Intel, Apple, Ascend, Moore Threads as of SGLang v0.5.23, read 2026-11-23",
+    release: "SGLang v0.5.23",
+  },
+  "status.trtllm.dynamo-pin": {
+    cite: "TRT-LLM v1.3.0rc29 as of Dynamo v1.6.0, read 2026-11-23",
+    release: "Dynamo v1.6.0",
+  },
   "status.trtllm.enable-chunked-prefill-default": {
     cite: "False as of NVIDIA/TensorRT-LLM v1.4.0rc4, read 2026-11-22",
+    release: "NVIDIA/TensorRT-LLM v1.4.0rc4",
+  },
+  "status.trtllm.pytorch-sole-backend": {
+    cite: "PyTorch only; TensorRT backend removed as of NVIDIA/TensorRT-LLM v1.4.0rc4, read 2026-11-23",
     release: "NVIDIA/TensorRT-LLM v1.4.0rc4",
   },
   "status.vllm.speculative-methods": {
