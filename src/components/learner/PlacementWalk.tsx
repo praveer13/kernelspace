@@ -294,7 +294,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
         </div>
       </div>
 
-      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path, plan, outcome.anchorShown)}</p>
+      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path, plan, outcome.anchorShown, outcome.anchorNotSure)}</p>
 
       {slips.length > 0 && (
         <div>
