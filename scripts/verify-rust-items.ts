@@ -44,6 +44,15 @@ const MISS = /^[a-z0-9]+(\.[a-z0-9-]+)+$/
 const BAD_TEXT = /\b(NaN|Infinity|undefined)\b/
 const PERMISSIONS: readonly Permission[] = ['read', 'write', 'own']
 
+/**
+ * A focus `*x` on a line where `x` is a method receiver (`x.extend(ids)` with `x: &mut Vec<_>`): Rust auto-dereferences
+ * the receiver, so the place the call uses is `*x`, the one Aquascope's diagram and rustc's message name.
+ */
+const receiverDeref = (line: string, path: string): boolean => {
+  const m = /^\*([A-Za-z_][A-Za-z0-9_]*)$/.exec(path)
+  return m !== null && new RegExp(`(^|[^A-Za-z0-9_.*])${m[1]}\\.[A-Za-z_]`).test(line)
+}
+
 /** The KCs a snippet may assess: those whose `gen` lists the compile family. */
 export const COMPILE_KCS: readonly string[] = KCS.filter((k) => (k.gen ?? []).includes('compile')).map((k) => k.id)
 
@@ -149,7 +158,7 @@ export function checkSnippets(groups: readonly RustGroup[], compileKcs: readonly
         if (v.focus) {
           const f = v.focus
           if (!Number.isInteger(f.line) || f.line < 1 || f.line > lines) vbad(`focus line ${f.line} is outside 1..${lines}`)
-          else if (!f.path || !codeLines[f.line - 1].includes(f.path)) vbad(`focus path \`${f.path}\` does not appear on line ${f.line}`)
+          else if (!f.path || !(codeLines[f.line - 1].includes(f.path) || receiverDeref(codeLines[f.line - 1], f.path))) vbad(`focus path \`${f.path}\` does not appear on line ${f.line}`)
           if (!Array.isArray(f.needs) || f.needs.length === 0 || f.needs.some((p) => !PERMISSIONS.includes(p)) || new Set(f.needs).size !== f.needs.length) {
             vbad('focus.needs lists one or more of read, write, own, once each')
           }
