@@ -10,20 +10,20 @@ const SPIRAL: AuthoredItem[] = [
     id: 't7.spiral.decode-ceiling',
     kcs: ['t4.decode-bandwidth'],
     q: {
-      q: 'A 70-billion-parameter model is held in BF16 on a GPU with 3.35 TB/s of memory bandwidth. At batch 1, decode runs at roughly…',
+      q: 'A 70-billion-parameter model is held in BF16, split across two 80 GB GPUs by tensor parallelism, each with 3.35 TB/s of memory bandwidth. At batch 1, the ideal decode ceiling is roughly…',
       options: [
-        'Forty-eight tokens per second: each token reads one byte per parameter, so 70 GB at 3.35 TB/s takes about 21 ms',
-        'Twelve tokens per second: every weight is read twice per token, once for attention and again for the feed-forward layer',
-        'Twenty-four tokens per second: each token reads all 140 GB of weights, and that takes about 42 ms at 3.35 TB/s',
+        'Ninety-six tokens per second: each token reads one byte per parameter, so 70 GB at the two GPUs\' 6.7 TB/s together takes about 10 ms',
+        'Twenty-four tokens per second: every weight is read twice per token, once for attention and again for the feed-forward layer',
+        'Forty-eight tokens per second: each token reads all 140 GB with half on each GPU at once, which takes about 21 ms at 6.7 TB/s',
         'Seven thousand tokens per second: the chip\'s arithmetic rate divided by the 140 GFLOP each token needs sets the speed',
       ],
       correct: [2],
       explanation:
-        'Batch-1 decode reads every weight once per token, so the ceiling is bandwidth divided by weight bytes: 3.35 TB/s ÷ 140 GB is about 24 tokens per second. Compute sits idle, which is why batching helps.',
+        'Batch-1 decode reads every weight once per token, so the ceiling is bandwidth divided by weight bytes. BF16 weights are 140 GB, more than one 80 GB GPU holds, so two GPUs each stream their half at once: 6.7 TB/s ÷ 140 GB is about 48 tokens per second at best, before the all-reduce between the GPUs. Compute sits idle, which is why batching helps.',
       why: [
         'Misconception: a parameter is one byte. In BF16 each parameter takes two bytes, so 70 billion parameters are 140 GB, and the one-byte count doubles the speed this estimate shows.',
         'Misconception: weights are read twice. Attention and feed-forward layers hold different weights, and each weight is read once per token, so the traffic is the model\'s size and no more.',
-        'Right: batch-1 decode is bandwidth-bound. Every token reads all 140 GB of BF16 weights once, so the ceiling is 3.35 TB/s ÷ 140 GB, about 24 tokens per second.',
+        'Right: batch-1 decode is bandwidth-bound. Every token reads all 140 GB of BF16 weights once, and the two GPUs read their halves at the same time, so the ceiling is 6.7 TB/s ÷ 140 GB, about 48 tokens per second.',
         'Misconception: decode is compute-bound. The arithmetic limit is real, but at batch 1 each weight read feeds only a couple of FLOPs, so memory traffic caps the speed long before the FLOP rate does.',
       ],
       miss: ['t4.params-are-bytes', 't4.weights-read-twice', '', 't4.decode-is-compute-bound'],
@@ -161,7 +161,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `You've built every piece the loop controls: the admission valve (lab 06), the block manager (lab 02), the intake queue (lab 04), the disaggregated fleets (T6.L3), the economics of the operating point (T7.L3–L4). The Planner closes the loop: **observe** (queue depth, TTFT/TPOT, KV utilization, GPU load) → **decide** (scale prefill? decode? rebalance the split? reroute?) → **act** (add/drain workers, adjust routing weights, shed load).
 
-Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load its weights, 140 GB for a 70B model in BF16 — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
+Why this is hard, and why the open stacks do not agree on the answer: there are two schools. **Dynamo's Planner** is a purpose-built controller. Its docs list four optimization targets (throughput, latency, load and sla), and the sla target can scale on forecast traffic (throughput-based) or on live engine metrics (load-based), aiming at TTFT and ITL values directly. **llm-d** adds no controller: KEDA reads vLLM metrics such as queue depth and KV-cache utilization from Prometheus and scales each serving role, prefill and decode, through the HPA it manages, one ScaledObject per role. So "HPA on a custom metric" is the other main open stack's answer, not a straw man, and the argument for a purpose-built planner has to be made on the grounds below. Inference capacity is *discrete and slow* (a new worker takes minutes to load its weights, 140 GB for a 70B model in BF16 — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
     },
     {
       type: 'prose',
@@ -169,7 +169,7 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
 
 1. **Signal selection.** Queue depth and *oldest-waiting-age* lead TTFT by the queue time; KV-block utilization leads preemption; TPOT drift leads decode saturation. Measured TTFT is a lagging confirmation. Dynamo's Planner can target TTFT and ITL SLAs directly, and its load and throughput modes act on queue-depth and KV-utilization thresholds and traffic forecasts. Alert and scale on leading signals.
 2. **Phase-aware scaling.** In disaggregated fleets (T6.L3), scale the phase that's binding: prefill queue → add prefill workers (compute); decode TPOT creeping → add decode workers (bandwidth+KV); and *rebalance the split* when the traffic mix drifts (summarization week vs chat week). The prefill:decode GPU ratio is a continuous variable, not an architecture.
-3. **Cold-start economics.** New workers cost minutes of load time. The mitigations are a lesson stack of their own: keep-warm pools for predictable peaks (diurnal traffic is cron-shaped), fast loaders (safetensors + direct-to-GPU streaming, Rust loaders like modelexpress — T3's language again), weight-sharing when the model is already resident elsewhere (NVLink copy over network pull).
+3. **Cold-start economics.** New workers cost minutes of load time. The mitigations are a lesson stack of their own: keep-warm pools for predictable peaks (diurnal traffic is cron-shaped), fast loaders (safetensors + direct-to-GPU streaming), weight-sharing when the model is already resident elsewhere: the Dynamo project's ModelExpress copies the weights from a serving peer GPU to GPU over RDMA (NIXL), so a new replica does not pull them from storage. Its README reports DeepSeek-V4-Pro loading from a serving replica in 11 seconds against 8 minutes 53 seconds for a cold Hugging Face pull (48×), measured with vLLM 0.23.0 and TP=8 on an 8×B200 node with ConnectX-7 NICs. That is a vendor benchmark on that setup, not a promise for your network.
 4. **Shed honestly.** When capacity can't arrive in time, this course's ladder, in order, is queue (bounded; TTFT dies as it deepens), then shed (some users fail fast — your lab-06/fleet intake, now production), then degrade (shorter max output, smaller batch classes). The ladder is a design recommendation, not a policy Dynamo's docs prescribe. An honest shed with a retryable 429 beats a silent SLO violation every time — the user experience of a timeout is worse than a clean "busy."
 
 5. **Failure drills.** Capacity failures are the norm (spot reclaim, node death, hot expert, KV thrash). The Planner's real test is behavior *during* them: reroute, rebalance, and how fast goodput recovers. Fleet Week's incident drills are this paragraph made executable.`,
@@ -215,7 +215,7 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
           osLine: 'Add pods when the metric crosses the line; lag kills you at spike.',
           llm: 'Planner on queue age + KV utilization + TPOT',
           llmLine: 'Leading signals chosen per phase; scale the binding fleet, not "the service".',
-          breaks: 'An HPA scales one workload on its own metrics, CPU or custom and external ones such as a queue length, taking the largest replica count any of them asks for; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no one workload\'s replica count says what to add.',
+          breaks: 'An HPA scales one workload on its own metrics, CPU or custom and external ones such as a queue length, taking the largest replica count any of them asks for; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so the question is which fleet to grow and by how much, not one replica count; llm-d answers with one KEDA-managed HPA per role, Dynamo with a Planner.',
         },
         {
           os: 'cold JVM pool',
