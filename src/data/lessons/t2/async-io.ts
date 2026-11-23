@@ -63,7 +63,7 @@ That last comparison is worth a table, because it decides architectures:`,    },
 | Event loop (Node/nginx) | callback/closure | ~KBs of JS/C state | userspace, same thread |
 | tokio task | state-machine struct | ~1 KiB here: whatever lives across an await | userspace poll, work-stealing |
 
-The serving relevance is not subtle: an inference cluster's control plane is a giant I/O problem — thousands of concurrent HTTP/SSE streams, KV-transfer connections, and scheduler events. It is exactly the workload io_uring and tokio were built for, and exactly why Dynamo's data plane is Rust + tokio over plain TCP by default rather than threads and queues of the 2005 kind.`,
+The serving relevance is not subtle: an inference cluster's control plane is a giant I/O problem — thousands of concurrent HTTP/SSE streams, KV-transfer connections, and scheduler events. It is exactly the workload io_uring and tokio were built for, and exactly why Dynamo is Rust + tokio, with its request plane on plain TCP by default (the KV blocks themselves move worker to worker through NIXL), rather than threads and queues of the 2005 kind.`,
     },
     {
       type: 'code',
