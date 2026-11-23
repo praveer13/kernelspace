@@ -189,54 +189,62 @@ function wordsOf(text: string): string[] {
     .filter((w) => w !== '')
 }
 
-/** The share of the explanation's words that the key's why already carries before the explanation counts as printed twice. */
-const REPEAT_COVER = 0.8
-/** An explanation longer than this many times the why is never a repeat of it. */
-const LONGER_BY = 1.3
+/** Words that carry no content of their own: a sentence that differs from the why only in these says nothing new. */
+const FUNCTION_WORDS = new Set(
+  'the and that this these those for with from its are was were has have had but then than when into also which because while there their them they you your our'.split(' '),
+)
+/** Content words: three letters or more and not a function word, or any word with a digit. */
+const contentWords = (words: readonly string[]): string[] => [...new Set(words.filter((t) => (t.length >= 3 && !FUNCTION_WORDS.has(t)) || /\d/.test(t)))]
+/** A near-copy has at least this many content words: a shorter sentence shares its words with a why by chance. */
+const NEAR_COPY_MIN = 3
+/** At most this many content words a near-copy may bring that the why lacks ("for exactly this reason")... */
+const NEW_WORDS_MAX = 2
+/** ...and at most this share of its content words. Three new words ("and cycles still leak") is something the why lacks. */
+const NEW_SHARE_MAX = 1 / 3
 
 /**
- * True when the explanation says nothing the key's why does not: the why, label removed, contains it, or
- * (the explanation being no more than LONGER_BY times as long) at least REPEAT_COVER of its words (three letters or more, or any number) occur in the
- * why and it brings no number the why lacks. An authored question carries both, and the verdict then reads the same sentence twice.
+ * True when one sentence of an explanation says nothing the key's why does not: it brings no number the why lacks,
+ * and either the why, label removed, contains it, or it is a near-copy of NEAR_COPY_MIN content words or more, all
+ * but NEW_WORDS_MAX of them (and no more than NEW_SHARE_MAX of them) occurring in the why. "Engines gate speculation on batch occupancy for
+ * exactly this reason" repeats a why that says "Engines gate speculation on occupancy"; "That is the price of
+ * crossing threads, and cycles still leak" adds to one that ends at "the price of crossing threads".
  */
-export function explanationRepeatsWhy(explanation: string, why: string): boolean {
-  const e = wordsOf(explanation)
+export function sentenceRepeatsWhy(sentence: string, why: string): boolean {
+  const e = wordsOf(sentence)
   const w = wordsOf(why)
-  if (e.length === 0 || w.length === 0) return false
-  const ej = e.join(' ')
-  const wj = w.join(' ')
-  // The why holding the explanation whole is a repeat. An explanation that holds the why and goes on adds to it.
-  if (wj.includes(ej)) return true
-  // An explanation much longer than the why has room for something the why lacks.
-  if (e.length > w.length * LONGER_BY) return false
-  const carries = (t: string) => t.length >= 3 || /\d/.test(t)
+  const mine = contentWords(e)
+  if (mine.length === 0 || w.length === 0) return false
   const have = new Set(w)
-  const mine = [...new Set(e.filter(carries))]
-  if (mine.length === 0) return false
   if (mine.some((t) => /\d/.test(t) && !have.has(t))) return false
-  return mine.filter((t) => have.has(t)).length / mine.length >= REPEAT_COVER
-}
-
-/** A sentence as the page compares it: lower case, punctuation read as a space. */
-const sentenceKey = (t: string): string => wordsOf(t).join(' ')
-
-/**
- * What the page prints as the explanation of a choice view: nothing when a key's why already says it, otherwise the
- * explanation with the sentences a key's why repeats word for word taken out, or null when none is left.
- */
-export function explanationToPrint(view: PlayView): string | null {
-  if (view.kind !== 'choice' || !view.explanation) return view.explanation ?? null
-  const explanation = view.explanation
-  const keys = view.options.filter((o) => view.correct.includes(o.id) && o.why !== '').map((o) => o.why)
-  if (keys.some((why) => explanationRepeatsWhy(explanation, why))) return null
-  const said = new Set(keys.flatMap((why) => why.split(SENTENCE_END).map(sentenceKey)).filter((k) => k.length >= SAID_MIN))
-  const kept = explanation.split(SENTENCE_END).filter((sentence) => !said.has(sentenceKey(sentence)))
-  return kept.length === 0 ? null : kept.join(' ')
+  if (` ${w.join(' ')} `.includes(` ${e.join(' ')} `)) return true
+  if (mine.length < NEAR_COPY_MIN) return false
+  const added = mine.filter((t) => !have.has(t)).length
+  return added <= NEW_WORDS_MAX && added <= mine.length * NEW_SHARE_MAX
 }
 
 const SENTENCE_END = /(?<=[.!?])\s+/
-/** A sentence shorter than this is never cut: a short clause repeats by chance. */
-const SAID_MIN = 40
+const sentencesOf = (text: string): string[] => text.split(SENTENCE_END).filter((t) => t.trim() !== '')
+
+/**
+ * True when the explanation says nothing the key's why does not: every sentence of it repeats the why
+ * (sentenceRepeatsWhy). An authored question carries both, and the verdict would read the same sentence twice. An
+ * explanation with one sentence that adds something is not a repeat: that sentence prints.
+ */
+export function explanationRepeatsWhy(explanation: string, why: string): boolean {
+  const all = sentencesOf(explanation)
+  return all.length > 0 && all.every((t) => sentenceRepeatsWhy(t, why))
+}
+
+/**
+ * What the page prints as the explanation of a choice view: the explanation without the sentences a key's why
+ * already says, word for word or as a near-copy (sentenceRepeatsWhy), or null when none is left.
+ */
+export function explanationToPrint(view: PlayView): string | null {
+  if (view.kind !== 'choice' || !view.explanation) return view.explanation ?? null
+  const keys = view.options.filter((o) => view.correct.includes(o.id) && o.why !== '').map((o) => o.why)
+  const kept = sentencesOf(view.explanation).filter((sentence) => !keys.some((why) => sentenceRepeatsWhy(sentence, why)))
+  return kept.length === 0 ? null : kept.join(' ')
+}
 
 /**
  * The display model for an item. Options are shuffled by `seed` (choice items, generated or authored);
