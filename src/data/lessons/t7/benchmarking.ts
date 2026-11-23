@@ -1,4 +1,5 @@
 import type { Lesson } from '../types'
+import { claimCite } from '../claims'
 
 const lesson: Lesson = {
   id: 't7.l2',
@@ -13,7 +14,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **GuideLLM** (in the vLLM project; the vLLM docs recommend it for production servers; traffic profiles from synchronous and concurrent through constant and Poisson to a rate sweep), **AIPerf** (NVIDIA's replacement for GenAI-Perf, which is being phased out: concurrency and request-rate modes, constant, Poisson and gamma arrivals, trace replay including BurstGPT, goodput against an SLO), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. Older posts still cite two tools you should skip: LLMPerf (Ray's load generator) was archived and made read-only in December 2025, and GenAI-Perf (NVIDIA's earlier analyzer) is being phased out in favor of AIPerf (status read 2026-11-21). The methodology below is what separates them from a blog screenshot.`,
+      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **GuideLLM** (in the vLLM project; traffic profiles from synchronous and concurrent through constant and Poisson to a rate sweep), **AIPerf** (NVIDIA's replacement for GenAI-Perf, which is being phased out: concurrency and request-rate modes, constant, Poisson and gamma arrivals, trace replay including BurstGPT, goodput against an SLO), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. Older posts still cite two tools you should skip, LLMPerf (Ray's load generator: ${claimCite('status.loadgen.llmperf')}) and GenAI-Perf (NVIDIA's earlier analyzer: ${claimCite('status.loadgen.genai-perf')}); the two live ones stand as this course last read them, GuideLLM (${claimCite('status.loadgen.guidellm')}) and AIPerf (${claimCite('status.loadgen.aiperf')}). The methodology below is what separates them from a blog screenshot.`,
     },
     {
       type: 'prose',
@@ -72,7 +73,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
       title: 'Find the goodput peak',
       note: `Each seed puts its goodput peak at one of four loads (0.75×, 1×, 1.25× or 1.5×), so the same answer comes up on different seeds, and the scene gave you what you needed to tell which one this seed uses. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
 
-That is Rule 3 on a small engine. The goodput peak is not quite the capacity number: goodput counts each request against its own bound, so at the peak a share of requests may already be late and the p95 may miss the SLO. The knee, the highest step that still meets the SLO, sits at or below the peak. A sweep of load steps finds both and a single run finds neither: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
+That is Rule 3 on a small engine. The goodput peak is not quite the capacity number: goodput counts each request against its own bound, so at the peak a share of requests may already be late and the p95 may miss the SLO. The knee, the highest step that still meets the SLO, sits at or below the peak. A sweep of load steps finds both and a single run finds neither: one run at a load past the peak reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
     },
     {
       type: 'exercise',
