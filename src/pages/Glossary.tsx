@@ -201,13 +201,13 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
             : { duration: 0.5, ease: [0.2, 0.8, 0.3, 1] }
         }
         className={cn(
-          'relative h-[220px] w-full [transform-style:preserve-3d]',
+          'relative grid min-h-[220px] w-full [transform-style:preserve-3d]',
           flash && 'rounded-lg shadow-[0_0_0_2px_#3EF2A4]',
         )}
       >
         {/* front */}
         <div
-          className="absolute inset-0 flex flex-col rounded-lg border border-line bg-surface-1 p-4 [backface-visibility:hidden] hover:border-line-bright"
+          className="flex flex-col rounded-lg border border-line bg-surface-1 p-4 [grid-area:1/1] [backface-visibility:hidden] hover:border-line-bright"
         >
           <div className="grid flex-1 grid-cols-[1fr_28px_1fr] gap-2">
             <div className="min-w-0">
@@ -238,7 +238,7 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
           </div>
         </div>
         {/* back */}
-        <div className="absolute inset-0 flex flex-col rounded-lg border border-line-bright bg-surface-2 p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div className="flex flex-col rounded-lg border border-line-bright bg-surface-2 p-4 [grid-area:1/1] [backface-visibility:hidden] [transform:rotateY(180deg)]">
           <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
             <ArrowLeftRight size={11} className="text-accent" /> why it holds
           </p>

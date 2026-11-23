@@ -48,7 +48,9 @@ describe('K0-C12: a glossary pair does not repeat a pairing an erratum retired',
   test('the lock-free pair keeps lock-free apart from wait-free and names no NATS', () => {
     const p = PAIRS.find((x) => x.slug === 'lock-free-queue')!
     expect(p.osDef).toContain('some thread always makes progress')
-    expect(p.osDef).toContain('bounded number of steps')
+    // Wait-free is named on the back as the stronger guarantee, in words both of its textbook forms share (K0-FIX2-GLOSSARY).
+    expect(p.why).toContain('Wait-free is stronger: every thread finishes its own operation, whatever the others do.')
+    expect(`${p.osDef} ${p.why}`).not.toMatch(/bounded number of steps|finite number of steps/)
     expect(JSON.stringify(p).toLowerCase()).not.toContain('nats')
   })
 })
