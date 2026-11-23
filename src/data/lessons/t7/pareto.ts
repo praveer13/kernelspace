@@ -13,9 +13,9 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `Plot two axes: **throughput per GPU** (the provider's margin) against **tokens per second per user** (the user's experience). Every engine configuration is a point; the best achievable points form a **Pareto frontier**, and everything real sits below it. The frontier is concave: low concurrency gives you blazing interactivity at pitiful utilization; high concurrency gives you fleet-leading tok/s/GPU at "is it frozen?" latencies. You cannot have both ends. Nobody can. The game is choosing *where* on the curve to live.
+      md: `Plot two axes: **throughput per GPU** (the provider's margin) against **tokens per second per user** (the user's experience). Every engine configuration is a point; the best achievable points form a **Pareto frontier**, and everything real sits below it. The frontier slopes downward: low concurrency gives you blazing interactivity at pitiful utilization; high concurrency gives you fleet-leading tok/s/GPU at "is it frozen?" latencies. You cannot have both ends. Nobody can. The game is choosing *where* on the curve to live. The slope need not be smooth: the four frontier points worked below fall at different rates per step, so the curve is a staircase of tradeoffs, not a tidy arc.
 
-This is why contradictory benchmark claims can both be true: they are *different points on the same frontier*. In SemiAnalysis's InferenceMAX launch (now InferenceX, 2025-10-09), DeepSeek-R1 FP4 shows a GB200 NVL72 well ahead at 30 tok/s/user, yet above 90 tok/s/user a single-node B200 on TRT-LLM beats it. The usual explanation: the NVL72 fabric amortizes MoE weights across giant batches, while the high-interactivity region needs small batches, where MTP gives 2–3× interactivity at a given cost. Same hardware family, opposite ends of the curve.`,
+This is why contradictory benchmark claims can both be true: they are *different points on the same frontier*. In SemiAnalysis's InferenceMAX launch (now InferenceX, 2025-10-09), DeepSeek-R1 FP4 shows the GB200 NVL72 with disaggregated prefill beating single 8-GPU nodes on TCO per million tokens below 90 tok/s/user, yet above 90 tok/s/user a single-node B200 on TRT-LLM beats it. The 30 tok/s/user figure belongs to a different comparison: tokens per all-in provisioned MW, where a GB200 NVL72 (no MTP) is ~8× a single-node H200. The usual explanation: the NVL72 fabric amortizes MoE weights across giant batches, while the high-interactivity region needs small batches, where MTP gives 2–3× interactivity at a given cost. Same hardware family, opposite ends of the curve.`,
     },
     {
       type: 'prose',
@@ -57,7 +57,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         { from: 'curve', to: 'lo', label: '' },
       ],
       steps: [
-        { caption: 'The frontier: every configuration is a point below it; best tradeoffs on it. Concave — the ends exclude each other.', active: ['curve', 'y', 'x'], edges: [] },
+        { caption: 'The frontier: every configuration is a point below it; best tradeoffs on it. Downward-sloping — the ends exclude each other.', active: ['curve', 'y', 'x'], edges: [] },
         { caption: 'Regions: NVL72 dominates the throughput end (fabric amortizes weights across giant batches); a single node + MTP dominates interactivity. Contradictory claims, both true.', active: ['hi', 'lo'], edges: ['curve->hi', 'curve->lo'] },
         { caption: 'The SLO floor: only the region right of it is sellable. Your product\'s latency contract picks your operating point — and therefore your hardware and your margin.', active: ['slo', 'curve'], edges: ['curve->slo'] },
       ],
@@ -77,7 +77,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
       type: 'quiz',
       questions: [
         {
-          q: 'In SemiAnalysis\'s InferenceMAX launch (Oct 2025, now InferenceX), DeepSeek-R1 FP4 has a GB200 NVL72 leading at 30 tok/s/user while a B200 on TRT-LLM beats it above 90 tok/s/user. These results are…',
+          q: 'In SemiAnalysis\'s InferenceMAX launch (Oct 2025, now InferenceX), DeepSeek-R1 FP4 has the GB200 NVL72 beating single 8-GPU nodes on TCO per million tokens below 90 tok/s/user while a B200 on TRT-LLM beats it above 90 tok/s/user. These results are…',
           options: [
             'In conflict, since one model on one hardware family cannot have two winners and one harness must be flawed',
             'Both true, since they sit at the throughput end and the interactivity end of one frontier',
@@ -171,9 +171,9 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
       {
         prompt: 'Explain how one benchmark can favour a GB200 NVL72 rack and another a single B200 node, and both be right.',
         model:
-          'Tokens per second per GPU and per user trade off along one concave frontier. The rack\'s fabric spreads MoE weights over giant batches, which wins the throughput end. A single node with MTP at small batch wins the interactive end. Each claim is true at its own operating point, so ask which end a number came from.',
+          'Tokens per second per GPU and per user trade off along one downward-sloping frontier. The rack\'s fabric spreads MoE weights over giant batches, which wins the throughput end. A single node with MTP at small batch wins the interactive end. Each claim is true at its own operating point, so ask which end a number came from.',
         ideas: [
-          'Per-GPU throughput and per-user speed trade off along one concave frontier',
+          'Per-GPU throughput and per-user speed trade off along one downward-sloping frontier',
           'The rack\'s fabric amortizes weights over giant batches, which wins the throughput end',
           'A single node with MTP at small batch wins the interactive end, so each claim holds at its own point',
         ],
