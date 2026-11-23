@@ -30,9 +30,9 @@ const lesson: Lesson = {
       caption: 'fig 1 — the interconnect ladder prices the axes (bandwidth per hop, 2026)',
       height: 52,
       nodes: [
-        { id: 'nvlink', x: 2, y: 6, w: 44, h: 9, label: 'NVLink 5 / NVL72 rack', sub: '~1.8 TB/s bidirectional — TP needs it', color: '#3EF2A4' },
-        { id: 'pcie', x: 2, y: 20, w: 44, h: 9, label: 'PCIe gen5 x16', sub: '~64 GB/s — CPU attach, offload tier', color: '#FBBF24' },
-        { id: 'rdma', x: 2, y: 34, w: 44, h: 9, label: 'RDMA (RoCE / InfiniBand)', sub: '25–100 GB/s — PP, DP, KV, cross-rack', color: '#5CA8FF' },
+        { id: 'nvlink', x: 2, y: 6, w: 44, h: 9, label: 'NVLink 5 / NVL72 rack', sub: '~1.8 TB/s both ways — TP needs it', color: '#3EF2A4' },
+        { id: 'pcie', x: 2, y: 20, w: 44, h: 9, label: 'PCIe gen5 x16', sub: '~64 GB/s — CPU, offload tier', color: '#FBBF24' },
+        { id: 'rdma', x: 2, y: 34, w: 44, h: 9, label: 'RDMA (RoCE / InfiniBand)', sub: '25–100 GB/s — PP, DP, KV, racks', color: '#5CA8FF' },
         { id: 'tp', x: 54, y: 6, w: 20, h: 9, label: 'TP', sub: 'all-reduce', color: '#3EF2A4' },
         { id: 'epcp', x: 54, y: 20, w: 20, h: 9, label: 'EP / CP', sub: 'all-to-all/ring', color: '#A78BFA' },
         { id: 'kv', x: 54, y: 34, w: 20, h: 9, label: 'PP / DP / KV xfer', sub: 'acts, replicas, blocks', color: '#5CA8FF' },

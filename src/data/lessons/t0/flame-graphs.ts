@@ -77,9 +77,9 @@ That's the whole grammar. The skill is recognizing *shapes*: the allocator plate
       nodes: [
         { id: 's1', x: 2, y: 4, w: 28, h: 9, label: 'sample 1', sub: 'main → serve → tokenize', color: '#5CA8FF' },
         { id: 's2', x: 2, y: 16, w: 28, h: 9, label: 'sample 2', sub: 'main → serve → tokenize', color: '#5CA8FF' },
-        { id: 's3', x: 2, y: 28, w: 28, h: 9, label: 'main → serve → decode', color: '#A78BFA' },
-        { id: 's4', x: 2, y: 40, w: 28, h: 9, label: 'main → gc_pause', color: '#FF5C6C' },
-        { id: 'merged', x: 40, y: 16, w: 56, h: 24, label: 'merged stacks: tokenize bar 2× decode bar', sub: 'width ∝ samples', color: '#3EF2A4' },
+        { id: 's3', x: 2, y: 28, w: 28, h: 9, label: 'sample 3', sub: 'main → serve → decode', color: '#A78BFA' },
+        { id: 's4', x: 2, y: 40, w: 28, h: 9, label: 'sample 4', sub: 'main → gc_pause', color: '#FF5C6C' },
+        { id: 'merged', x: 40, y: 16, w: 56, h: 24, label: 'merged: tokenize 2× decode', sub: 'width ∝ samples', color: '#3EF2A4' },
       ],
       edges: [
         { from: 's1', to: 'merged', label: '' },

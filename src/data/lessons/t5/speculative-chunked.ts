@@ -100,14 +100,14 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
       caption: 'fig 1 — one speculative round: draft 4, verify 1 pass, accept 3',
       height: 52,
       nodes: [
-        { id: 'draft', x: 2, y: 8, w: 26, h: 10, label: 'draft model (tiny)', sub: '4 cheap serial steps', color: '#5CA8FF' },
+        { id: 'draft', x: 2, y: 8, w: 26, h: 10, label: 'draft model', sub: '4 cheap serial steps', color: '#5CA8FF' },
         { id: 'd1', x: 34, y: 2, w: 12, h: 7, label: '" the"' },
         { id: 'd2', x: 34, y: 11, w: 12, h: 7, label: '" quick"' },
         { id: 'd3', x: 34, y: 20, w: 12, h: 7, label: '" brown"' },
         { id: 'd4', x: 34, y: 29, w: 12, h: 7, label: '" dog"', color: '#FF5C6C' },
-        { id: 'verify', x: 52, y: 12, w: 22, h: 10, label: 'target model', sub: 'ONE parallel pass over 4', color: '#A78BFA' },
+        { id: 'verify', x: 52, y: 12, w: 22, h: 10, label: 'target model', sub: 'ONE pass over all 4', color: '#A78BFA' },
         { id: 'accept', x: 80, y: 6, w: 18, h: 9, label: 'accept 3', sub: '+1 bonus token', color: '#3EF2A4' },
-        { id: 'reject', x: 80, y: 22, w: 18, h: 9, label: 'reject "dog"', sub: 'resume from mismatch', color: '#FF5C6C' },
+        { id: 'reject', x: 80, y: 22, w: 18, h: 9, label: 'reject "dog"', sub: 'resume here', color: '#FF5C6C' },
       ],
       edges: [
         { from: 'draft', to: 'd1' },

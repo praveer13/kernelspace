@@ -48,8 +48,8 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         { id: 'y', x: 6, y: 4, w: 10, h: 40, label: 'tok/s/GPU ↑', sub: 'margin' },
         { id: 'x', x: 18, y: 40, w: 60, h: 8, label: 'tok/s/user →', sub: 'experience' },
         { id: 'curve', x: 22, y: 8, w: 52, h: 24, label: 'Pareto frontier', sub: 'best achievable tradeoffs', color: '#3EF2A4' },
-        { id: 'hi', x: 60, y: 14, w: 26, h: 8, label: 'B200 node + MTP', sub: 'high interactivity', color: '#5CA8FF' },
-        { id: 'lo', x: 24, y: 14, w: 26, h: 8, label: 'GB200 NVL72', sub: 'max throughput', color: '#A78BFA' },
+        { id: 'hi', x: 60, y: 9, w: 26, h: 8, label: 'B200 node + MTP', sub: 'high interactivity', color: '#5CA8FF' },
+        { id: 'lo', x: 24, y: 9, w: 26, h: 8, label: 'GB200 NVL72', sub: 'max throughput', color: '#A78BFA' },
         { id: 'slo', x: 66, y: 28, w: 22, h: 8, label: 'SLO floor', sub: 'operate right of it', color: '#FB7185' },
       ],
       edges: [

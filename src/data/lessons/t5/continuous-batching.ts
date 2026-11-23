@@ -93,13 +93,13 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
       caption: 'fig 1 — static vs continuous: the same 4 requests on one GPU',
       height: 56,
       nodes: [
-        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: [A B C D] run until LONGEST (D, 40 steps)', sub: 'idle: A after 8, B 12, C 20', color: '#FF5C6C' },
+        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: A B C D, 40 steps', sub: 'idle: A after 8, B 12, C 20', color: '#FF5C6C' },
         { id: 's2', x: 2, y: 14, w: 44, h: 7, label: '…then batch 2: [E F G H]', sub: 'queue waits a full 40-step batch' },
         { id: 'c1', x: 54, y: 4, w: 10, h: 7, label: 'it 1–8', sub: 'A B C D', color: '#3EF2A4' },
         { id: 'c2', x: 54, y: 14, w: 10, h: 7, label: 'it 9', sub: 'B C D + E', color: '#3EF2A4' },
         { id: 'c3', x: 54, y: 24, w: 10, h: 7, label: 'it 13', sub: 'C D E + F', color: '#3EF2A4' },
         { id: 'c4', x: 54, y: 34, w: 10, h: 7, label: 'it 21', sub: 'D E F + G', color: '#3EF2A4' },
-        { id: 'legend', x: 76, y: 14, w: 22, h: 20, label: 'per-iteration', sub: 'leave on finish · join on free blocks', color: '#22D3EE' },
+        { id: 'legend', x: 74, y: 14, w: 24, h: 20, label: 'leave on finish', sub: 'join on free blocks', color: '#22D3EE' },
       ],
       edges: [
         { from: 'c1', to: 'c2' },

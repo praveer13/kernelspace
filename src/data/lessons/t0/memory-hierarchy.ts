@@ -94,7 +94,7 @@ These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200�
       caption: 'fig 1 — a load instruction walks the hierarchy until something answers',
       height: 52,
       nodes: [
-        { id: 'cpu', x: 2, y: 20, w: 14, h: 10, label: 'CPU core', sub: 'load r1, [addr]' },
+        { id: 'cpu', x: 2, y: 20, w: 14, h: 10, label: 'CPU core', sub: 'load [addr]' },
         { id: 'l1', x: 24, y: 4, w: 16, h: 9, label: 'L1', sub: '~0.5 ns · 48 KiB' },
         { id: 'l2', x: 24, y: 20, w: 16, h: 9, label: 'L2', sub: '~5 ns · 1 MiB' },
         { id: 'l3', x: 24, y: 36, w: 16, h: 9, label: 'L3', sub: '~15 ns · 32 MiB' },

@@ -101,7 +101,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
         { id: 'roof', x: 56, y: 6, w: 40, h: 8, label: 'perf = peak FLOPs', sub: 'compute-bound region', color: '#A78BFA' },
         { id: 'ridge', x: 44, y: 16, w: 12, h: 10, label: 'ridge', sub: '~295 F/B', color: '#3EF2A4' },
         { id: 'decode', x: 6, y: 44, w: 26, h: 8, label: 'decode · AI ≈ 0.5–4', sub: 'bandwidth wall', color: '#FB7185' },
-        { id: 'prefill', x: 64, y: 44, w: 30, h: 8, label: 'prefill/matmul · AI ≈ 100+', sub: 'at the compute roof', color: '#3EF2A4' },
+        { id: 'prefill', x: 64, y: 44, w: 30, h: 8, label: 'prefill · AI ≈ 100+', sub: 'matmul at the compute roof', color: '#3EF2A4' },
       ],
       edges: [
         { from: 'slope', to: 'ridge' },
