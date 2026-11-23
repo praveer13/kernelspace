@@ -459,7 +459,22 @@
 [15,"genai-perf","GenAI-Perf (NVIDIA) status","being phased out; use AIPerf",""],
 [16,"uidellm","GuideLLM status and traffic profiles","live; recommended by the vLLM docs for production servers",""],
 [15,"aiperf","AIPerf status and benchmarking modes","live; NVIDIA's replacement for GenAI-Perf",""],
-[7,"rust.polonius","Polonius is not on stable Rust: the conditional-return borrow is still rejected","no stable release through Rust 1.100.0, Nov 2026, ships Polonius",""]
+[0,"bench.deepseek-day6.daily-cost","DeepSeek V3 and R1 serving cost for one day (its stated assumption)",87072,"USD/day"],
+[20,"theoretical-revenue","DeepSeek V3 and R1 day: revenue if every token were billed at R1 list prices",562027,"USD/day"],
+[20,"cost-profit-margin","DeepSeek's \"cost profit margin\" for the day (profit over cost, at R1 list prices)",545,"%"],
+[20,"avg-nodes","DeepSeek average node occupancy over the day",226.75,"nodes (8 H800 each)"],
+[20,"input-tokens","DeepSeek input tokens served in the day",608000000000,"tokens/day"],
+[20,"cache-hit-tokens","DeepSeek input tokens that hit the on-disk KV cache in the day",342000000000,"tokens/day"],
+[30,"rate","DeepSeek KV-cache hit rate over input tokens, one day",56.3,"%"],
+[20,"output-tokens","DeepSeek output tokens served in the day",168000000000,"tokens/day"],
+[0,"price.deepseek.h800-hourly-assumption","DeepSeek's assumed leasing cost of one H800 GPU (day-six cost)",2,"USD/GPU-hr"],
+[15,"r1-input-cache-hit","DeepSeek-R1 list price, input tokens that hit the cache (Feb 2025)",0.14,"USD/Mtok"],
+[30,"miss","DeepSeek-R1 list price, input tokens that miss the cache (Feb 2025)",0.55,"USD/Mtok"],
+[18,"output","DeepSeek-R1 list price, output tokens (Feb 2025)",2.19,"USD/Mtok"],
+[15,"v4-pro-output-peak","DeepSeek flagship (deepseek-v4-pro) list price, output tokens, peak hours",3.96,"USD/Mtok"],
+[29,"offpeak","DeepSeek flagship (deepseek-v4-pro) list price, output tokens, off-peak hours",1.98,"USD/Mtok"],
+[6,"h100.median-2026-11","H100 on-demand median rental price, November 2026 reading",3.91,"USD/GPU-hr"],
+[0,"status.rust.polonius","Polonius is not on stable Rust: the conditional-return borrow is still rejected","no stable release through Rust 1.100.0, Nov 2026, ships Polonius",""]
 ],
 "glossary": [
 ["page","Page","KV token block (tens of tokens)","t2.l2","block, chunk, memory unit"],

@@ -286,7 +286,7 @@ export const TRACK_EXTRAS: Record<TrackId, TrackExtras> = {
       'Define goodput and reject raw-throughput claims on sight.',
       'Run a benchmark that survives review: traffic, warmup, samples, identical stacks.',
       'Read the Pareto frontier: which dial moved, which region, which hardware.',
-      'Price a serving business on a napkin: $/Mtok, tok/MW, the 545% margin day.',
+      'Price a serving business on a napkin: $/Mtok, tok/MW, the 545% cost profit margin day.',
       'Design the Planner loop: leading signals, phase-aware scaling, honest shedding.',
     ],
     requires: 'requires T6 · the mega-scale machinery',
