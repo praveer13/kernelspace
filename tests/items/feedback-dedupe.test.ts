@@ -75,6 +75,13 @@ describe('Feedback prints the explanation once under Correct.', () => {
     expect(render(quiz(q)).html).toContain('Best fit needs the smallest hole that fits.')
   })
 
+  test('a lesson reference (T2.L4, T4) is not a number, and a cache level (L2) still is', () => {
+    const why = 'Right: the slow sibling holds the batch, the FIFO convoy with HBM as the held resource.'
+    expect(sentenceRepeatsWhy('It is the FIFO convoy from T2.L4 with HBM as the held resource.', why)).toBe(true)
+    expect(sentenceRepeatsWhy('It is the FIFO convoy (T2) with HBM as the held resource.', why)).toBe(true)
+    expect(sentenceRepeatsWhy('The line already sits in L2, so both orders hit cache.', 'Right: the line already sits in L1, so both orders hit cache.')).toBe(false)
+  })
+
   test('the row-vs-column pair, which share only their first 54 characters, is one sentence', () => {
     expect(
       explanationRepeatsWhy(
@@ -151,6 +158,16 @@ describe('no authored question prints the same sentence twice', () => {
     const { html } = at('t5.l8#3')
     expect(count(html, 'Engines gate speculation on occupancy')).toBe(1)
     expect(text(html)).not.toContain('for exactly this reason')
+  })
+  test('a long near-copy with fewer than a quarter of its content words new is cut (t0.l4#3, t7.l3#1, t0.l6#3)', () => {
+    expect(text(at('t0.l4#3').html)).not.toContain('Layout must match the access pattern')
+    expect(text(at('t7.l3#1').html)).not.toContain('The frontier shifts only when the physics change')
+    expect(text(at('t0.l6#3').html)).not.toContain('Three wide wait bars + one absent')
+  })
+  test('a lesson reference is not a new number: t5.l7#0, t6.l5#1 and t6.l1#0 are cut', () => {
+    expect(text(at('t5.l7#0').html)).not.toContain('the FIFO convoy from T2.L4')
+    expect(text(at('t6.l5#1').html)).not.toContain('T6.L4: only')
+    expect(text(at('t6.l1#0').html)).not.toContain('Decode is bandwidth-bound (T4)')
   })
   test('an explanation that adds something the key why lacks still prints it (t3.l1#2, t5.l10#0, t0.l2#0)', () => {
     expect(text(at('t3.l1#2').html)).toContain('and cycles still leak')
