@@ -61,14 +61,14 @@ describe('t4.l5 reduce.wgsl over a 256 x 256 first pass', () => {
 describe('the 5 ms floor names its model', () => {
   test('the erratum after says the floor is per decode step of an 8B FP16 model, 16 GB of weights', () => {
     expect(prefill.after).toContain('each decode step of an 8B FP16 model (16 GB of weights) takes at least about 5 ms')
-    expect(prefill.after).toContain('only more tokens per weight read or fewer bytes lower it')
+    expect(prefill.after).toContain('the floor per token at batch 1; only more tokens per weight read or fewer bytes per weight lower that')
     expect(prefill.after).not.toContain('engineering can only add')
     expect(prefill.after.length).toBeLessThanOrEqual(240)
   })
 
   test('the erratum title says per-step floor, not "not physics"', () => {
     expect(prefill.title).not.toContain('not physics')
-    expect(prefill.title).toContain('the 5 ms is a per-step floor that only more tokens per weight read or fewer bytes lower')
+    expect(prefill.title).toContain('the 5 ms is the floor of one decode step, and at batch 1 the floor per token')
     expect(prefill.title.length).toBeLessThanOrEqual(240)
   })
 

@@ -37,7 +37,8 @@ describe('t3.l4: a task is as big as its live locals, as t2.l6 says', () => {
     expect(t2l6Erratum.after).toContain('A task holds the locals live across its awaits')
     expect(rendered('t2.l6')).toContain('about 1 KiB for the echo server below, because its read buffer lives inside it')
     expect(t3l4Erratum.lessons).toEqual(['t3.l4'])
-    expect(t3l4Erratum.source?.url).toBe(t2l6Erratum.source?.url)
+    // K0-CLOSE-J: the t2.l6 erratum's seccomp page backs its io_uring half only; the task's state is the Rust Reference's.
+    expect(t3l4Erratum.source?.url).toBe('https://doc.rust-lang.org/1.96.0/reference/expressions/block-expr.html#r-expr.block.async.layout-unspecified')
   })
 })
 
