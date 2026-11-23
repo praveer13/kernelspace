@@ -10,4 +10,8 @@ export default {
   after:
     'Adult silent reading is far slower than 50 ms per token at T5.L2\'s rule of about 0.75 words per token. The ~200 ms "broken" line is the course\'s rule of thumb, not a reading speed.',
   why: 'The 50 ms figure had no source. At 0.75 words per token it means 900 words a minute, far faster than adults read silently. The course has read no study of reading rate, so it gives no replacement number.',
+  source: {
+    url: 'https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them',
+    title: 'OpenAI Help Center: Understanding and counting tokens ("1 token is approximately three-quarters of a word")',
+  },
 } satisfies Erratum

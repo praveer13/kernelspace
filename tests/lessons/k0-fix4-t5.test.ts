@@ -34,7 +34,8 @@ describe('t5.l3: the ITL chip and its erratum name no study the course has not r
     for (const text of [itlHint(), JSON.stringify(itl)]) {
       expect(text).not.toMatch(/Brysbaert|meta-analysis|Memory and Language|2019|study is known/)
     }
-    expect(itl.source).toBeUndefined()
+    // K0-CLOSE-A: the erratum cites the words-per-token rule its after uses (every new erratum has a source); still no study.
+    expect(itl.source?.url).toBe('https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them')
   })
   test('the erratum\'s why gives the arithmetic: 0.75 words per token every 50 ms is 900 words a minute', () => {
     expect((0.75 / 0.05) * 60).toBeCloseTo(900, 9)
@@ -64,7 +65,8 @@ describe('t5.l10: the comparison table says which cells were read, from claims',
     for (const d of dates) expect(verified.has(d)).toBe(true)
     expect(before).toContain(claimCite('status.trtllm.pytorch-sole-backend'))
     expect(before).toContain(claimRelease('status.sglang.hardware'))
-    expect(before).toContain(claimRelease('twin.vllm.scheduler'))
+    // K0-CLOSE-A: no claim holds vLLM's release-notes line, so the caption no longer counts that cell as checked.
+    expect(before).not.toContain(claimRelease('twin.vllm.scheduler'))
     expect(before).toContain('the course\'s summary')
   })
   test('the lesson source types no date and no release in the comparison or the SGLang section', () => {
@@ -77,10 +79,10 @@ describe('t5.l10: the comparison table says which cells were read, from claims',
   })
   test('vLLM\'s Rust front end is a second front end beside the Python one', () => {
     expect(row('Language core')[2]).toBe('Python + CUDA; a second, Rust front end')
-    expect(before).toContain('"the Python and Rust frontends"')
+    expect(before).not.toContain('"the Python and Rust frontends"')
   })
   test('the erratum\'s why says the table names which cells were read, not that every cell names a release', () => {
     expect(table.why).not.toContain('each cell now names')
-    expect(table.why).toContain('the table now says which cells were read and when')
+    expect(table.why).toContain('the table now says which cells were read.')
   })
 })
