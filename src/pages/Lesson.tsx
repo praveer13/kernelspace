@@ -56,6 +56,7 @@ import type { PlacementResult, Recommendation } from '@/lib/learner/types'
 import type { RecommendContent, RecommendState } from '@/lib/learner/recommend'
 import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
+import { resolveAnchor } from '@/pages/lesson/anchor-aliases'
 import { alsoNext } from '@/pages/lesson/also-next'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
@@ -774,8 +775,9 @@ function LessonView({ lesson }: { lesson: Lesson }) {
 
   /* resume position (runs after Layout's scroll-to-top); a #heading link (⌘K opens KCs at their H2) wins over it */
   useEffect(() => {
-    const anchor = decodeURIComponent(hash.slice(1))
-    if (anchor && headings.some((h) => h.id === anchor)) {
+    const anchor = resolveAnchor(lesson.id, hash, headings.map((h) => h.id))
+    if (anchor) {
+      if (`#${anchor}` !== hash) navigate({ hash: `#${anchor}` }, { replace: true })
       const id = requestAnimationFrame(() =>
         requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior })),
       )
@@ -791,7 +793,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
       )
       return () => cancelAnimationFrame(id)
     }
-  }, [lesson.id, hash, headings])
+  }, [lesson.id, hash, headings, navigate])
 
   /* scroll driver: progress bar + pct readout (refs), throttled store save */
   useEffect(() => {
