@@ -19,8 +19,8 @@ interface Ctx {
   known: Set<string>
   /** the last lesson of the whole path, in registry order */
   pathLast: string
-  /** lesson counts a text may state: the whole registry and each track */
-  counts: Set<number>
+  /** the whole registry's lesson count; a track's own count is valid only beside its track's name */
+  total: number
 }
 
 interface Rule {
@@ -34,13 +34,29 @@ function matches(text: string, re: RegExp): string[] {
 
 const trackLast = (ctx: Ctx, n: string): string | undefined => ctx.tracks[`t${n}`]?.at(-1)
 
+/** the characters on each side of a match that may carry the words which excuse it */
+const NEAR = 80
+const near = (t: string, m: RegExpMatchArray, chars = NEAR): string =>
+  t.slice(Math.max(0, m.index! - chars), m.index! + m[0].length + chars)
+
+// "the plan" in a database sense (EXPLAIN, a query or execution plan) is innocent; a prose block is one string, so
+// only words near the phrase excuse it, never an EXPLAIN elsewhere in the block
+const DB_PLAN = /\bEXPLAIN\b|\b(?:[Qq]uery|[Ee]xecution) plan\b/
+
 export const RULES: Rule[] = [
-  { name: 'wave number', check: (t) => matches(t, /\bWave \d/) },
+  { name: 'wave number', check: (t) => matches(t, /\bwave \d/i) },
   { name: 'lesson N of M', check: (t) => matches(t, /\blesson \d+ of \d+\b/i) },
   {
     name: 'stale lesson count',
     check: (t, ctx) =>
-      [...t.matchAll(/\b(\d+) lessons\b/g)].filter((m) => !ctx.counts.has(Number(m[1]))).map((m) => m[0]),
+      [...t.matchAll(/\b(\d+) lessons\b/g)]
+        .filter((m) => {
+          const n = Number(m[1])
+          if (n === ctx.total) return false
+          // "T5's 10 lessons" or "the 10 lessons of T5": a track's size, true only beside that track's name
+          return ![...near(t, m, 12).matchAll(/\b(T[0-7]|R)\b/g)].some((k) => ctx.tracks[k[1]!.toLowerCase()]?.length === n)
+        })
+        .map((m) => m[0]),
   },
   {
     // A lesson that says "This is the last lesson of T<n>" claims a position; a pointer ("The final lesson of T5 puts it
@@ -68,14 +84,15 @@ export const RULES: Rule[] = [
   {
     name: 'build plan reference',
     check: (t) => [
-      // "the plan" in a database sense (EXPLAIN, a query or execution plan) is innocent; anywhere else it is the build plan
-      ...(/\bEXPLAIN\b|\b(?:query|execution) plan\b/.test(t) ? [] : matches(t, /\bthe plan\b/i)),
+      ...[...t.matchAll(/\bthe plan\b(?!['’]s\b)/gi)].filter((m) => !DB_PLAN.test(near(t, m))).map((m) => m[0]),
+      // a database plan has no capstone: "the plan's" is the build plan wherever it stands
+      ...matches(t, /\bthe plan['’]s\b/i),
       ...matches(t, /\bbuild plan\b/i),
       ...matches(t, /§\s?\d+(?:\.\d+)? of the plan\b/),
       ...matches(t, /\bPLAN(?:-[A-Z0-9]+)?\.md\b/),
     ],
   },
-  { name: "topic table names T2.L6's zero-copy", check: (t) => matches(t, /\bT2\.L6's zero-copy\b/) },
+  { name: "topic table names T2.L6's zero-copy", check: (t) => matches(t, /\bT2\.L6['’]s zero-copy\b/) },
 ]
 
 export function violations(text: string, ctx: Ctx): string[] {
@@ -95,7 +112,7 @@ const baseCtx: Omit<Ctx, 'id'> = {
   tracks,
   known: new Set(ALL_LESSONS.map((l) => l.id)),
   pathLast: ALL_LESSONS.at(-1)!.id,
-  counts: new Set([ALL_LESSONS.length, ...TRACK_IDS.map((id) => LESSONS_BY_TRACK[id].length)]),
+  total: ALL_LESSONS.length,
 }
 
 describe('lesson text signposts', () => {
@@ -114,7 +131,36 @@ describe('lesson text signposts', () => {
     }
     for (const r of RULES) expect(r.check(fixtures[r.name]!, ctx).length).toBeGreaterThan(0)
     expect(Object.keys(fixtures).length).toBe(RULES.length)
-    expect(RULES[RULES.findIndex((r) => r.name === 'build plan reference')]!.check("the plan's capstone", ctx).length).toBeGreaterThan(0)
+  })
+
+  test('each build-plan pattern fires on a fixture of its own, by the text it matched', () => {
+    const ctx: Ctx = { ...baseCtx, id: 't1.l1' }
+    const plan = RULES.find((r) => r.name === 'build plan reference')!
+    // [fixture, a hit that only this pattern produces]; EXPLAIN beside a phrase silences the bare "the plan" pattern,
+    // so a fixture that carries it shows the other pattern still fires on its own
+    const own: [string, string][] = [
+      ['as the plan says', 'the plan'],
+      ["EXPLAIN ANALYZE shows it. Fleet Week (the plan's capstone 2.0) follows.", "the plan's"],
+      ['EXPLAIN ANALYZE shows it. Fleet Week (the plan’s capstone) follows.', 'the plan’s'],
+      ['EXPLAIN ANALYZE shows it, and the build plan has it next', 'build plan'],
+      ['EXPLAIN ANALYZE shows it (§6 of the plan)', '§6 of the plan'],
+      ['EXPLAIN ANALYZE shows it, per PLAN-W0.md', 'PLAN-W0.md'],
+    ]
+    for (const [text, hit] of own) expect(plan.check(text, ctx)).toEqual([hit])
+    // EXPLAIN far from the phrase does not excuse it
+    const far = `EXPLAIN ANALYZE shows it. ${'x'.repeat(100)} Then, as the plan says, Fleet Week.`
+    expect(plan.check(far, ctx)).toEqual(['the plan'])
+  })
+
+  test('each signpost rule reads case and curly apostrophes, and a track size only beside its track', () => {
+    const ctx: Ctx = { ...baseCtx, id: 't1.l1' }
+    const fire = (name: string, text: string) => RULES.find((r) => r.name === name)!.check(text, ctx)
+    expect(fire('wave number', 'this lands in wave 6')).toEqual(['wave 6'])
+    expect(fire("topic table names T2.L6's zero-copy", 'T2.L6’s zero-copy')).toEqual(['T2.L6’s zero-copy'])
+    const t5 = baseCtx.tracks.t5!.length
+    expect(fire('stale lesson count', `the course's ${t5} lessons`)).toEqual([`${t5} lessons`])
+    expect(fire('stale lesson count', `T5's ${t5} lessons`)).toEqual([])
+    expect(fire('stale lesson count', `all ${ALL_LESSONS.length} lessons`)).toEqual([])
   })
 
   test('true and innocent wording passes', () => {
