@@ -61,19 +61,49 @@ describe('t0.l4: false sharing and padding', () => {
   const exercise = lesson.blocks.find((b) => b.type === 'exercise')!
   const padTask = LAYOUT_TASKS.find((t) => t.id === 't-layout-pad')!
 
+  // K0-FIX2-T0: the measured run is one configuration (K0-C42: 8 threads pinned to the six hyperthreaded
+  // performance cores, unpadded 0.61-0.63 of one thread, padded 6.3-7.8x over unpadded), and every place says which.
+  const config = 'six hyperthreaded performance cores'
   test('the sim task and the lesson task call the simulator a model and give its ratio beside the measured one', () => {
     for (const t of [padTask.text, exercise.tasks![3]]) {
       expect(t).toContain(`the simulator is a model and shows about ${ratio}×`)
-      expect(t).toContain('5–8×')
+      expect(t).toContain('6–8×')
+      expect(t).toContain(config)
+      expect(t).not.toContain('5–8×')
     }
     expect(exercise.note).toContain(`about ${ratio} times`)
+    expect(exercise.note).toContain('6–8×')
+    expect(exercise.note).toContain(config)
+  })
+  test('the code block and its chip state the same configuration and figure', () => {
+    const code = (lesson.blocks as unknown as { type: string; code?: string; chips?: string[] }[]).find(
+      (b) => b.type === 'code' && b.code?.includes('CountersBad'),
+    ) as { code: string; chips: string[] }
+    expect(code.code).toContain('6 hyperthreaded P-cores')
+    expect(code.code).toContain('6-8x')
+    expect(code.chips).toContain('6–8× measured')
   })
   test('false sharing is not stated as always slower, and no unsourced growth claim is left', () => {
     const text = JSON.stringify(aosSoa)
     expect(text).not.toContain('worse as cores and sockets are added')
     expect(text).not.toContain('worse with more cores or sockets')
     expect(text).not.toContain('more on bigger machines')
-    expect(text).toContain('where cores share a cache')
+    // K0-FIX2-T0: shared caches explain nothing on this chip (all 20 threads share L3), and the efficiency-core
+    // figure was taken while other work loaded those cores, so neither is taught.
+    expect(text).not.toContain('share a cache')
+    expect(text).not.toContain('cores share caches')
+    expect(text).not.toContain("one thread's speed")
+    expect(text).not.toContain('1.3 to 1.6')
+    expect(text).not.toContain('1.3x to 1.6x')
+    expect(text).toContain(`about 1.6× slower on the 8-thread run measured for this lesson, on a desktop Core i5's ${config}`)
+    expect(text).toContain('did not grow with the number of cores')
+  })
+  test('the erratum after states the same configuration and figures', () => {
+    expect(l4Erratum.after).toContain(config)
+    expect(l4Erratum.after).toContain('about 1.6x slower than one thread')
+    expect(l4Erratum.after).toContain('6-8x faster than unpadded')
+    expect(l4Erratum.after).not.toContain('5-8x')
+    expect(l4Erratum.after.length).toBeLessThanOrEqual(240)
   })
   test('the erratum source resolves to the false-sharing measurements', () => {
     expect(l4Erratum.source.url).toBe('https://akkadia.org/drepper/cpumemory.pdf')
