@@ -1,26 +1,69 @@
 import type { LearningPath } from '@/lib/ledger/types'
+import type { BraidPair } from '@/lib/learner/paths'
 import type { WalkOutcome } from '@/lib/learner/placement'
+import { getTrack } from '@/lib/tracks'
 
 type RustAnchor = WalkOutcome['result']['rustAnchor']
 
 const ANCHOR_LINE: Record<RustAnchor, string> = {
   solid: 'Rust reading: solid. The Rust Zero lessons are offered as test-outs instead of lessons.',
   missed: 'Rust reading: not yet. Rust Zero stays in your plan, braided in just before the lessons that need it.',
-  skipped: 'Rust reading: not asked. The Rust Zero lessons are offered as test-outs.',
+  // the learner answered "Not sure" to the Rust item (on these paths it is never left out): it was asked, and skipped
+  skipped: 'Rust reading: skipped. The Rust Zero lessons are offered as test-outs, and each one is still in the Curriculum to take as a lesson.',
 }
 
 const isRust = (lessonId: string): boolean => lessonId.split('.')[0] === 'r'
 const lessonsOf = (n: number): string => (n === 1 ? 'lesson' : 'lessons')
+const trackCode = (lessonId: string): string => getTrack(lessonId.split('.')[0])?.code ?? lessonId.split('.')[0].toUpperCase()
 
-/** The missed-anchor sentence, counted from the computed plan: how many Rust Zero lessons open it and how many follow. */
-function missedLine(lessons: readonly string[]): string {
+/** "a, b and c" */
+const andList = (parts: readonly string[]): string => (parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`)
+
+/** "1 comes ... it", "2 come ... them" */
+const counted = (n: number, one: string, many: string, rest: (pronoun: string) => string): string => `${n} ${n === 1 ? one : many} ${rest(n === 1 ? 'it' : 'them')}`
+
+/**
+ * The missed-anchor sentence, counted from the computed plan. The Rust Zero lessons that open the plan are counted
+ * first. On the full ramp each later one is placed by the braid's pairing (`plan.pairs`): before the first lesson in
+ * the plan that uses it, after it (the braid's cap can slide one forward), or with no lesson in the plan that uses it.
+ * rust-systems has no pairing: its later half follows the lessons named by track.
+ */
+function missedLine(plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] }): string {
+  const { lessons } = plan
   const total = lessons.filter(isRust).length
   const firstOther = lessons.findIndex((id) => !isRust(id))
-  const lead = firstOther === -1 ? lessons.length : firstOther
+  if (total === 0) return ANCHOR_LINE.missed
+  if (firstOther === -1) return `Rust reading: not yet. Your plan is the ${total === 1 ? 'one Rust Zero lesson' : `${total} Rust Zero lessons`}.`
   const head = 'Rust reading: not yet. Rust Zero stays in your plan'
-  if (total === 0 || lead === 0) return ANCHOR_LINE.missed
+  const lead = firstOther
   if (lead === total) return `${head}, and ${total === 1 ? 'its one lesson comes' : `all ${total} Rust Zero lessons come`} first.`
-  return `${head}: the first ${lead} Rust Zero ${lessonsOf(lead)} open it, and the other ${total - lead} follow later, before the lessons that need them.`
+  const clauses = lead > 0 ? [`the first ${lead} Rust Zero ${lessonsOf(lead)} open it`] : []
+  const later = lessons.slice(lead).filter(isRust)
+  const pairs = plan.pairs ?? []
+  if (pairs.length === 0) {
+    // rust-systems: the later Rust Zero lessons follow the tracks between them and the opening run
+    const at = lessons.indexOf(later[0])
+    const codes = [...new Set(lessons.slice(lead, at).map(trackCode))]
+    clauses.push(`the other ${later.length} come after the ${andList(codes)} lessons`)
+    return `${head}: ${andList(clauses)}.`
+  }
+  const pos = new Map(lessons.map((id, i) => [id, i]))
+  const user = new Map(pairs.map((p) => [p.r, p.t]))
+  let before = 0
+  let after = 0
+  let unused = 0
+  for (const r of later) {
+    const t = user.get(r) ?? null
+    const tAt = t === null ? undefined : pos.get(t)
+    if (tAt === undefined) unused++
+    else if ((pos.get(r) as number) < tAt) before++
+    else after++
+  }
+  if (lead === 0 && after === 0 && unused === 0) return ANCHOR_LINE.missed
+  if (before > 0) clauses.push(counted(before, 'comes', 'come', (p) => `before the first lesson that uses ${p}`))
+  if (after > 0) clauses.push(counted(after, 'comes', 'come', (p) => `after the first lesson that uses ${p}`))
+  if (unused > 0) clauses.push(counted(unused, 'is', 'are', (p) => `there though no lesson in this plan uses ${p}`))
+  return `${head}: ${andList(clauses)}.`
 }
 
 /** `serving-first` has no Rust Zero lessons or test-outs to promise: its Rust is the reading blocks inside T5 and T6 (serving-reading.md §5.5). */
@@ -32,9 +75,10 @@ const SERVING_ANCHOR_LINE: Record<RustAnchor, string> = {
 
 /**
  * The result's Rust line for the learner's path; the other two paths keep the test-out wording, and their missed line
- * counts the Rust Zero lessons in `plan` (the order the learner will walk), so it never promises a braid the plan does not have.
+ * counts the Rust Zero lessons in `plan` (the order the learner will walk, with the full ramp's braid pairing), so it
+ * never promises a braid the plan does not have.
  */
-export const anchorLine = (rustAnchor: RustAnchor, path: LearningPath, plan: { lessons: readonly string[] }): string => {
+export const anchorLine = (rustAnchor: RustAnchor, path: LearningPath, plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] }): string => {
   if (path === 'serving-first') return SERVING_ANCHOR_LINE[rustAnchor]
-  return rustAnchor === 'missed' ? missedLine(plan.lessons) : ANCHOR_LINE[rustAnchor]
+  return rustAnchor === 'missed' ? missedLine(plan) : ANCHOR_LINE[rustAnchor]
 }

@@ -12,6 +12,7 @@ import {
   MAX_PROBES,
   composeExtra,
   composeSession,
+  canKeepGoing,
   eligibleKcs,
   budgetLine,
   confusableGroups,
@@ -400,6 +401,24 @@ describe('"keep going" practises only on passed ideas (K0-A5)', () => {
     const eligible = eligibleKcs(KCS, {}, [BOOT_KCS[0]])
     expect(eligible.has(BOOT_KCS[0])).toBe(true)
     expect(eligible.has(BOOT_KCS[1])).toBe(false)
+  })
+
+  // Today offers "Keep going" only when canKeepGoing holds (K0-FIX-LEARNER-APP: the button's own rule, tested here)
+  test('after Boot alone there is no eligible KC, so Today offers no "Keep going"', () => {
+    const pool = composerContent().pool
+    expect(BOOT_KCS.some((kc) => pool.families(kc).length > 0)).toBe(true)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}), pool)).toBe(false)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, { [intro(BOOT_KCS[0])]: { status: 'read' } }), pool)).toBe(false)
+  })
+
+  test('a passed lesson or a solid placement KC brings the button back, but only for a carded KC with a generator', () => {
+    const pool = composerContent().pool
+    const served = BOOT_KCS.find((kc) => pool.families(kc).length > 0) as string
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, { [intro(served)]: { status: 'done' } }), pool)).toBe(true)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}, [served]), pool)).toBe(true)
+    // eligible but not carded, or carded and eligible with no generator family: nothing to serve
+    expect(canKeepGoing(set([]), eligibleKcs(KCS, {}, [served]), pool)).toBe(false)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}, [served]), { families: () => [] })).toBe(false)
   })
 })
 
