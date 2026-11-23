@@ -145,7 +145,7 @@ You should now be able to trace a request through a modern async server: NIC int
           miss: ['', 't2.epoll-for-files', 't2.uring-needs-no-async', 't2.uring-hardware-bound'],
         },
         {
-          q: 'A suspended tokio task costs about 1 KiB instead of ~1 MiB because…',
+          q: 'The echo server\'s suspended task costs about 1 KiB instead of ~1 MiB because…',
           options: [
             'Rust stacks start tiny and grow on demand, with an idle task keeping a few hundred bytes of OS stack committed',
             'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
