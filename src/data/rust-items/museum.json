@@ -87,10 +87,10 @@
     "source": "fn mirror(q: &mut Vec<u64>) {\n    let ids = q.iter().copied();\n    q.extend(ids);\n}",
     "line": 3,
     "message": "cannot borrow `*q` as mutable because it is also borrowed as immutable",
-    "why": "The lazy iterator `ids` still reads `q` and is handed to `extend` on line 3, so `q` lacks W when `extend` needs it.",
+    "why": "The lazy iterator `ids` still reads `*q`, the vector behind `q`, and is handed to `extend` on line 3, so `*q` lacks W when `extend` needs it.",
     "focus": {
       "line": 3,
-      "path": "q",
+      "path": "*q",
       "needs": [
         "read",
         "write"
@@ -102,7 +102,7 @@
       "line": 2,
       "text": "    let ids = q.to_vec();",
       "after": "compiles",
-      "why": "The vector owns its ids, so no borrow of `q` is alive when `extend` needs W."
+      "why": "The vector owns its ids, so no borrow of `*q` is alive when `extend` needs W."
     },
     "wrong": {
       "id": "clone-extend",

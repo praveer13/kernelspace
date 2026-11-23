@@ -75,7 +75,7 @@
       }
     },
     "mirror-queue-extend": {
-      "hash": "956634481673c9fb099285775d6697d334a35085267d23e152be25110d566c7e",
+      "hash": "6d1b866532dd499cbb1415fdfbc92fde8d82e5a752070da7ef627192914c44ed",
       "variants": {
         "base": {"result":"compiles"},
         "lazy-ids": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"},"fixes":{"to-vec":"compiles","lazy-take":{"code":"E0502","line":3},"clone-extend":"compiles"}},

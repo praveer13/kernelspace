@@ -53,18 +53,22 @@ beforeAll(async () => {
 /* 1. The compile family's legacy hash rows                            */
 /* ------------------------------------------------------------------ */
 
-/** The 15 rows of `tests/fixtures/items/hashes/compile.json` at the base (SR-D12: no `VERSION` bump, no legacy instance moves). */
+/**
+ * The 15 rows of `tests/fixtures/items/hashes/compile.json` at the base (SR-D12: no `VERSION` bump, no legacy instance moves).
+ * Moved once since, deliberately (K0-FIX2-RUST): borrows/mirror-queue-extend names `*q`, the place behind the reference,
+ * where the bank said `q`; that moves fix.borrow-rules, permission and verdict.borrow-rules.
+ */
 const LEGACY_ROWS: Readonly<Record<string, string>> = {
   'fix.analyzer-limits': '54bc4244',
-  'fix.borrow-rules': '9494a66d',
+  'fix.borrow-rules': '4d572c21',
   'fix.clone-copy-drop': 'a1ca616f',
   'fix.interior-mutability': '15cd3b78',
   'fix.lifetimes': 'd4f3f813',
   'fix.ownership-moves': '423cd16f',
   'fix.slices': 'c5a39e15',
-  permission: '80c550f7',
+  permission: 'c6c71d15',
   'verdict.analyzer-limits': '123242b8',
-  'verdict.borrow-rules': '528938db',
+  'verdict.borrow-rules': '43657c47',
   'verdict.clone-copy-drop': 'c9601749',
   'verdict.interior-mutability': 'f345b9be',
   'verdict.lifetimes': '42269387',
@@ -119,8 +123,8 @@ describe('I2: form blueprints', () => {
 /* 3. The Error Museum                                                 */
 /* ------------------------------------------------------------------ */
 
-/** sha256 of src/data/rust-items/museum.json at the base: 21 exhibits (SR-D8, I3). */
-const MUSEUM_SHA256 = '51fd84878455aa13b07a94fb95a1f8b5006687cefef0796468df6a1c477b77c6'
+/** sha256 of src/data/rust-items/museum.json: 21 exhibits (SR-D8, I3). Moved once (K0-FIX2-RUST): E0502 names `*q`. */
+const MUSEUM_SHA256 = 'f98afeb74f0283749df84db97f0d0cde90698f696c8583a170a7c4a19191e107'
 const MUSEUM_SEEDS = 60
 
 describe('I3: the Error Museum', () => {
