@@ -24,7 +24,7 @@ The new letter: **E — encode.** Multimodal models need a third worker class: t
 
 Disaggregation lives or dies on KV transfer (T5.L9's 26.8 ms budget line). Two artifacts turned that from a custom project into plumbing:
 
-**NIXL** (NVIDIA Inference Xfer Library; a C++ library with Rust bindings, not a Rust one): point-to-point KV-cache transfer over RDMA / InfiniBand / RoCE / UCX / NVLink / SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T2.L6's zero-copy lesson becomes at cluster scale.
+**NIXL** (NVIDIA Inference Xfer Library; a C++ library with Rust bindings, not a Rust one): point-to-point KV-cache transfer over RDMA / InfiniBand / RoCE / UCX / NVLink / SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T3.L2's zero-copy lesson becomes at cluster scale.
 
 **KVBM** (KV Block Manager): Dynamo's block manager — the lab-02 data structure, industrialized — handling **tiering**: GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote object store. Written in Rust (the T3.L6 decision, shipped). Your paged block manager manages one pool; KVBM managed a *hierarchy* of pools with placement, eviction, and migration between tiers. T2.L3's swap lesson, third incarnation.
 
@@ -138,7 +138,7 @@ No worker in this model both prefills and decodes, so the interference a colocat
           ],
           correct: [1],
           explanation:
-            'NIXL is the transport plumbing disaggregated stacks call: descriptor-based, GPU-direct where possible, backend-agnostic. T2.L6\'s zero-copy at cluster scale.',
+            'NIXL is the transport plumbing disaggregated stacks call: descriptor-based, GPU-direct where possible, backend-agnostic. T3.L2\'s zero-copy at cluster scale.',
           why: [
             'An engine runs the model and its scheduler. NIXL runs inside engines and moves KV between them; it schedules no batches and replaces no engine.',
             'Right: NIXL is the transfer layer. Workers hand it descriptor lists and it moves KV blocks point to point, with GPU-direct paths where the fabric allows.',

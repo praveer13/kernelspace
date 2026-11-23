@@ -170,7 +170,7 @@ To correct the number, take the flaw out and ask whether production's load queue
     {
       type: 'deepdive',
       title: 'A benchmarking report you can write today',
-      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and GuideLLM or AIPerf adds the rest. This document is a portfolio artifact (§6 of the plan).`,
+      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and GuideLLM or AIPerf adds the rest. This document is a portfolio artifact.`,
     },
   ],
   kcs: ['t7.goodput-curve', 't7.benchmark-hygiene'],

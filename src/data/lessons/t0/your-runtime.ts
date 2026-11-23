@@ -57,7 +57,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Every idea in this course lands twice as fast if it lands on familiar ground. So before T1 drops you into raw pointers, let's cash in your existing intuition. You have run the JVM or CPython in production for years. Both are **systems programs** — millions of lines of C and C++ that manage memory, schedule execution, and compile code behind your back. They are the perfect reference implementation of the concepts you are about to learn the manual way.
 
-This is the last lesson of T0, and it has a quiet agenda: after this, whenever the course says "allocator," "compaction," "safepoint," or "code cache," your brain should answer "ah — like the GC, like the JIT." That reflex is the whole point.`,
+This is the last lesson but one of T0, and it has a quiet agenda: after this, whenever the course says "allocator," "compaction," "safepoint," or "code cache," your brain should answer "ah — like the GC, like the JIT." That reflex is the whole point.`,
     },
     {
       type: 'prose',

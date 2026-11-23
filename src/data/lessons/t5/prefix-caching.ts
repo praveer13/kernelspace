@@ -255,7 +255,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
       type: 'callout',
       variant: 'warning',
       title: 'Cache keys are an isolation boundary',
-      md: `A cache hit changes latency. If mutually untrusted tenants share a namespace, an attacker may probe timing to infer whether another tenant recently used a prefix. Salt or partition cache keys by trust domain, avoid caching sensitive prefixes, and make eviction/accounting tenant-aware. Wave 6 returns to this as a full side-channel lesson; for now remember: a performance cache is also shared state, and shared state is observable.`,
+      md: `A cache hit changes latency. If mutually untrusted tenants share a namespace, an attacker may probe timing to infer whether another tenant recently used a prefix. Salt or partition cache keys by trust domain, avoid caching sensitive prefixes, and make eviction/accounting tenant-aware. T6.L10 treats this as a full section on the timing oracle; for now remember: a performance cache is also shared state, and shared state is observable.`,
     },
     {
       type: 'field-note',
