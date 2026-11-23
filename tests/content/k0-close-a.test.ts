@@ -8,6 +8,7 @@
  * - The Rust radix-tree sentences read their release from twin.sglang.treecore, the claim that holds the Rust default.
  * - The caption no longer counts vLLM's Rust front end as checked: no claim holds that release-notes line.
  * - Every erratum this wave adds (dated 2026-11-21 or later) carries an https source with a title.
+ * - K0-CLOSE2-A: the Kimi erratum's title and after say what t6.l3 now says, and name no figure or date the lesson does not.
  */
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -21,6 +22,7 @@ import type { Erratum } from '@/data/errata/schema'
 import table from '@/data/errata/2026-11-23-t5-l10-trtllm-pytorch-only'
 import itl from '@/data/errata/2026-11-22-t5-l3-itl-reading-speed'
 import blockExplorer from '@/data/errata/2026-11-22-t5-l5-block-explorer-40-token-prompt'
+import kimi from '@/data/errata/2026-11-22-t6-l3-kimi-benchmark-and-mooncake-date'
 
 type Block = { type: string; md?: string; questions?: { q: string; explanation?: string }[] }
 const blocks = (id: string): Block[] => (lessonById(id) as unknown as { blocks: Block[] }).blocks
@@ -158,5 +160,29 @@ describe('every erratum this wave adds has an https source with a title', () => 
     expect(blockExplorer.source?.url).toMatch(
       /^https:\/\/github\.com\/[^/]+\/kernelspace\/blob\/[0-9a-f]{40}\/labs\/kv-block-manager\/src\/manager\.rs#L33-L35$/,
     )
+  })
+})
+
+describe('the Kimi erratum says what t6.l3 now says', () => {
+  const lesson = blocks('t6.l3')
+    .map((b) => b.md ?? '')
+    .join('\n')
+  const MONTHS = /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/g
+  const figures = (text: string): string[] => [...(text.match(/\d[\d,.]*(?:k|%)?/g) ?? []), ...(text.match(MONTHS) ?? [])]
+  test('its title and after name no figure, month or date that the lesson does not', () => {
+    for (const text of [kimi.title, kimi.after]) {
+      const missing = figures(text).filter((f) => !lesson.includes(f))
+      expect(missing).toEqual([])
+    }
+  })
+  test('its after says the post is a Mooncake-team benchmark with SGLang, not production, as the lesson does', () => {
+    expect(kimi.title).toBe('The Kimi K2 numbers are a Mooncake-team benchmark, not Moonshot production')
+    expect(kimi.after).toContain('benchmark')
+    expect(kimi.after).toContain('with SGLang')
+    expect(kimi.after).toContain("not Moonshot's production")
+    expect(kimi.after).toContain('one fixed input and output length')
+    expect(lesson).toContain("is a *benchmark*, not Moonshot's production: one cluster, one fixed input and output length")
+    expect(lesson).toContain("The FAST'25 paper's own claim about production is a different one")
+    expect(kimi.after.length).toBeLessThanOrEqual(240)
   })
 })

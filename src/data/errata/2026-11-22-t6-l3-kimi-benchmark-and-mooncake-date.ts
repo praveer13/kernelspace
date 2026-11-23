@@ -5,10 +5,10 @@ export default {
   date: '2026-11-22',
   kind: 'error',
   lessons: ['t6.l3'],
-  title: 'The Kimi K2 numbers are a 16-node benchmark by the Mooncake team, not Moonshot production; Mooncake joined PyTorch in February 2026',
+  title: 'The Kimi K2 numbers are a Mooncake-team benchmark, not Moonshot production',
   before: "Kimi's production numbers at K2 scale: 128xH200, 224k tok/s prefill / 288k tok/s decode, with Mooncake's pool underneath. Mooncake entered the PyTorch ecosystem (Jan 2026).",
-  after: "A July 2025 Mooncake-team post benchmarked Kimi K2 on 128 H200 GPUs (4 prefill nodes, 12 decode nodes; 2,000 tokens in, 100 out): 224k and 288k tok/s. Mooncake's PyTorch announcement is dated 2026-02-12.",
-  why: 'A benchmark of a fixed 2,000-in, 100-out workload says what a tuned cluster can do on that workload, not what a production service sustains. 128 counts GPUs, which is 16 nodes.',
+  after: "Mooncake joined the PyTorch ecosystem. The Mooncake team's post on Kimi K2 with SGLang is a benchmark, not Moonshot's production: one cluster, one fixed input and output length. The FAST'25 paper's production claim is a different one.",
+  why: 'A benchmark at one fixed input and output length says what a tuned cluster does on that workload, not what a production service sustains. The lesson links the post and leaves its figures to it.',
   source: {
     url: 'https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/',
     title: 'Deploying Kimi K2 with PD Disaggregation and Large-Scale Expert Parallelism on 128 H200 GPUs (The Mooncake Team, July 20, 2025)',
