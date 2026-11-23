@@ -55,7 +55,7 @@ export default function ConstructedAnswer({ cr, text, ideas, revealed, onText, o
             <p className="break-words text-body-sm text-text-1">{cr.model}</p>
           </div>
           <fieldset className="min-w-0">
-            <legend className="mb-1.5 text-body-sm text-text-2">Tick each idea your answer covered. Two of three is a pass.</legend>
+            <legend className="mb-1.5 text-body-sm text-text-2">Tick each idea your answer covered. You mark your own answer: the site does not read it. Two of three is a pass.</legend>
             <div className="space-y-2">
               {cr.ideas.map((idea, i) => (
                 <label

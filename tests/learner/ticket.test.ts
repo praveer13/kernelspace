@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Verdict } from '../../src/components/learner/ExitTicket'
+import { ticketRule } from '../../src/lib/learner/ticket-rule'
 import TestOut from '../../src/components/learner/TestOut'
 import { KCS, kcById } from '../../src/data/kc'
 import type { Lesson, QuizBlockData } from '../../src/data/lessons/types'
@@ -753,5 +754,28 @@ describe('TestOut before the ledger has been read', () => {
     expect(html).toContain('Test out')
     expect(html).toContain('aria-disabled="true"')
     expect(html).toContain('role="status"')
+  })
+})
+
+/* ------------------------------ the written item is self-checked ------------------------------ */
+
+describe('the written item is self-checked on the page', () => {
+  test('a plan whose non-MCQ item is written says so in the rule line, and a numeric one does not', () => {
+    const written = mustPlan(planTicket(lessonOf('t0.l1', T0_L1, 5, 2), content(NO_POOL), [], 3))
+    expect(written.items[written.nonMcqIndex].source).toBe('cr')
+    expect(ticketRule(written)).toContain('check yourself')
+    expect(ticketRule(written)).toContain('including the written one')
+
+    const numeric = mustPlan(planTicket(lessonOf('t1.l4', T1_L4), content(genPool), [], 11))
+    const nm = numeric.items[numeric.nonMcqIndex]
+    expect(nm.source === 'gen' && nm.inst.answer.kind !== 'choice').toBe(true)
+    expect(ticketRule(numeric)).not.toContain('check yourself')
+    expect(ticketRule(numeric)).not.toContain('written')
+  })
+
+  test('the pass line marks a written item as self-checked, and a numeric one is unchanged', () => {
+    const written = mustPlan(planTicket(lessonOf('t0.l1', T0_L1, 5, 2), content(NO_POOL), [], 3))
+    const passed = renderToStaticMarkup(createElement(Verdict, { plan: written, verdict: judgeTicket(written, written.items.map(() => true)), continued: false, onNewNumbers: () => {}, onContinue: () => {}, onClose: () => {} }))
+    expect(passed).toContain('the written item included (self-checked).')
   })
 })
