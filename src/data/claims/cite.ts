@@ -10,6 +10,7 @@ import { claimNumber, formatClaimValue, getClaim } from './index'
 const REPO_NAMES: Record<string, string> = {
   'vllm-project/vllm': 'vLLM',
   'sgl-project/sglang': 'SGLang',
+  'ai-dynamo/dynamo': 'Dynamo',
 }
 
 /** A numeric claim's value, unscaled. Throws on an unknown id or a non-numeric claim. */

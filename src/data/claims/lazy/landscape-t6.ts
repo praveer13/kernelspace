@@ -24,6 +24,22 @@ export const LANDSCAPE_T6_CLAIMS: Claim[] = [
     pin: { repo: 'ai-dynamo/dynamo', ref: 'v1.5.0' },
   },
   {
+    id: 'status.dynamo.release',
+    kind: 'status',
+    value: 'v1.6.2',
+    label: 'The newest Dynamo release (the releases page marks it Latest)',
+    source: {
+      url: 'https://github.com/ai-dynamo/dynamo/releases/tag/v1.6.2',
+      title: 'NVIDIA Dynamo v1.6.2 release notes',
+      quote: 'Dynamo v1.6.2 is a patch release on top of v1.6.1',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary:
+      'github.com/ai-dynamo/dynamo/releases/latest showed v1.6.2 labelled Latest, released 05 Nov 22:11 (2026-11-05), on the read date. A newer release makes this stale; it says nothing about which release a deployment runs.',
+    pin: { repo: 'ai-dynamo/dynamo', ref: 'v1.6.2' },
+  },
+  {
     id: 'status.deepep.api',
     kind: 'status',
     value: 'one EPBuffer interface for high-throughput and low-latency EP; V1 removed',
