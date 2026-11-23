@@ -36,6 +36,16 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 64,
     cite: "64",
   },
+  "model.deepseek-v3.active-params": {
+    value: 37,
+    cite: "37 B params as of deepseek-ai/DeepSeek-V3 e815299, read 2026-10-05",
+    release: "deepseek-ai/DeepSeek-V3 e815299",
+  },
+  "model.deepseek-v3.total-params": {
+    value: 671,
+    cite: "671 B params as of deepseek-ai/DeepSeek-V3 e815299, read 2026-10-05",
+    release: "deepseek-ai/DeepSeek-V3 e815299",
+  },
   "model.kv.static-utilization-high": {
     value: 38.2,
     cite: "38.2",
@@ -227,5 +237,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   "twin.vllm.scheduler": {
     cite: "no prefill or decode phase as of vLLM v0.34.0, read 2026-11-21",
     release: "vLLM v0.34.0",
+  },
+  "zoo.deepseek-v3.layers": {
+    value: 61,
+    cite: "61 layers as of deepseek-ai/DeepSeek-V3 e815299, read 2026-10-05",
+    release: "deepseek-ai/DeepSeek-V3 e815299",
   },
 }

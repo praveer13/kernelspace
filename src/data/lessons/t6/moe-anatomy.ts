@@ -1,4 +1,13 @@
 import type { Lesson } from '../types'
+import { claimNumber } from '../claims'
+
+// DeepSeek-V3's sizes, read from the claims that hold them (model card and config.json at the same pin). The first 3 layers
+// are dense (first_k_dense_replace, which no claim holds), so the rest are MoE layers.
+const TOTAL_B = claimNumber('model.deepseek-v3.total-params')
+const ACTIVE_B = claimNumber('model.deepseek-v3.active-params')
+const LAYERS = claimNumber('zoo.deepseek-v3.layers')
+const DENSE_LAYERS = 3
+const MOE_LAYERS = LAYERS - DENSE_LAYERS
 
 const lesson: Lesson = {
   id: 't6.l1',
@@ -13,27 +22,27 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `Everything before this track assumed a dense model: every token touches every parameter, so every token costs the same weight-read (T4's roofline arithmetic). Mixture-of-Experts breaks that symmetry. The FFN layer — roughly two-thirds of a transformer's parameters — is replaced by **N parallel expert FFNs plus a tiny router network**. Each token, the router scores all N experts and sends the token to the top-k (DeepSeek-V3: N=256 routed experts + 1 shared, k=8). Total parameters: 671B. Parameters touched per token: ~37B.
+      md: `Everything before this track assumed a dense model: every token touches every parameter, so every token costs the same weight-read (T4's roofline arithmetic). Mixture-of-Experts breaks that symmetry. The FFN layer — roughly two-thirds of a transformer's parameters — is replaced by **N parallel expert FFNs plus a tiny router network**. Each token, the router scores all N experts and sends the token to the top-k (DeepSeek-V3: N=256 routed experts + 1 shared, k=8). Total parameters: ${TOTAL_B}B. Parameters touched per token: ~${ACTIVE_B}B.
 
-The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the whole model at batch 1 (671B ÷ 37B), and by about 28 for the expert path alone (9 of 257 experts per token, the shared one included). Larger batches touch more experts, so the saving shrinks as the batch grows. That is why most of the open frontier models of 2025 were MoEs (as of August 2025: DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants, gpt-oss); not all are, since some current releases are dense.`,
+The deal: dense-model quality at a fraction of the per-token weight bandwidth. T4's decode economics — tokens/s ≈ bandwidth ÷ bytes-per-token — suddenly divides by ~18 for the whole model at batch 1 (${TOTAL_B}B ÷ ${ACTIVE_B}B), and by about 28 for the expert path alone (9 of 257 experts per token, the shared one included). Larger batches touch more experts, so the saving shrinks as the batch grows. That is why most of the open frontier models of 2025 were MoEs (as of August 2025: DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants, gpt-oss); not all are, since some current releases are dense.`,
     },
     {
       type: 'prose',
       md: `## What the router costs you: the all-to-all
 
-Here is the systems bill, and it is paid in *network*, not FLOPs. With more experts than one GPU holds, each expert lives on a specific device. After the router decides, **every token must be physically moved to the GPUs hosting its k experts**, computed there, and moved back. Per layer, per batch: a **dispatch** all-to-all (tokens → expert devices) and a **combine** all-to-all (results → home devices). A 256-expert model at expert parallelism 144 (EP144, DeepSeek's decode config) runs this across 144 GPUs — twice per MoE layer. DeepSeek-V3 has 61 layers, but the first 3 are dense FFNs with no router, so that is 58 MoE layers and 2 × 58 = 116 all-to-alls per forward pass.
+Here is the systems bill, and it is paid in *network*, not FLOPs. With more experts than one GPU holds, each expert lives on a specific device. After the router decides, **every token must be physically moved to the GPUs hosting its k experts**, computed there, and moved back. Per layer, per batch: a **dispatch** all-to-all (tokens → expert devices) and a **combine** all-to-all (results → home devices). A 256-expert model at expert parallelism 144 (EP144, DeepSeek's decode config) runs this across 144 GPUs — twice per MoE layer. DeepSeek-V3 has ${LAYERS} layers, but the first ${DENSE_LAYERS} are dense FFNs with no router, so that is ${MOE_LAYERS} MoE layers and 2 × ${MOE_LAYERS} = ${2 * MOE_LAYERS} all-to-alls per forward pass.
 
 This is why MoE serving is a *scheduling and networking* discipline:
 - **Load balance is the whole game.** If 30% of tokens pick expert #7, expert #7's GPU is the straggler and 143 others wait at the combine barrier. Hot experts are the NCCL stall of T0.L6 writ large.
 - **The batch is the load balancer's only material.** More tokens per forward = more uniform expert utilization = better GPU occupancy. MoE *demands* big batches — the exact opposite of low-latency small-batch serving, and the tension T6.L2 resolves.
-- **Latency floor = one dispatch and one combine in each of the 58 MoE layers.** Together they are one network round trip per MoE layer, 116 crossings per forward pass. On NVLink each crossing is short; over RDMA, exposed on the critical path, they dominate, which is why wide-EP serving overlaps them with compute (T6.L2) and why they can still be fine there. Topology stops being trivia and starts being the price list.`,
+- **Latency floor = one dispatch and one combine in each of the ${MOE_LAYERS} MoE layers.** Together they are one network round trip per MoE layer, ${2 * MOE_LAYERS} crossings per forward pass. On NVLink each crossing is short; over RDMA, exposed on the critical path, they dominate, which is why wide-EP serving overlaps them with compute (T6.L2) and why they can still be fine there. Topology stops being trivia and starts being the price list.`,
     },
     {
       type: 'statline',
       stats: [
-        { value: '671B / 37B', label: 'DeepSeek-V3 params: total / per-token', hint: 'At batch 1, MoE reads ~18× fewer weight bytes per token for the whole model (671B ÷ 37B), about 28× for the expert path alone.' },
+        { value: `${TOTAL_B}B / ${ACTIVE_B}B`, label: 'DeepSeek-V3 params: total / per-token', hint: `At batch 1, MoE reads ~18× fewer weight bytes per token for the whole model (${TOTAL_B}B ÷ ${ACTIVE_B}B), about 28× for the expert path alone.` },
         { value: '256 + 1', label: 'routed experts + shared', hint: 'Top-8 of 256 chosen per token by the router; the shared expert always runs.' },
-        { value: '2 × 58', label: 'all-to-alls per forward', hint: 'Dispatch + combine, every MoE layer (58 of 61; the first 3 are dense). MoE inference is a network workload.' },
+        { value: `2 × ${MOE_LAYERS}`, label: 'all-to-alls per forward', hint: `Dispatch + combine, every MoE layer (${MOE_LAYERS} of ${LAYERS}; the first ${DENSE_LAYERS} are dense). MoE inference is a network workload.` },
         { value: 'EP144', label: 'DeepSeek decode EP width', hint: 'Experts spread across 144 GPUs in production decode (Feb 2025).' },
       ],
     },
