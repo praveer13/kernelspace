@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { installDom } from '../dom/mini-dom'
-import { isWidgetKeyTarget } from '../../src/lib/sims/host'
+import { isLessonKeyTarget, isWidgetKeyTarget } from '../../src/lib/sims/host'
 
 let dom: Awaited<ReturnType<typeof installDom>>
 beforeAll(async () => {
@@ -57,5 +57,26 @@ describe('isWidgetKeyTarget', () => {
 
   test('contenteditable="false" is not a field', () => {
     expect(isWidgetKeyTarget(el(['div', { contenteditable: 'false' }]))).toBe(false)
+  })
+})
+
+describe('isLessonKeyTarget', () => {
+  test('a focused code block or table that scrolls sideways keeps its arrows', () => {
+    expect(isLessonKeyTarget(el(['div', { role: 'region', tabindex: '0', 'aria-label': 'code, scrolls sideways' }]))).toBe(true)
+    expect(isLessonKeyTarget(el(['div', { role: 'region', tabindex: '0', 'aria-label': 'table, scrolls sideways' }, ['table']]))).toBe(true)
+  })
+  test('every control that owns its keys still does', () => {
+    expect(isLessonKeyTarget(el(['span', { role: 'slider' }]))).toBe(true)
+    expect(isLessonKeyTarget(el(['div', { 'data-queue': '' }, ['button']]))).toBe(true)
+  })
+  test('a region that is not a tab stop, a plain button, the body and null do not', () => {
+    expect(isLessonKeyTarget(el(['div', { role: 'region' }, ['button']]))).toBe(false)
+    expect(isLessonKeyTarget(el(['div', { role: 'region', tabindex: '-1' }]))).toBe(false)
+    expect(isLessonKeyTarget(el(['button']))).toBe(false)
+    expect(isLessonKeyTarget(dom.document.body)).toBe(false)
+    expect(isLessonKeyTarget(null)).toBe(false)
+  })
+  test('the lab transport is not affected: a sim view that scrolls is not a widget', () => {
+    expect(isWidgetKeyTarget(el(['div', { role: 'region', tabindex: '0', 'aria-label': 'heap view' }]))).toBe(false)
   })
 })
