@@ -14,6 +14,9 @@ describe('the block-table explorer names no copy size', () => {
   test('no "<n>-token copy" sentence: the copy size is what blk.cow asks the learner to predict', () => {
     expect(src.match(/\d+-token copy/)?.[0] ?? null).toBeNull()
   })
+  test('no "<n> of its <m> slots" count: the lab paragraph under the pool shows before any action, beside blk.cow', () => {
+    expect(src.match(/\d+ of its \d+ slots/)?.[0] ?? null).toBeNull()
+  })
   test('the diverge control and its sentence read the logical block from the model', () => {
     expect(src.match(/diverge B at L\d/)?.[0] ?? null).toBeNull()
     expect(src.match(/logical block \d/)?.[0] ?? null).toBeNull()

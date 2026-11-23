@@ -272,8 +272,10 @@ describe('the pool model', () => {
       const t = tailTokens(n, BLOCK_SIZE)
       expect(t).toBeGreaterThan(0)
       expect(t).toBeLessThanOrEqual(BLOCK_SIZE)
-      // the blocks before the last are full, and the last holds the rest
-      expect((Math.ceil(n / BLOCK_SIZE) - 1) * BLOCK_SIZE + t).toBe(n)
+      // counted token by token, apart from tailTokens: a block fills to BLOCK_SIZE before the next one opens
+      let last = 0
+      for (let k = 0; k < n; k++) last = last === BLOCK_SIZE ? 1 : last + 1
+      expect(t).toBe(last)
       // a full block is copied only when the prompt is a multiple of the block size
       expect(t === BLOCK_SIZE).toBe(n % BLOCK_SIZE === 0)
     }
@@ -338,6 +340,14 @@ const button = (root: MiniElement, text: string): MiniElement => {
 const poolText = (root: MiniElement): string => root.textContent
 
 describe('the explorer reports what each task asks about', () => {
+  test('before any action, no sentence on the page states the copy that blk.cow asks the learner to predict', async () => {
+    const { page } = await mountExplorer()
+    const text = page.container.textContent
+    expect(text).toContain('partly filled tail block')
+    expect(text.match(/\d+ of its \d+ slots/)?.[0] ?? null).toBeNull()
+    await page.unmount()
+  })
+
   test('fork beam from B: 7 of 10 blocks stay free, and the pool says refcount 3', async () => {
     const { page, seen } = await mountExplorer()
     expect(seen).toEqual([])
@@ -366,6 +376,8 @@ describe('the explorer reports what each task asks about', () => {
     expect(seen.map((o) => o.key)).toEqual(['blk.share-free', 'blk.cow-copied'])
     expect(seen[1]).toEqual({ key: 'blk.cow-copied', value: 8, unit: 'tokens' })
     expect(page.container.textContent).toContain('copy of P2')
+    // the control group's sentence keeps its space after the block number (JSX drops a newline after an expression)
+    expect(page.container.textContent).toContain(`logical block ${DIVERGE_AT} writes`)
     // the second write finds the block private: no second reading
     await dom.press(button(page.container, 'diverge B at L2'))
     expect(seen).toHaveLength(2)
