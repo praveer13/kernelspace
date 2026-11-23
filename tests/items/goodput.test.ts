@@ -154,6 +154,27 @@ describe('the truths', () => {
     }
   })
 
+  test('every knee row\'s tok/s is its concurrency over its mean TPOT, and the key is still the last row under the limit', () => {
+    // the table gives the p95 TPOT; the mean is that over the generator's fixed ratio (1.2), so one stream at 51 ms is about 23 tok/s, never 2,666
+    const ratio = 1.2
+    const many = genSeeds(1000)
+    for (const level of LEVELS) {
+      for (const seed of many) {
+        const i = goodput.make(seed, level, 'knee')
+        const [conc, tps, tpot] = [list(i, 'conc'), list(i, 'tps'), list(i, 'tpot')]
+        const limit = Number(i.params.limit)
+        conc.forEach((c, k) => {
+          const expected = (c * 1000) / (tpot[k] / ratio)
+          expect(Math.abs(tps[k] - expected) / expected).toBeLessThan(0.1)
+        })
+        const key = tpot.filter((x) => x < limit).length - 1
+        expect(tpot.every((x, k) => (x < limit) === (k <= key))).toBe(true)
+        if (i.answer.kind !== 'choice') throw new Error('knee is a choice')
+        expect(i.answer.correct).toEqual([`c${key}`])
+      }
+    }
+  })
+
   test('the frontier answer is the point with the most tok/s/GPU among those at or over the floor', () => {
     for (const i of all('frontier')) {
       const [tg, tu] = [list(i, 'tg'), list(i, 'tu')]
