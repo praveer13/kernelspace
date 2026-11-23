@@ -171,7 +171,7 @@ void toy_free(void *p) {
         a->size += sizeof(Block) + b->size;
         NEXT(a) = NEXT(b);
     }
-}}`,
+}`,
       highlightLines: [12, 37, 58, 64],
       chips: ['16 B header', 'first-fit', 'address-ordered', 'split + coalesce', '0 syscalls per alloc'],
     },
