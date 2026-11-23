@@ -71,6 +71,14 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 70,
     cite: "70",
   },
+  "status.dynamo.kvbm.removal-target": {
+    cite: "v1.7.0 as of Dynamo v1.5.0, read 2026-11-21",
+    release: "Dynamo v1.5.0",
+  },
+  "status.dynamo.release": {
+    cite: "v1.6.2 as of Dynamo v1.6.2, read 2026-11-22",
+    release: "Dynamo v1.6.2",
+  },
   "status.rust.polonius": {
     cite: "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
   },

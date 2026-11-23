@@ -1,11 +1,12 @@
 import type { Lesson } from '../types'
+import { claimCite, claimRelease } from '../claims'
 
 const lesson: Lesson = {
   id: 't6.l3',
   slug: 'epd-disaggregation',
   trackId: 't6',
   index: 3,
-  title: 'EPD Disaggregation: The 2026 Edition',
+  title: 'EPD Disaggregation',
   minutes: 30,
   hook: 'T5.L9 taught prefill/decode disaggregation as the big idea of 2024–25. In 2026 it is the default architecture, and it grew a third phase, a standard transfer library (NIXL: C++ with Rust bindings), and a Kubernetes operator. What changed, and what the E is.',
   exercise: 'read+quiz',
@@ -13,7 +14,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when this lesson was written, v1.5 now) packaged NIXL transfer and a tiered KV-block manager (KVBM, since deprecated; see below) as its disaggregation plumbing; and **llm-d** (Red Hat/Google/CoreWeave) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
+      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when this lesson was written; ${claimRelease('status.dynamo.release')} is the newest release we have read) packaged NIXL transfer and a tiered KV-block manager (KVBM, since deprecated; see below) as its disaggregation plumbing; and **llm-d** (Red Hat/Google/CoreWeave) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
 
 The new letter: **E — encode.** Multimodal models need a third worker class: the vision/audio encoder that turns pixels and waveforms into embeddings. Encode workers have their own physics (massively parallel vision transformers, zero KV), their own scaling curve, and no reason to share GPUs with prefill. EPD = encode, prefill, decode — three fleets, three hardware mixes, one transfer fabric.`,
     },
@@ -27,13 +28,13 @@ Disaggregation lives or dies on KV transfer (T5.L9's 26.8 ms budget line). Two a
 
 **KVBM** (KV Block Manager): Dynamo's block manager — the lab-02 data structure, industrialized — handling **tiering**: GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote object store. Written in Rust (the T3.L6 decision, shipped). Your paged block manager manages one pool; KVBM managed a *hierarchy* of pools with placement, eviction, and migration between tiers. T2.L3's swap lesson, third incarnation.
 
-**Status change: KVBM is deprecated.** Dynamo v1.5.0 (2026-09-21) deprecated it, with removal targeted for v1.6.0; the migration path is to use the engine's native KV offloading for host and disk tiering. llm-d made the same move (v0.10 deprecated its fs-connector for vLLM's in-tree \`OffloadingConnector\`). The durable lesson is the one KVBM taught: **tiering is a feature of whoever owns the cache**, while transport (NIXL, Mooncake's transfer engine) and routing (the endpoint picker) stay separate layers. Reading a deprecation notice as an architecture signal is a skill worth keeping.`,
+**Status change: KVBM is deprecated.** Dynamo v1.5.0 (2026-09-21) deprecated it, with removal targeted for ${claimCite('status.dynamo.kvbm.removal-target')}; a deprecation is a plan, not a removal. The migration path is to use the engine's native KV offloading for host and disk tiering. llm-d made the same move (v0.10 deprecated its fs-connector for vLLM's in-tree \`OffloadingConnector\`). The durable lesson is the one KVBM taught: **tiering is a feature of whoever owns the cache**, while transport (NIXL, Mooncake's transfer engine) and routing (the endpoint picker) stay separate layers. Reading a deprecation notice as an architecture signal is a skill worth keeping.`,
     },
     {
       type: 'prose',
       md: `## Mooncake grows up, llm-d packages it
 
-Mooncake (T5.L9's KV-cache-as-distributed-store) won FAST'25 best paper and entered the PyTorch ecosystem (Jan 2026) — its transfer engine and store are now infrastructure others build on, including SGLang's EPD mode and vLLM's KV connectors. Kimi's production numbers at K2 scale: 128×H200, 224k tok/s prefill / 288k tok/s decode, with Mooncake's KVCache-centric pool underneath (75% more requests served under SLO vs colocated in their original study).
+Mooncake (T5.L9's KV-cache-as-distributed-store) won a FAST'25 best-paper award and joined the PyTorch ecosystem (announced on the PyTorch blog in February 2026) — its transfer engine and store are now infrastructure others build on, including SGLang's EPD mode and vLLM's KV connectors. The Mooncake team's July 2025 post on serving Kimi K2 with SGLang is a *benchmark*, not Moonshot's production: 128 H200 GPUs as 16 nodes (4 prefill, 12 decode), 2,000 tokens in and 100 out, measured at 224k tokens/sec prefill and 288k tokens/sec decode. The numbers are that post's, not a general rate. The FAST'25 paper's own claim about production is a different one: Kimi handling 115% and 107% more requests on A800 and H800 clusters than previous systems.
 
 **llm-d** is the packaging answer for teams that don't want to assemble this: Kubernetes-native disaggregated serving — prefill/decode worker pools, KV-aware routing, Mooncake-style cache tiers, autoscalers that understand TTFT. If Dynamo is NVIDIA's fabric, llm-d is the cloud-native distribution. For your career: the job posts say "Kubernetes + disaggregated inference" and mean this stack.`,
     },
@@ -189,7 +190,7 @@ No worker in this model both prefills and decodes, so the interference a colocat
     {
       type: 'deepdive',
       title: 'When to still say no',
-      md: `The 2025-26 evidence didn't repeal T5.L9's rule — it sharpened it. Disaggregation wins when: contexts are long (KV transfer amortizes), prefill/decode ratios are skewed, and the fleet is big enough to bin-pack phases (DeepSeek's 200+ nodes, Kimi's 128). It loses when: deployment is small, contexts are short, or traffic is uniform. The honest decision procedure: compute the KV-transfer budget per request (T5.L9's 26.8 ms for 70B 4k over 50 GB/s), compare to the ITL isolation win, and remember that an idle prefill GPU is still a cost. Every "always disaggregate" claim is marketing; every "never disaggregate" claim is a small fleet talking.`,
+      md: `The 2025-26 evidence didn't repeal T5.L9's rule — it sharpened it. Disaggregation wins when: contexts are long (KV transfer amortizes), prefill/decode ratios are skewed, and the fleet is big enough to bin-pack phases (DeepSeek's 200+ nodes, the Kimi K2 benchmark's 16 nodes of 8 GPUs). It loses when: deployment is small, contexts are short, or traffic is uniform. The honest decision procedure: compute the KV-transfer budget per request (T5.L9's 26.8 ms for 70B 4k over 50 GB/s), compare to the ITL isolation win, and remember that an idle prefill GPU is still a cost. Every "always disaggregate" claim is marketing; every "never disaggregate" claim is a small fleet talking.`,
     },
   ],
   kcs: ['t6.epd-phases', 't6.kv-tiering'],
