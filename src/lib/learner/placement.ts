@@ -384,6 +384,8 @@ export interface WalkOutcome {
   pattern: BlindPattern | null
   /** Each misconception once, in the order the walk met it, with the sentence the lure carries. */
   slips: { id: string; message: string }[]
+  /** The walk showed the Rust anchor item (answered, or "Not sure"); false when serving-first left it out. Not stored. */
+  anchorShown: boolean
 }
 
 /**
@@ -421,7 +423,20 @@ export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now
     },
     pattern,
     slips: [...slips].map(([id, message]) => ({ id, message })),
+    anchorShown: anchorAnswers.length > 0,
   }
+}
+
+/**
+ * The note at the top of the Curriculum's Rust Zero layer, from the placement's Rust anchor, or null when the layer
+ * has no test-outs to offer (`testOut`: the plan offers R as test-outs, which a solid or a skipped anchor both give).
+ * Only a solid anchor says placement found the learner's Rust solid. It lives here, not in anchor-line.ts, so the
+ * Curriculum route reads it from a module it already loads.
+ */
+export function rLayerNote(rustAnchor: PlacementResult['rustAnchor'] | null | undefined, testOut: boolean): string | null {
+  if (!testOut) return null
+  if (rustAnchor === 'solid') return 'placement found your Rust reading solid: open any lesson here and test out of it.'
+  return 'placement has no Rust reading for you: each lesson here offers a test-out, or take it as a lesson.'
 }
 
 /* ------------------------------------------------------------------ */

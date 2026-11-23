@@ -215,8 +215,20 @@ describe('solid and missed', () => {
     expect(w.outcome.result.solidKcs).toEqual([])
     expect(w.outcome.result.entryTrack).toBe('t0')
     expect(w.outcome.result.rustAnchor).toBe('skipped')
+    expect(w.outcome.anchorShown).toBe(true)
     expect(w.outcome.pattern).toBeNull()
     expect(w.state.asked).toBe(PROBES.length)
+  })
+
+  test('serving-first: "Not sure" on the shown Rust item reads skipped and shown, apart from the item left out', () => {
+    const shown = drive(real, (v, step) => (step.kc === RUST_ANCHOR_KC ? 'skip' : expert(v, step)), 3, 'serving-first')
+    expect(shown.outcome.result.rustAnchor).toBe('skipped')
+    expect(shown.outcome.anchorShown).toBe(true)
+    const left = drive(real, expert, 3, 'serving-first', { skipAnchor: true })
+    expect(left.outcome.result.rustAnchor).toBe('skipped')
+    expect(left.outcome.anchorShown).toBe(false)
+    // answered: shown
+    expect(drive(real, expert, 3, 'serving-first').outcome.anchorShown).toBe(true)
   })
 
   test('an expert who skips only the Rust anchor item is placed at T5 with R as test-outs, not sent to R.L1', () => {

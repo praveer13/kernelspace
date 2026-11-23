@@ -1,5 +1,6 @@
+import { KCS } from '@/data/kc'
 import type { LearningPath } from '@/lib/ledger/types'
-import type { BraidPair } from '@/lib/learner/paths'
+import { kcsIntroducedBy, kcsOfLesson, type BraidPair } from '@/lib/learner/paths'
 import type { WalkOutcome } from '@/lib/learner/placement'
 import { getTrack } from '@/lib/tracks'
 
@@ -23,10 +24,19 @@ const andList = (parts: readonly string[]): string => (parts.length < 2 ? parts.
 const counted = (n: number, one: string, many: string, rest: (pronoun: string) => string): string => `${n} ${n === 1 ? one : many} ${rest(n === 1 ? 'it' : 'them')}`
 
 /**
+ * Lesson `l` uses Rust Zero lesson `r` when a KC taught in `l` is one `r` introduces or requires one (the braid's own
+ * rule, paths.ts needEdge), whether `l` is a T lesson or a later Rust Zero lesson.
+ */
+const uses = (r: string, l: string): boolean => {
+  const introduced = new Set(kcsIntroducedBy(KCS, r).map((k) => k.id))
+  return kcsOfLesson(KCS, l).some((k) => introduced.has(k.id) || k.requires.some((id) => introduced.has(id)))
+}
+
+/**
  * The missed-anchor sentence, counted from the computed plan. The Rust Zero lessons that open the plan are counted
- * first. On the full ramp each later one is placed by the braid's pairing (`plan.pairs`): before the first lesson in
- * the plan that uses it, after it (the braid's cap can slide one forward), or with no lesson in the plan that uses it.
- * rust-systems has no pairing: its later half follows the lessons named by track.
+ * first. On the full ramp each later one is placed against the first lesson in the plan, R or T, that uses it: before
+ * it, after it (the braid's cap can slide one forward past its first T user), or with no lesson in the plan that uses
+ * it. rust-systems has no pairing: its later half follows the lessons named by track.
  */
 function missedLine(plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] }): string {
   const { lessons } = plan
@@ -47,16 +57,14 @@ function missedLine(plan: { lessons: readonly string[]; pairs?: readonly BraidPa
     clauses.push(`the other ${later.length} come after the ${andList(codes)} lessons`)
     return `${head}: ${andList(clauses)}.`
   }
-  const pos = new Map(lessons.map((id, i) => [id, i]))
-  const user = new Map(pairs.map((p) => [p.r, p.t]))
   let before = 0
   let after = 0
   let unused = 0
   for (const r of later) {
-    const t = user.get(r) ?? null
-    const tAt = t === null ? undefined : pos.get(t)
-    if (tAt === undefined) unused++
-    else if ((pos.get(r) as number) < tAt) before++
+    const at = lessons.indexOf(r)
+    const firstUser = lessons.findIndex((l, i) => i !== at && uses(r, l))
+    if (firstUser === -1) unused++
+    else if (at < firstUser) before++
     else after++
   }
   if (lead === 0 && after === 0 && unused === 0) return ANCHOR_LINE.missed
@@ -73,12 +81,21 @@ const SERVING_ANCHOR_LINE: Record<RustAnchor, string> = {
   skipped: 'Rust reading: not asked. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.',
 }
 
+/** serving-first, the Rust item shown and every answer to it "Not sure": it was asked, so the line does not say "not asked" (the spec's row covers the item left out). */
+const SERVING_SKIPPED_SHOWN = 'Rust reading: skipped. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.'
+
 /**
  * The result's Rust line for the learner's path; the other two paths keep the test-out wording, and their missed line
  * counts the Rust Zero lessons in `plan` (the order the learner will walk, with the full ramp's braid pairing), so it
  * never promises a braid the plan does not have.
  */
-export const anchorLine = (rustAnchor: RustAnchor, path: LearningPath, plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] }): string => {
-  if (path === 'serving-first') return SERVING_ANCHOR_LINE[rustAnchor]
+export const anchorLine = (
+  rustAnchor: RustAnchor,
+  path: LearningPath,
+  plan: { lessons: readonly string[]; pairs?: readonly BraidPair[] },
+  /** The walk showed the Rust item (`WalkOutcome.anchorShown`); only serving-first can leave it out. */
+  anchorShown = path !== 'serving-first',
+): string => {
+  if (path === 'serving-first') return rustAnchor === 'skipped' && anchorShown ? SERVING_SKIPPED_SHOWN : SERVING_ANCHOR_LINE[rustAnchor]
   return rustAnchor === 'missed' ? missedLine(plan) : ANCHOR_LINE[rustAnchor]
 }

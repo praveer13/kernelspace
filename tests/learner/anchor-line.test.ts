@@ -5,11 +5,14 @@
  * "not asked", and a missed anchor's line counts where each Rust Zero lesson sits in the plan (K0-FIX-LEARNER-APP).
  */
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { anchorLine } from '../../src/components/learner/anchor-line'
 import { KCS } from '../../src/data/kc'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { pathPlan } from '../../src/lib/learner/paths'
+import { rLayerNote } from '../../src/lib/learner/placement'
 import type { LearningPath } from '../../src/lib/ledger/types'
 
 const ANCHORS = ['solid', 'missed', 'skipped'] as const
@@ -17,6 +20,12 @@ const OTHER: LearningPath[] = ['full-ramp', 'rust-systems']
 const GRAPH = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS }
 const PLAN = { lessons: [] as string[] }
 const ANCHOR_MISSED = 'Rust reading: not yet. Rust Zero stays in your plan, braided in just before the lessons that need it.'
+const SOLID_NOTE = 'placement found your Rust reading solid: open any lesson here and test out of it.'
+/** Lesson `l` uses Rust Zero lesson `r`: a KC taught in `l` is one `r` introduces, or requires one. Over every lesson, R or T. */
+const usesR = (r: string, l: string): boolean => {
+  const introduced = new Set(KCS.filter((k) => k.lessons[0] === r).map((k) => k.id))
+  return KCS.filter((k) => k.lessons.includes(l)).some((k) => introduced.has(k.id) || k.requires.some((id) => introduced.has(id)))
+}
 const planFor = (path: LearningPath, entryTrack: 't0' | 't1' | 't2' | 't3' | 't4' | 't5', rustAnchor: (typeof ANCHORS)[number]) => pathPlan(path, GRAPH, { entryTrack, rustAnchor, missedKcs: [] })
 
 describe('anchorLine', () => {
@@ -26,6 +35,15 @@ describe('anchorLine', () => {
       'Rust reading: not yet. That is fine on this path: short reading items inside T5 and T6 cover the Rust those lessons use, and Rust Zero stays open in the Curriculum.',
     )
     expect(anchorLine('skipped', 'serving-first', PLAN)).toBe('Rust reading: not asked. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.')
+    expect(anchorLine('skipped', 'serving-first', PLAN, false)).toBe('Rust reading: not asked. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.')
+  })
+
+  test('serving-first: a learner shown the Rust item who answered "Not sure" reads "skipped", never "not asked"', () => {
+    const line = anchorLine('skipped', 'serving-first', PLAN, true)
+    expect(line).toBe('Rust reading: skipped. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6.')
+    expect(line).not.toMatch(/not asked/)
+    // shown or not, solid and missed keep the spec strings
+    for (const a of ['solid', 'missed'] as const) expect(anchorLine(a, 'serving-first', PLAN, true)).toBe(anchorLine(a, 'serving-first', PLAN, false))
   })
 
   test('serving-first never promises R lessons in the plan or test-outs', () => {
@@ -64,22 +82,25 @@ describe('anchorLine', () => {
     const half = planFor('rust-systems', 't1', 'missed')
     expect(half.lessons.slice(0, 6)).toEqual(['r.l1', 'r.l2', 'r.l3', 'r.l4', 'r.l5', 't1.l1'])
     expect(anchorLine('missed', 'rust-systems', half)).toBe('Rust reading: not yet. Rust Zero stays in your plan: the first 5 Rust Zero lessons open it and the other 5 come after the T1 lessons.')
-    // full ramp with entry T5: two Rust Zero lessons open the plan; of the others, r.l7 comes before t5.l5, r.l5 and r.l6
-    // come after t5.l2 (the braid's cap slid them forward), and nothing in a T5-T7 plan uses r.l3, r.l4, r.l8, r.l9 or r.l10
+    // full ramp with entry T5: two Rust Zero lessons open the plan; of the others, r.l5 and r.l6 come after t5.l2 (the
+    // braid's cap slid them forward), r.l3, r.l4, r.l7 and r.l8 come before their first user (r.l3 is used by r.l4, r.l8 by
+    // r.l10: later Rust Zero lessons count), and only r.l9 and r.l10 have no lesson in the plan that uses them
     const ramp = planFor('full-ramp', 't5', 'missed')
     expect(ramp.lessons.slice(0, 3)).toEqual(['r.l1', 'r.l2', 't5.l1'])
     const at = (id: string) => ramp.lessons.indexOf(id)
-    const userOf = (r: string) => ramp.pairs.find((p) => p.r === r)?.t ?? null
-    expect(at('r.l7')).toBeLessThan(at(userOf('r.l7') as string))
-    for (const r of ['r.l5', 'r.l6']) expect(at(r)).toBeGreaterThan(at(userOf(r) as string))
-    for (const r of ['r.l3', 'r.l4', 'r.l8', 'r.l9', 'r.l10']) expect(userOf(r)).toBeNull()
+    const firstUser = (r: string) => ramp.lessons.find((l) => l !== r && usesR(r, l)) ?? null
+    for (const r of ['r.l5', 'r.l6']) expect(at(r)).toBeGreaterThan(at(firstUser(r) as string))
+    for (const r of ['r.l3', 'r.l4', 'r.l7', 'r.l8']) expect(at(r)).toBeLessThan(at(firstUser(r) as string))
+    expect(usesR('r.l3', 'r.l4')).toBe(true)
+    expect(usesR('r.l8', 'r.l10')).toBe(true)
+    for (const r of ['r.l9', 'r.l10']) expect(firstUser(r)).toBeNull()
     expect(anchorLine('missed', 'full-ramp', ramp)).toBe(
-      'Rust reading: not yet. Rust Zero stays in your plan: the first 2 Rust Zero lessons open it, 1 comes before the first lesson that uses it, 2 come after the first lesson that uses them and 5 are there though no lesson in this plan uses them.',
+      'Rust reading: not yet. Rust Zero stays in your plan: the first 2 Rust Zero lessons open it, 4 come before the first lesson that uses them, 2 come after the first lesson that uses them and 2 are there though no lesson in this plan uses them.',
     )
-    // full ramp with entry T4: none opens the plan, and six have no lesson in it that uses them, so the line is not the braid sentence
+    // full ramp with entry T4: none opens the plan; r.l9 and r.l10 are the two no lesson in it uses
     const t4 = planFor('full-ramp', 't4', 'missed')
     expect(anchorLine('missed', 'full-ramp', t4)).toBe(
-      'Rust reading: not yet. Rust Zero stays in your plan: 4 come before the first lesson that uses them and 6 are there though no lesson in this plan uses them.',
+      'Rust reading: not yet. Rust Zero stays in your plan: 8 come before the first lesson that uses them and 2 are there though no lesson in this plan uses them.',
     )
     // full ramp with entry T0: the braid opens with T0.L1, so the original sentence is true
     expect(anchorLine('missed', 'full-ramp', planFor('full-ramp', 't0', 'missed'))).toBe(ANCHOR_MISSED)
@@ -94,10 +115,8 @@ describe('anchorLine', () => {
       const r = plan.lessons.filter((id) => id.startsWith('r.'))
       const lead = plan.lessons.findIndex((id) => !id.startsWith('r.'))
       const later = r.filter((id) => at(id) >= lead)
-      const userAt = (id: string) => {
-        const t = plan.pairs.find((p) => p.r === id)?.t
-        return t ? at(t) : -1
-      }
+      // the first user over every lesson of the plan, R or T, not only the braid's first T user (plan.pairs)
+      const userAt = (id: string) => plan.lessons.findIndex((l) => l !== id && usesR(id, l))
       const before = later.filter((id) => userAt(id) > at(id)).length
       const after = later.filter((id) => userAt(id) >= 0 && userAt(id) < at(id)).length
       const unused = later.filter((id) => userAt(id) < 0).length
@@ -118,6 +137,26 @@ describe('anchorLine', () => {
 
   test('a missed line never says "braided" when Rust Zero lessons open the plan', () => {
     for (const p of OTHER) expect(anchorLine('missed', p, planFor(p, 't5', 'missed'))).not.toMatch(/braided/)
+  })
+
+  test('the Curriculum says placement found Rust solid only for a solid anchor, never for a skipped one', () => {
+    expect(rLayerNote('solid', true)).toBe(SOLID_NOTE)
+    expect(rLayerNote('skipped', true)).toBe('placement has no Rust reading for you: each lesson here offers a test-out, or take it as a lesson.')
+    for (const p of OTHER) {
+      for (const a of ANCHORS) {
+        for (const e of ['t0', 't3', 't5'] as const) {
+          const note = rLayerNote(a, planFor(p, e, a).testOut.length > 0)
+          if (a === 'solid') expect(note).toBe(SOLID_NOTE)
+          else if (a === 'skipped') expect(note).not.toMatch(/solid/)
+          else expect(note).toBeNull()
+        }
+      }
+    }
+    expect(rLayerNote(null, false)).toBeNull()
+    // the Curriculum's Rust Zero layer reads its note from the anchor, not from plan.testOut alone
+    const page = readFileSync(join(import.meta.dir, '../../src/pages/Curriculum.tsx'), 'utf8')
+    expect(page).toContain('rNote={rLayerNote(placement?.rustAnchor, plan.testOut.length > 0)}')
+    expect(page).not.toContain('placement found your Rust reading solid')
   })
 
   test('no line names a persona', () => {

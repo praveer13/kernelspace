@@ -6,7 +6,7 @@
  * answered), plays the items one at a time in the item player, and on the last answer writes
  * `completePlacement` once. Nothing is written before that: leaving earlier saves nothing.
  *
- * Nothing locks (W8). **Not sure** skips an item as a miss, the Rust questions can be skipped on
+ * Nothing locks (W8). **Not sure** skips an item as a miss (on the Rust item it reads as skipped, not missed), the Rust questions can be skipped on
  * `serving-first` (where R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons), and the result says in words where the learner
  * starts and why, never a score. The Rust items' Java analogue lives in each item's explanation, which the
  * player shows after the answer and not before.
@@ -294,7 +294,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
         </div>
       </div>
 
-      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path, plan)}</p>
+      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path, plan, outcome.anchorShown)}</p>
 
       {slips.length > 0 && (
         <div>
