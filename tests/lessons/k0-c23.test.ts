@@ -25,8 +25,9 @@ function continuousRows() {
 }
 
 function staticSub() {
-  const parts = NAMES.slice(0, 3).map((n, i) => (i === 0 ? `${n} idle from step ${LENGTHS[i]}` : `${n} from ${LENGTHS[i]}`))
-  return parts.join(', ')
+  // A request that finishes at step n leaves its slot idle after step n (A's slot is idle from step 9).
+  const parts = NAMES.slice(0, 3).map((n, i) => (i === 0 ? `${n} after ${LENGTHS[i]}` : `${n} ${LENGTHS[i]}`))
+  return `idle: ${parts.join(', ')}`
 }
 
 const lesson = lessonById('t5.l7')!

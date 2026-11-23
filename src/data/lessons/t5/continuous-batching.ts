@@ -3,7 +3,7 @@ import { claimNumber, claimRelease } from '../claims'
 
 const GAIN_LOW = claimNumber('serving.pagedattention.throughput-gain-low')
 const GAIN_HIGH = claimNumber('serving.pagedattention.throughput-gain-high')
-const VLLM_RELEASE = claimRelease('production.vllm.block-size')
+const VLLM_RELEASE = claimRelease('twin.vllm.scheduler')
 
 const lesson: Lesson = {
   id: 't5.l7',
@@ -93,7 +93,7 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
       caption: 'fig 1 — static vs continuous: the same 4 requests on one GPU',
       height: 56,
       nodes: [
-        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: [A B C D] run until LONGEST (D, 40 steps)', sub: 'A idle from step 8, B from 12, C from 20', color: '#FF5C6C' },
+        { id: 's1', x: 2, y: 4, w: 44, h: 7, label: 'static: [A B C D] run until LONGEST (D, 40 steps)', sub: 'idle: A after 8, B 12, C 20', color: '#FF5C6C' },
         { id: 's2', x: 2, y: 14, w: 44, h: 7, label: '…then batch 2: [E F G H]', sub: 'queue waits a full 40-step batch' },
         { id: 'c1', x: 54, y: 4, w: 10, h: 7, label: 'it 1–8', sub: 'A B C D', color: '#3EF2A4' },
         { id: 'c2', x: 54, y: 14, w: 10, h: 7, label: 'it 9', sub: 'B C D + E', color: '#3EF2A4' },
