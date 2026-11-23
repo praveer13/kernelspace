@@ -112,26 +112,58 @@ interface StepListProps {
 }
 
 /**
- * Two conventions reach a step: the text leads up to the value and `result` is the chip (cost, prefill, memory,
- * rollout), or the text already ends with the value, or with "=" or ":" where a blanked step hid it, and `result`
- * repeats it (roofline, step, tiling, step-calibrated). The list draws the value once either way.
+ * Text that states the value next: it ends in "=", ":" or "by" ("the bytes shrink by"). A value after an operator
+ * ("12,200 tokens − 6,100 tokens") is an operand, even when it happens to equal the result.
  */
+const STATES = /(?:[=:]|\bby)\s*$/
+
+/**
+ * The step's text without the result it states at its end, or undefined when it states none. Two conventions reach a
+ * step: the text leads up to the value and `result` is the chip (cost, prefill, memory, rollout), or the text states
+ * the value itself after "=", ":" or "by" (a value or claim part, or the words "13,160 B") and `result` repeats it
+ * (roofline, step, tiling, step-calibrated, frag). Which one a step uses is read from the words before its last
+ * value, never from the value alone: an operand that equals the result is still an operand.
+ */
+function statedResult(s: SolutionStep, shown: string): PromptPart[] | undefined {
+  const r = s.result
+  const last = s.text[s.text.length - 1]
+  const before = s.text[s.text.length - 2]
+  if (!r || !last) return undefined
+  if (last.t === 'text') {
+    const head = last.text.slice(0, last.text.length - shown.length)
+    return last.text.endsWith(shown) && STATES.test(head) ? [...s.text.slice(0, -1), { t: 'text', text: head }] : undefined
+  }
+  const same = last.t === 'value' ? last.value === r.value : last.t === 'claim' && partText(last) === shown
+  return same && before?.t === 'text' && STATES.test(before.text) ? s.text.slice(0, -1) : undefined
+}
+
+/** One step: its text, then its result once (a chip, or the value the text already states), or "?" for a blank. */
 function StepBody({ s, gap }: { s: SolutionStep; gap: boolean }) {
   const r = s.result
   if (!r) return <Parts parts={s.text} />
   const last = s.text[s.text.length - 1]
   const shown = `${formatNumber(r.value)}${r.unit ? ` ${r.unit}` : ''}`
-  const inText = last?.t === 'value' ? last.value === r.value : last?.t === 'claim' && partText(last) === shown
+  const head = statedResult(s, shown)
+  const inText = head !== undefined
   // a blank step still shows its answer in the text only if a family forgot to cut it: cut it here
-  const text = gap && inText ? s.text.slice(0, -1) : s.text
+  const text = gap && head ? head : s.text
   const tail = text[text.length - 1]
-  const lead = tail?.t === 'text' && /[=:]\s*$/.test(tail.text)
+  const lead = tail?.t === 'text' && STATES.test(tail.text)
   const hole = (
     <span className="inline-block min-w-12 rounded border border-dashed border-line-bright px-1.5 text-center font-mono text-text-3">
       ?<span className="sr-only"> blank step: your answer goes in the answer field</span>
     </span>
   )
-  if (!gap && inText) return <Parts parts={text} />
+  if (!gap && inText) {
+    // the text's value carries no unit where the result names one ("= 172.7" for a batch): the unit still shows
+    const unit = last?.t === 'value' && !last.unit && r.unit ? ` ${r.unit}` : ''
+    return (
+      <>
+        <Parts parts={text} />
+        {unit}
+      </>
+    )
+  }
   return (
     <>
       <Parts parts={text} />
