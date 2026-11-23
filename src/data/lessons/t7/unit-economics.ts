@@ -28,9 +28,22 @@ const grossMargin = (1 - day6.cost / day6.revenue) * 100
 const flagshipPeak = claimNumber('price.deepseek.v4-pro-output-peak')
 const flagshipOffPeak = claimNumber('price.deepseek.v4-pro-output-offpeak')
 const medianNow = claimNumber('price.h100.median-2026-11')
-/** SGLang's per-decode-node output rate (their blog) and the node-day cost of eight GPUs at a given GPU-hour price, per million output tokens. */
-const sglangTokPerNodeDay = 22.3e3 * 86_400
-const perMtok = (gpuHour: number) => ((gpuHour * 8 * 24) / sglangTokPerNodeDay) * 1e6
+/** SGLang's DeepSeek reproduction (their blog, May 2025): output rate per decode node, GPUs per node and their own $/Mtok estimate. */
+const sglang = {
+  tps: claimNumber('serving.sglang-deepseek.output-tps-per-node'),
+  gpus: claimNumber('serving.sglang-deepseek.gpus-per-node'),
+  blogCost: claimNumber('serving.sglang-deepseek.cost-per-mtok'),
+}
+/** The round GPU-hour price this lesson's worked examples assume (a course stand-in, not a market reading). */
+const assumedRent = claimNumber('synthetic.cost.gpu-hourly')
+const sglangTokPerNodeDay = sglang.tps * 86_400
+/** One node's rent for a day, then that rent per million of the node's output tokens. */
+const nodeDay = (gpuHour: number) => gpuHour * sglang.gpus * 24
+const perMtok = (gpuHour: number) => (nodeDay(gpuHour) / sglangTokPerNodeDay) * 1e6
+/** The napkin relation's worked numbers: tok/s per GPU to earn gross margin m at price P, rounded to 50 as the text says "about". */
+const napkin = { price: 0.6, margin: 0.5 }
+const napkinTps = Math.round((assumedRent * 1e6) / (3_600 * napkin.price * (1 - napkin.margin)) / 50) * 50
+const usdCents = (v: number) => `$${v.toFixed(2)}`
 
 const lesson: Lesson = {
   id: 't7.l4',
@@ -59,9 +72,9 @@ Reproduce DeepSeek's day (open-infra index, Feb 2025): **${day6.nodes} nodes avg
 
 One line per direction:
 - **Cost per useful token ≈ (GPU-hours × $/hr) ÷ tokens delivered within SLO.** Those tokens = goodput × time — which is why T7.L1's objective function is also the cost function. Output from requests that miss their latency targets costs GPU-hours but does not count as a useful token. Utilization below SLO collapse is the whole game: an idle GPU bills the same as a full one.
-- **Price is revenue per token, and two relations tie it to cost.** A *markup* gives price = cost × (1 + markup); a *gross margin* m gives price = cost ÷ (1 − m). DeepSeek's 545% is a markup (price ≈ 6.45× cost), which is the same day as a gross margin of ${grossMargin.toFixed(1)}%; this lesson says "margin" only with its form named. Units stay explicit: price and cost in $/Mtok, a GPU's rent C in $/GPU-hour, throughput in tok/s. To earn gross margin m at price P ($/Mtok), each GPU must deliver at least tok/s = C × 10⁶ ÷ (3,600 × P × (1 − m)) inside its SLO: at C = $2, P = $0.60 and m = 50%, that is 2 × 10⁶ ÷ (3,600 × 0.60 × 0.5) ≈ **1,850 tok/s per GPU**. Then read where your operating point on the T7.L3 frontier sits against it.
+- **Price is revenue per token, and two relations tie it to cost.** A *markup* gives price = cost × (1 + markup); a *gross margin* m gives price = cost ÷ (1 − m). DeepSeek's 545% is a markup (price ≈ 6.45× cost), which is the same day as a gross margin of ${grossMargin.toFixed(1)}%; this lesson says "margin" only with its form named. Units stay explicit: price and cost in $/Mtok, a GPU's rent C in $/GPU-hour, throughput in tok/s. To earn gross margin m at price P ($/Mtok), each GPU must deliver at least tok/s = C × 10⁶ ÷ (3,600 × P × (1 − m)) inside its SLO: at C = $${assumedRent} (the round rent this lesson assumes), P = ${usdCents(napkin.price)} and m = ${napkin.margin * 100}%, that is ${assumedRent} × 10⁶ ÷ (3,600 × ${napkin.price.toFixed(2)} × ${napkin.margin}) ≈ **${napkinTps.toLocaleString('en-US')} tok/s per GPU**. Then read where your operating point on the T7.L3 frontier sits against it.
 
-Worked example, SGLang's DeepSeek reproduction (T6.L2): their blog reports 22.3k output tok/s per node on 8×H100 nodes, measured on 9 decode nodes with the prefill side assumed unlimited. Per node-day: 22.3e3 × 86400 = 1.93G output tokens. At $2/GPU/hr × 8 GPUs × 24 = $384/node-day → **$${perMtok(2).toFixed(2)}/M output tokens** (their published estimate matches). That is one decode node priced alone, at the throughput end of the frontier: the same blog lists TTFT of 2–5 seconds and ITL of about 100 ms (ten tokens a second per user) as the limit of that operating point, so $0.20 is not a cost per token inside a tight SLO. The same node-day at the November 2026 median H100 rent in this course's claims table, $${medianNow.toFixed(2)} per GPU-hour (its source and reading date are listed there), is 8 × ${medianNow.toFixed(2)} × 24 = $${(medianNow * 8 * 24).toFixed(2)}, or **$${perMtok(medianNow).toFixed(2)}/M**: the same tokens at nearly twice the cost, because the rent is the input that moved.
+Worked example, SGLang's DeepSeek reproduction (T6.L2): their blog (May 2025) reports ${sglang.tps / 1e3}k output tok/s per node on ${sglang.gpus}×H100 nodes, measured on 9 decode nodes with the prefill side assumed unlimited. Per node-day: ${sglang.tps / 1e3}e3 × 86400 = ${(sglangTokPerNodeDay / 1e9).toFixed(2)}G output tokens. At $${assumedRent}/GPU/hr × ${sglang.gpus} GPUs × 24 = $${nodeDay(assumedRent)}/node-day → **${usdCents(perMtok(assumedRent))}/M output tokens** (their published estimate is ${usdCents(sglang.blogCost)}/1M; the blog does not state the GPU-hour price behind it). That is one decode node priced alone, at the throughput end of the frontier: the same blog lists TTFT of 2–5 seconds and ITL of about 100 ms (ten tokens a second per user) as the limit of that operating point, so ${usdCents(sglang.blogCost)} is not a cost per token inside a tight SLO. The same node-day at the dated median on-demand H100 rent in this course's claims table, $${medianNow.toFixed(2)} per GPU-hour (its source and reading date are listed there), is ${sglang.gpus} × ${medianNow.toFixed(2)} × 24 = $${nodeDay(medianNow).toFixed(2)}, or **${usdCents(perMtok(medianNow))}/M**: the same tokens at ${(medianNow / assumedRent).toFixed(1)}× the cost, because the round $${assumedRent} assumed above is a course stand-in, not a market rent.
 
 Against R1's $${day6.outPrice}/M list price, that gap is the whole story of the 2025 margin. No source gives a fixed fall in API prices that this arithmetic explains, so read no "x% a year" into it. What is sourced is narrower. Epoch AI's March 2025 data insight measures the price of *reaching a fixed benchmark score* falling between 9× and 900× per year depending on the milestone, and notes that the fastest drops were in the latest year, so they may not persist. That is the price of a capability, not any one model's list price: DeepSeek's own flagship, deepseek-v4-pro, lists $${flagshipPeak} per million output tokens at peak hours and $${flagshipOffPeak} off-peak, against R1's $${day6.outPrice}.
 

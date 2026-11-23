@@ -1,5 +1,17 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
+import { claimNumber } from '../claims'
+
+/**
+ * The decode-ceiling item's GPU is an H100 SXM: its memory and bandwidth are read from the claims, and every figure the
+ * options print is worked from them (tests/claims/k0-c29-decode-ceiling.test.ts recomputes the key and its words).
+ * 70B parameters in BF16 are the item's premise: 2 bytes each, 140 GB, split over two GPUs.
+ */
+const hbmGb = claimNumber('hw.h100-sxm.hbm-capacity')
+const hbmTbs = claimNumber('hw.h100-sxm.hbm-bw')
+const pairTbs = (2 * hbmTbs).toFixed(1)
+/** Milliseconds to stream this many GB at the pair's bandwidth: GB ÷ (TB/s) is ms. */
+const msAtPair = (gb: number): number => Math.round(gb / (2 * hbmTbs))
 
 /**
  * Spiral items (wave-2 spec §6.2): authored questions on earlier KCs of T4-T7, drawn by the t7.l5 checkpoint beside
@@ -10,20 +22,20 @@ const SPIRAL: AuthoredItem[] = [
     id: 't7.spiral.decode-ceiling',
     kcs: ['t4.decode-bandwidth'],
     q: {
-      q: 'A 70-billion-parameter model is held in BF16, split across two 80 GB GPUs by tensor parallelism, each with 3.35 TB/s of memory bandwidth. At batch 1, the ideal decode ceiling is roughly…',
+      q: `A 70-billion-parameter model is held in BF16, split across two ${hbmGb} GB GPUs by tensor parallelism, each with ${hbmTbs} TB/s of memory bandwidth. At batch 1, the ideal decode ceiling is roughly…`,
       options: [
-        'Ninety-six tokens per second: each token reads one byte per parameter, so 70 GB at the two GPUs\' 6.7 TB/s together takes about 10 ms',
+        `Ninety-six tokens per second: each token reads one byte per parameter, so 70 GB at the two GPUs' ${pairTbs} TB/s together takes about ${msAtPair(70)} ms`,
         'Twenty-four tokens per second: every weight is read twice per token, once for attention and again for the feed-forward layer',
-        'Forty-eight tokens per second: each token reads all 140 GB with half on each GPU at once, which takes about 21 ms at 6.7 TB/s',
-        'Seven thousand tokens per second: the chip\'s arithmetic rate divided by the 140 GFLOP each token needs sets the speed',
+        `Forty-eight tokens per second: each token reads all 140 GB with half on each GPU at once, which takes about ${msAtPair(140)} ms at ${pairTbs} TB/s`,
+        'Fourteen thousand tokens per second: the two chips\' arithmetic rate divided by the 140 GFLOP each token needs sets the speed',
       ],
       correct: [2],
       explanation:
-        'Batch-1 decode reads every weight once per token, so the ceiling is bandwidth divided by weight bytes. BF16 weights are 140 GB, more than one 80 GB GPU holds, so two GPUs each stream their half at once: 6.7 TB/s ÷ 140 GB is about 48 tokens per second at best, before the all-reduce between the GPUs. Compute sits idle, which is why batching helps.',
+        `Batch-1 decode reads every weight once per token, so the ceiling is bandwidth divided by weight bytes. BF16 weights are 140 GB, more than one ${hbmGb} GB GPU holds, so two GPUs each stream their half at once: ${pairTbs} TB/s ÷ 140 GB is about 48 tokens per second at best, before the all-reduce between the GPUs. Compute sits idle, which is why batching helps.`,
       why: [
         'Misconception: a parameter is one byte. In BF16 each parameter takes two bytes, so 70 billion parameters are 140 GB, and the one-byte count doubles the speed this estimate shows.',
         'Misconception: weights are read twice. Attention and feed-forward layers hold different weights, and each weight is read once per token, so the traffic is the model\'s size and no more.',
-        'Right: batch-1 decode is bandwidth-bound. Every token reads all 140 GB of BF16 weights once, and the two GPUs read their halves at the same time, so the ceiling is 6.7 TB/s ÷ 140 GB, about 48 tokens per second.',
+        `Right: batch-1 decode is bandwidth-bound. Every token reads all 140 GB of BF16 weights once, and the two GPUs read their halves at the same time, so the ceiling is ${pairTbs} TB/s ÷ 140 GB, about 48 tokens per second.`,
         'Misconception: decode is compute-bound. The arithmetic limit is real, but at batch 1 each weight read feeds only a couple of FLOPs, so memory traffic caps the speed long before the FLOP rate does.',
       ],
       miss: ['t4.params-are-bytes', 't4.weights-read-twice', '', 't4.decode-is-compute-bound'],

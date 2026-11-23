@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { byId } from '@/data/claims/all'
 import { lessonById } from '@/data/lessons'
 
@@ -37,7 +38,32 @@ describe('t7.spiral.decode-ceiling recomputed from the claims', () => {
   })
 
   test('the explanation states the same ceiling', () => {
-    expect(item.q.explanation).toContain('6.7 TB/s ÷ 140 GB')
+    const pair = ((gpus * bandwidth) / 1e12).toFixed(1)
+    expect(item.q.explanation).toContain(`${pair} TB/s ÷ 140 GB`)
     expect(item.q.explanation).toContain('about 48 tokens per second')
+  })
+
+  // K0-FIX-T7: the stem's GPU figures come from the claims the test reads, and the compute-bound distractor models the
+  // same two GPUs the stem names, not one chip.
+  test('the stem prints the claims, and the lesson reads them instead of typing them', () => {
+    expect(stem).toContain(`two ${num('hw.h100-sxm.hbm-capacity')} GB GPUs`)
+    expect(stem).toContain(`each with ${num('hw.h100-sxm.hbm-bw')} TB/s`)
+    const src = readFileSync('src/data/lessons/t7/autoscaling-planner.ts', 'utf8')
+    expect(src).toContain("claimNumber('hw.h100-sxm.hbm-capacity')")
+    expect(src).toContain("claimNumber('hw.h100-sxm.hbm-bw')")
+    expect(src).not.toContain('two 80 GB GPUs')
+    expect(src).not.toContain('3.35 TB/s')
+  })
+
+  test('the stream times in the options are the weight bytes over both GPUs\' bandwidth', () => {
+    const ms = (bytes: number) => Math.round((bytes / (gpus * bandwidth)) * 1000)
+    expect(item.q.options[0]).toContain(`about ${ms(70e9)} ms`)
+    expect(item.q.options[2]).toContain(`about ${ms(weightBytes)} ms`)
+  })
+
+  test('the compute-bound distractor is two chips\' BF16 rate over 140 GFLOP a token', () => {
+    const thousands = Math.round((gpus * num('hw.h100-sxm.bf16-dense') * 1e12) / 140e9 / 1000)
+    expect(thousands).toBe(14)
+    expect(item.q.options[3]!.startsWith('Fourteen thousand tokens per second: the two chips\'')).toBe(true)
   })
 })
