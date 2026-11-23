@@ -1,3 +1,4 @@
+import { claimNumber } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -83,7 +84,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `Take stock of what this track has taught you to fear. Dangling pointers to dead stack frames. Reads past the array that silently corrupt. Double-frees that hand two owners the same memory. Leaks that only the OOM killer notices. Data races that need exactly the wrong interleaving to lose your data. Each is a distinct bug with a distinct flavor of pain — and the Chromium project reports the bill for one big C++ codebase: **around 70% of its high-severity security bugs are memory-unsafety problems** (912 high or critical bugs since 2015). It is one project's count, not a share of all C/C++ CVEs.
+      md: `Take stock of what this track has taught you to fear. Dangling pointers to dead stack frames. Reads past the array that silently corrupt. Double-frees that hand two owners the same memory. Leaks that only the OOM killer notices. Data races that need exactly the wrong interleaving to lose your data. Each is a distinct bug with a distinct flavor of pain — and the Chromium project reports the bill for one big C++ codebase: **around ${claimNumber('status.chromium.memory-safety-share')}% of its high-severity security bugs are memory-unsafety problems**. It is one project's count, not a share of all C/C++ CVEs.
 
 Rust's pitch is audacious, and it is specific. The *temporal* bugs (use after free, double free, dangling references) and data races are rejected at compile time, with no GC, no reference counting on every object, and no pauses. The *spatial* bug is not: an out-of-bounds index is checked at run time and panics, as in Java, and safe Rust can still leak (an \`Rc\` cycle). This lesson shows you the single idea that delivers it, at the level of T1's vocabulary. T3 will make you fluent; today is about *believing it's possible*.`,
     },
@@ -263,7 +264,7 @@ Next track: the operating system. You have built memory management by hand; now 
           ],
           correct: [1],
           explanation:
-            'The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (Chromium\'s 70% share of high-severity bugs) or GC pauses. Rust is the only mainstream language offering both halves.',
+            `The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (Chromium's ${claimNumber('status.chromium.memory-safety-share')}% share of high-severity bugs) or GC pauses. Rust is the only mainstream language offering both halves.`,
           why: [
             'Reverses the ecosystem. CUDA toolchains, kernel libraries, and NVIDIA\'s own libraries are C++-first; Rust reaches them through bindings, so tooling is not the motive.',
             'Right: it keeps the control and speed of C++ and removes the memory-bug class at compile time, with no GC pauses to blow tail-latency budgets.',
