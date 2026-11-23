@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useObserve } from '@/lib/sims/host'
+import { useObserve, useSimHost } from '@/lib/sims/host'
 import {
   ADVERSARIAL_TRACE,
   ALTERNATING_TRACE,
@@ -76,6 +76,10 @@ type QueuedOp = WorkOp | ScriptOp
 
 export default function AllocatorSim() {
   const { embed } = usePlaygroundContext()
+  /* The shell's embed flag is not visible here (this renders the shell's children): ask the SimHost. In the lesson column
+     the chart stacks above its controls instead of beside them. */
+  const host = useSimHost()
+  const stacked = host !== null && host.mode !== 'lab'
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
   const observe = useObserve()
@@ -531,7 +535,7 @@ export default function AllocatorSim() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className={`flex min-h-0 flex-1 flex-col ${stacked ? '' : 'lg:flex-row'}`}>
           {/* ------- stage ------- */}
           <div tabIndex={0} role="region" aria-label="heap view" className="relative min-h-[380px] flex-1 overflow-auto bg-ink bg-blueprint p-4">
             {/* fragmentation meter (top-right, always visible) */}
@@ -757,7 +761,9 @@ export default function AllocatorSim() {
           </div>
 
           {/* ------- control panel ------- */}
-          <aside className="w-full shrink-0 overflow-y-auto border-t border-line bg-surface-1 lg:w-[296px] lg:border-l lg:border-t-0">
+          <aside
+          className={`w-full shrink-0 overflow-y-auto border-t border-line bg-surface-1 ${stacked ? '' : 'lg:w-[296px] lg:border-l lg:border-t-0'}`}
+        >
             <ControlGroup label="malloc(size)">
               <div className="flex items-center gap-1.5">
                 <input
