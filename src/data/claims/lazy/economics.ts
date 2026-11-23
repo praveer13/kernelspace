@@ -8,6 +8,8 @@ import type { Claim } from '../schema'
  *
  * `status.loadgen.*`: the status of the four load generators lesson t7.l2 names. Status claims live 60 days.
  *
+ * `status.meta.*` and `status.mlperf.*`: Meta's two latency goals and MLPerf Inference's published TTFT and TPOT limits, read by lesson t7.l1 (K0-C27).
+ *
  * `bench.deepseek-day6.*` and `price.deepseek.*`: the figures of DeepSeek's day-six page and its price lists, and
  * `price.h100.median-2026-11`: the dated H100 median lesson t7.l4 reads beside the 2026-10 one (K0-C3; owner question 12 default).
  */
@@ -18,6 +20,106 @@ const DAY6 = {
 const DAY6_BOUNDARY =
   'DeepSeek\'s own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date.'
 const DEEPSEEK_PRICES = { url: 'https://api-docs.deepseek.com/quick_start/pricing', title: 'DeepSeek API Docs: Models & Pricing' }
+
+const META_POST = {
+  url: 'https://engineering.fb.com/2025/10/17/ai-research/scaling-llm-inference-innovations-tensor-parallelism-context-parallelism-expert-parallelism/',
+  title: 'Meta Engineering: Scaling LLM Inference: Innovations in Tensor Parallelism, Context Parallelism, and Expert Parallelism (2025-10-17)',
+}
+const META_BOUNDARY =
+  'A goal the post states for the user experience its inference optimizations serve, as read on the verified date. The post does not call it an SLO, does not name an app, and gives no percentile.'
+
+const RULES_URL = 'https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc'
+const RULES_TITLE = 'MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, "Server latency constraint" column)'
+const RULES_BOUNDARY =
+  'MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file\'s own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile).'
+const LLAMA_QUOTE = 'Conversational category: TTFT/TPOT: 2000 ms/100 ms. Interactive category: TTFT/TPOT: 500 ms/30 ms.'
+const R1_QUOTE = 'Server: TTFT/TPOT: 2000 ms/80 ms. Interactive: TTFT/TPOT: 1500 ms/15 ms.'
+
+function mlperfLimit(id: string, value: number, label: string, quote: string): Claim {
+  return {
+    id,
+    kind: 'status',
+    value,
+    unit: 'ms',
+    label,
+    source: { url: RULES_URL, title: RULES_TITLE, quote },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary: RULES_BOUNDARY,
+  }
+}
+
+const LATENCY_CLAIMS: Claim[] = [
+  {
+    id: 'status.meta.ttft-goal',
+    kind: 'status',
+    value: 350,
+    unit: 'ms',
+    label: 'Meta: first-token latency goal (TTFT)',
+    source: {
+      url: META_POST.url,
+      title: META_POST.title,
+      quote: 'Time-to-first-token (TTFT) for prefill: The time it takes for the first part of the response to appear, ideally under 350ms.',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary: META_BOUNDARY,
+  },
+  {
+    id: 'status.meta.ttit-goal',
+    kind: 'status',
+    value: 25,
+    unit: 'ms',
+    label: 'Meta: gap-between-tokens goal (TTIT, time to incremental token)',
+    source: {
+      url: META_POST.url,
+      title: META_POST.title,
+      quote: 'Time-to-incremental-token (TTIT) for decoding: The latency between subsequent words, targeting less than 25ms.',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary: META_BOUNDARY,
+  },
+  mlperfLimit('status.mlperf.llama31-8b.conversational-ttft', 2000, 'MLPerf Inference Llama3.1-8B conversational TTFT limit', LLAMA_QUOTE),
+  mlperfLimit('status.mlperf.llama31-8b.conversational-tpot', 100, 'MLPerf Inference Llama3.1-8B conversational TPOT limit', LLAMA_QUOTE),
+  mlperfLimit('status.mlperf.llama31-8b.interactive-ttft', 500, 'MLPerf Inference Llama3.1-8B interactive TTFT limit', LLAMA_QUOTE),
+  mlperfLimit('status.mlperf.llama31-8b.interactive-tpot', 30, 'MLPerf Inference Llama3.1-8B interactive TPOT limit', LLAMA_QUOTE),
+  mlperfLimit('status.mlperf.deepseek-r1.server-ttft', 2000, 'MLPerf Inference DeepSeek-R1 server TTFT limit', R1_QUOTE),
+  mlperfLimit('status.mlperf.deepseek-r1.server-tpot', 80, 'MLPerf Inference DeepSeek-R1 server TPOT limit', R1_QUOTE),
+  mlperfLimit('status.mlperf.deepseek-r1.interactive-ttft', 1500, 'MLPerf Inference DeepSeek-R1 interactive TTFT limit', R1_QUOTE),
+  mlperfLimit('status.mlperf.deepseek-r1.interactive-tpot', 15, 'MLPerf Inference DeepSeek-R1 interactive TPOT limit', R1_QUOTE),
+  {
+    id: 'status.mlperf.server-tail-percentile',
+    kind: 'status',
+    value: 99,
+    unit: '%',
+    label: 'MLPerf Inference server and interactive scenarios: tail latency percentile',
+    source: {
+      url: RULES_URL,
+      title: 'MLCommons inference_policies, inference_rules.adoc (scenario table)',
+      quote:
+        '|Server/Interactive |LoadGen sends new queries to the SUT according to a Poisson distribution | 600 seconds |1 |Benchmark specific |99%*',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary:
+      'From the rules file on its default branch as read on the verified date: queries arrive by a Poisson process, each run lasts at least 600 seconds, and the tail-latency percentile is 99%. The asterisk marks the theoretical lower limit for very long runs.',
+  },
+  {
+    id: 'status.mlperf.round',
+    kind: 'status',
+    value: 'v6.1',
+    label: 'Latest MLPerf Inference round read',
+    source: {
+      url: 'https://mlcommons.org/2026/09/mlperf-inference-v6-1-results/',
+      title: 'MLCommons: MLPerf Inference v6.1 results (2026-09-16)',
+      quote: 'MLCommons ® announced new results for its industry-standard MLPerf ® Inference v6.1 benchmark suite.',
+    },
+    verifiedAt: '2026-11-22',
+    ttlDays: 60,
+    boundary: 'The round whose results page was the newest read on the verified date; the page says MLPerf Endpoints will replace Inference for the datacenter, so a later round may not exist.',
+  },
+]
 
 export const ECONOMICS_CLAIMS: Claim[] = [
   {
@@ -277,6 +379,7 @@ export const ECONOMICS_CLAIMS: Claim[] = [
     boundary:
       'Median of priced on-demand configs across 47 providers; the page dates its figure "As of November 23, 2026" (the reading is the day before in this course\'s dates) and says the median rose about 16% over the past 90 days. Used only by lesson t7.l4 beside the older reading; price.h100.median (2026-10-04) stays for everything pinned to it. It moves daily.',
   },
+  ...LATENCY_CLAIMS,
 ]
 
 registerClaims(ECONOMICS_CLAIMS)

@@ -135,6 +135,53 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     cite: "v1.6.2 as of Dynamo v1.6.2, read 2026-11-22",
     release: "Dynamo v1.6.2",
   },
+  "status.meta.ttft-goal": {
+    value: 350,
+    cite: "350",
+  },
+  "status.meta.ttit-goal": {
+    value: 25,
+    cite: "25",
+  },
+  "status.mlperf.deepseek-r1.interactive-tpot": {
+    value: 15,
+    cite: "15",
+  },
+  "status.mlperf.deepseek-r1.interactive-ttft": {
+    value: 1500,
+    cite: "1500",
+  },
+  "status.mlperf.deepseek-r1.server-tpot": {
+    value: 80,
+    cite: "80",
+  },
+  "status.mlperf.deepseek-r1.server-ttft": {
+    value: 2000,
+    cite: "2000",
+  },
+  "status.mlperf.llama31-8b.conversational-tpot": {
+    value: 100,
+    cite: "100",
+  },
+  "status.mlperf.llama31-8b.conversational-ttft": {
+    value: 2000,
+    cite: "2000",
+  },
+  "status.mlperf.llama31-8b.interactive-tpot": {
+    value: 30,
+    cite: "30",
+  },
+  "status.mlperf.llama31-8b.interactive-ttft": {
+    value: 500,
+    cite: "500",
+  },
+  "status.mlperf.round": {
+    cite: "v6.1",
+  },
+  "status.mlperf.server-tail-percentile": {
+    value: 99,
+    cite: "99",
+  },
   "status.rust.polonius": {
     cite: "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
   },
