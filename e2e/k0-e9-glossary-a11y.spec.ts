@@ -40,3 +40,35 @@ test('each flagship dot is at least 24 x 24 px', async ({ page }) => {
     expect(box!.height).toBeGreaterThanOrEqual(24)
   }
 })
+
+// Every face's text fits inside its card at phone width, and no card is drawn over the next one.
+for (const width of [360, 390]) {
+  test.describe(`at ${width} px`, () => {
+    test.use({ viewport: { width, height: 844 }, reducedMotion: 'reduce' })
+
+    test('every card face holds its text and no card covers the next', async ({ page }) => {
+      await page.goto('/glossary')
+      const cards = page.locator('[id]:has(> button[aria-expanded])')
+      await expect(cards.first()).toBeVisible()
+      const found = await cards.evaluateAll((els) => {
+        const spills: string[] = []
+        const boxes = els.map((el) => el.getBoundingClientRect())
+        els.forEach((el, i) => {
+          const faces = el.querySelectorAll(':scope > div > div')
+          faces.forEach((f, j) => {
+            const over = f.scrollHeight - f.clientHeight
+            if (over > 1) spills.push(`${el.id} face ${j} spills ${over} px`)
+            const fb = f.getBoundingClientRect()
+            if (fb.bottom > boxes[i]!.bottom + 1) spills.push(`${el.id} face ${j} ends below its card`)
+          })
+          const next = boxes[i + 1]
+          if (next && next.left < boxes[i]!.right && next.top > boxes[i]!.top && next.top < boxes[i]!.bottom - 1)
+            spills.push(`${el.id} is covered by the next card`)
+        })
+        return { n: els.length, spills }
+      })
+      expect(found.n).toBeGreaterThan(20)
+      expect(found.spills).toEqual([])
+    })
+  })
+}

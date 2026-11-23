@@ -11,7 +11,7 @@ describe('K0-E8 glossary and home', () => {
   const pair = PAIRS.find((p) => p.slug === 'external-fragmentation')!
   const text = `${pair.llmDef} ${pair.why}`
 
-  test('the external-fragmentation card names KV memory and states the range in words', () => {
+  test('the external-fragmentation card names KV memory and says most of the reserved KV memory is stranded', () => {
     expect(pair).toBeDefined()
     expect(text).not.toContain('60–80%')
     expect(text).not.toContain('of HBM')

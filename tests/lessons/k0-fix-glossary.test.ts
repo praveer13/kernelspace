@@ -42,7 +42,10 @@ describe('K0-FIX-GLOSSARY: glossary cards agree with the graded answers', () => 
     const text = `${p.llm} ${p.llmDef} ${p.why}`
     expect(text).not.toMatch(/no side blocks|prefill.{0,20}decode/i)
     expect(p.syn).not.toContain('dynamo')
-    expect(p.llmDef).toContain('a stalled producer never stops the consumer’s progress')
+    // K0-FIX2-GLOSSARY: a producer that stalls between claiming a slot and publishing it holds up the consumer of a
+    // claim-then-publish ring, so the twin states t2.l5's mechanism and no progress promise.
+    expect(p.llmDef).not.toMatch(/never stops|stalled/)
+    expect(p.llmDef).toContain('producers CAS-claim slots and consumers CAS-advance')
     expect(p.why).toContain('a full bounded ring still refuses the push')
   })
 
