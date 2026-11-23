@@ -67,6 +67,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 2,
     cite: "2",
   },
+  "status.chromium.memory-safety-share": {
+    value: 70,
+    cite: "70",
+  },
   "status.rust.polonius": {
     cite: "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
   },

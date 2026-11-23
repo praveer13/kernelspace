@@ -1,5 +1,8 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
+import { claimNumber } from '../claims'
+
+const CHROMIUM_SHARE = claimNumber('status.chromium.memory-safety-share')
 
 /**
  * Spiral items (wave-2.md §6.2): authored questions on earlier KCs of T0-T3, drawn by the t3.l7 checkpoint beside
@@ -208,7 +211,7 @@ const lesson: Lesson = {
       md: `Every language sermon skips the only part that matters: the decision. T3.L6 showed you one made well (Dynamo's data plane in Rust, and the reasoning chain behind it). This lesson turns that chain into a rubric you can run in a meeting, then checks it against what the field actually ships in 2026. Spoiler: the answer is almost never "my favorite language." It is almost always "the language whose failure modes and ecosystem match this specific path."
 
 **The four questions:**
-1. **What does failure cost on this path?** Memory corruption with untrusted input (network-facing, multi-tenant, long-lived) → memory safety is not optional. That's Rust's table stakes, and the reason ~70% of serious CVEs being memory-safety issues is an argument, not a statistic.
+1. **What does failure cost on this path?** Memory corruption with untrusted input (network-facing, multi-tenant, long-lived) → memory safety is not optional. That's Rust's table stakes, and the reason Chromium counts around ${CHROMIUM_SHARE}% of its high-severity security bugs (since 2015) as memory unsafety is an argument, not a statistic: it is one C++ codebase's number, not a share of all CVEs.
 2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda) exist but are marginal in production, and Zig and Go have no vote. (cudarc is not one of them: it wraps the host-side CUDA API so Rust can launch kernels, not write them.) The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
 3. **Who maintains it for five years?** Team velocity, hiring, compile-time guardrails vs review-time guardrails. A compiler that catches your invariants (Rust) is worth real money on a fast-moving codebase; a codebase your six-person team can hold in their heads entirely (Zig's pitch) is worth a different kind of money.
 4. **What's the allocation and determinism budget?** Tail latency in microseconds and zero tolerance for hidden allocation (databases, embedded, schedulers) → you want allocation as a visible act: Zig's explicit-allocator discipline or C. GC-shaped languages already lost this round in T0.L5.`,
@@ -227,7 +230,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## Applied: the serving stack, component by component
 
-Run the four questions down the stack you've built in this course: **Router / API front** — untrusted input, 100k connections, tail latency: Rust (tokio, T3.L4). **Scheduler / KV block manager** — untrusted-adjacent, invariant-heavy, refactored weekly: Rust (your labs 02 and 06 are the proof shape). **Intake queue** — single-purpose, allocation-hostile hot loop: Rust still fine (lab 04), Zig equally defensible if the team prefers it. **GPU kernels** — ecosystem gravity wins: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang), with Rust and Zig marginal at best. **io_uring / eBPF glue** — the kernel's ABI is C, so C. **CLI tooling, test harnesses, one-off migrations** — whatever the team ships fastest; this is where Zig earns honest keep. Notice what didn't appear anywhere in that list: ideology.`,
+Run the four questions down the stack you've built in this course: **Router / API front** — untrusted input, 100k connections, tail latency: Rust (tokio, T3.L4). **Scheduler / KV block manager** — untrusted-adjacent, invariant-heavy, refactored weekly: Rust (your labs 02 and 06 are the proof shape). **Intake queue** — single-purpose, allocation-hostile hot loop: Rust still fine (lab 04), Zig equally defensible if the team prefers it. **GPU kernels** — ecosystem gravity wins: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang), with Rust and Zig marginal at best. **io_uring / eBPF glue** — the kernel's interface is a C ABI, so any language with free C interop: Rust drives io_uring through the io-uring crate, and eBPF programs are written in restricted C or in Rust (Aya); C inside the kernel tree. **CLI tooling, test harnesses, one-off migrations** — whatever the team ships fastest; this is where Zig earns honest keep. Notice what didn't appear anywhere in that list: ideology.`,
     },
     {
       type: 'callout',
@@ -253,7 +256,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
           ],
           correct: [1],
           explanation:
-            '~70% of serious CVEs are memory-safety. On network-facing, long-lived, multi-tenant paths, memory safety is a security property, not a comfort. That is exactly Dynamo\'s data plane and Infire\'s edge engine — and exactly why those teams paid the borrow-checker price.',
+            `Around ${CHROMIUM_SHARE}% of Chromium's high-severity security bugs since 2015 are memory-unsafety, one C++ codebase's number and not a share of all CVEs. On network-facing, long-lived, multi-tenant paths, memory safety is a security property, not a comfort. That is exactly Dynamo's data plane and Infire's edge engine — and exactly why those teams paid the borrow-checker price.`,
           why: [
             'Speed is not the failure-cost question. C, C++ and Zig are comparably fast; the framework asks what a memory bug costs on this path, not which language is quicker.',
             'Right: with untrusted input, long-lived multi-tenant processes and tight tails, a memory bug is both an outage and an exploit, which is where compile-time safety pays for its friction.',
@@ -333,7 +336,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
           ],
           correct: [2],
           explanation:
-            'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
+            'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: anything with free C interop. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
           why: [
             'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects such as CubeCL and rust-cuda exist but are marginal in production kernels, and cudarc only wraps the host-side CUDA API.',
             'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the vendor libraries and tooling live.',
@@ -371,10 +374,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         prompt:
           'Pick the language for GPU kernels and for io_uring glue code, and say what decides each choice.',
         model:
-          'GPU kernels follow the vendor ecosystem, so they are CUDA C++ or a Python DSL such as Triton or CuTe DSL, and Rust or Zig are marginal there. The kernel\'s io_uring interface is a C ABI, so the glue is C. In both cases ecosystem gravity decides, not safety or speed in the abstract.',
+          'GPU kernels follow the vendor ecosystem: CUDA C++ or a Python DSL such as Triton or CuTe DSL, with Rust and Zig marginal. The kernel\'s io_uring interface is a C ABI, so the glue needs free C interop: Rust or C both qualify, and the rest of the stack decides. Ecosystem gravity decides, not safety or speed in the abstract.',
         ideas: [
           'GPU kernels follow the vendor ecosystem: CUDA C++ or a Python DSL, with Rust and Zig marginal',
-          'The kernel\'s io_uring and eBPF interfaces are C ABIs, so the glue is C',
+          'The io_uring and eBPF interfaces are C ABIs, so any language with free C interop can drive them',
           'Ecosystem gravity decides both, not safety or speed in the abstract',
         ],
         kcs: ['t3.language-choice'],
