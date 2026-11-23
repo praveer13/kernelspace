@@ -39,6 +39,7 @@ import {
   pressured,
   resizePool,
   sweepRow,
+  tailTokens,
 } from '../../src/lib/sims/models/blocks'
 import { useProgress } from '../../src/lib/progress'
 import { buildRegistry } from '../../src/lib/sims/registry'
@@ -257,10 +258,25 @@ describe('the pool model', () => {
     expect(PHONE_MODELS.cow().actual).toBe(tail)
     const forked = forkBeam(initialState()).state
     const out = divergeB(forked, 1)
-    expect(out.kind === 'copied' && out.tokens).toBe(PROMPT_TOKENS - DIVERGE_AT * BLOCK_SIZE)
-    // the prompt's block count is whole for every length: a plain division gives 2.5 at 40 tokens
-    for (let n = 1; n <= 200; n++) expect(Number.isInteger(Math.ceil(n / BLOCK_SIZE))).toBe(true)
+    expect(out.kind === 'copied' && out.tokens).toBe(tailTokens(PROMPT_TOKENS, BLOCK_SIZE))
+    expect(out.kind === 'copied' && out.tokens).toBe(tail)
+    // a plain division gives 2.5 blocks at 40 tokens
     expect(PROMPT_TOKENS / BLOCK_SIZE).not.toBe(PROMPT_BLOCKS)
+  })
+
+  test('the copy is the tokens the last block holds: a partly filled tail, or a full block only when the prompt fills it', () => {
+    expect(tailTokens(40, 16)).toBe(8)
+    expect(tailTokens(48, 16)).toBe(16)
+    expect(tailTokens(1, 16)).toBe(1)
+    for (let n = 1; n <= 200; n++) {
+      const t = tailTokens(n, BLOCK_SIZE)
+      expect(t).toBeGreaterThan(0)
+      expect(t).toBeLessThanOrEqual(BLOCK_SIZE)
+      // the blocks before the last are full, and the last holds the rest
+      expect((Math.ceil(n / BLOCK_SIZE) - 1) * BLOCK_SIZE + t).toBe(n)
+      // a full block is copied only when the prompt is a multiple of the block size
+      expect(t === BLOCK_SIZE).toBe(n % BLOCK_SIZE === 0)
+    }
   })
 
   test('the sweep: 40 tokens leave no waste at 4 and 8, 8 slots unused at 16, and 24 at 32 and 64', () => {

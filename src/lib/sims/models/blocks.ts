@@ -24,6 +24,12 @@ export const NEW_REQUEST_BLOCKS = 4
 /** The prompt's logical blocks: L0..L2 (L0 and L1 full, L2 partly filled). Beam B diverges at the last one. */
 export const PROMPT_BLOCKS = Math.ceil(PROMPT_TOKENS / BLOCK_SIZE)
 export const DIVERGE_AT = PROMPT_BLOCKS - 1
+/**
+ * The tokens a prompt's last block holds: the blocks before it are full, so the last holds the rest. It is partly
+ * filled unless the prompt is a multiple of the block size; copy-on-write on that block copies exactly these tokens.
+ */
+export const tailTokens = (promptTokens: number, blockSize: number): number =>
+  promptTokens - (Math.ceil(promptTokens / blockSize) - 1) * blockSize
 
 /** Ids a new request can take, in order; the component colours the first four and greys the rest. */
 const REQUEST_IDS = ['D', 'E', 'F', 'G', 'H'] as const
@@ -117,8 +123,8 @@ export type DivergeResult =
 
 /**
  * B writes into its last prompt block. A block with one owner is written in place; a shared one is copied
- * first: one free block gets the tokens the shared block holds (the partly filled tail, PROMPT_TOKENS - DIVERGE_AT x
- * BLOCK_SIZE of them; a full block is never written, so it is never copied), B's table points at it, and the original
+ * first: one free block gets the tokens the shared block holds (the partly filled tail, tailTokens(PROMPT_TOKENS,
+ * BLOCK_SIZE) of them; a full block is never written, so it is never copied), B's table points at it, and the original
  * loses B's reference.
  */
 export function divergeB(s: PoolState, tick: number): DivergeResult {
@@ -137,7 +143,7 @@ export function divergeB(s: PoolState, tick: number): DivergeResult {
     return blk
   })
   const seqs = s.seqs.map((q): Sequence => (q.id === 'B' ? { ...q, logicalBlocks: q.logicalBlocks.map((pid, i) => (i === DIVERGE_AT ? to : pid)) } : q))
-  return { kind: 'copied', state: { pool, seqs }, from: oldPid, to, tokens: PROMPT_TOKENS - DIVERGE_AT * BLOCK_SIZE }
+  return { kind: 'copied', state: { pool, seqs }, from: oldPid, to, tokens: tailTokens(PROMPT_TOKENS, BLOCK_SIZE) }
 }
 
 /* ------------------------------------------------------------------ */

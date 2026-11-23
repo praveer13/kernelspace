@@ -25,7 +25,7 @@ describe('t5.l6 block boundary at vLLM default (K0-D13)', () => {
     expect(text).toContain(`vLLM's default on CUDA is ${claimCite('production.vllm.block-size')}`)
   })
 
-  test('the 16-token setup stays as the worked case', () => {
+  test("the paper's block stays as the worked case", () => {
     expect(text).toContain(
       `With the paper's ${paper}-token blocks, 130 identical leading tokens produce ${paperBlocks} reusable blocks (${paperBlocks * paper} tokens)`,
     )

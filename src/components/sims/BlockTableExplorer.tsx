@@ -42,6 +42,7 @@ import { useObserve } from '@/lib/sims/host'
 import { ENGINE_BLOCK_SCOPE_TEXT } from '@/lib/sims/models/kv'
 import {
   BLOCK_SIZE,
+  DIVERGE_AT,
   INITIAL_POOL,
   NEW_REQUEST_BLOCKS,
   OBSERVE,
@@ -191,7 +192,7 @@ export default function BlockTableExplorer() {
       return
     }
     if (out.kind === 'private') {
-      log(t, 'WRITE', `seq B writes logical block 2 → physical ${out.physical} (already private)`, 'op')
+      log(t, 'WRITE', `seq B writes logical block ${DIVERGE_AT} → physical ${out.physical} (already private)`, 'op')
       return
     }
     if (out.kind === 'no-free') {
@@ -200,7 +201,7 @@ export default function BlockTableExplorer() {
     }
     if (out.kind !== 'copied') return
     setState(out.state)
-    log(t, 'COW', `seq B writes shared logical block 2 — copied ${out.tokens} tokens P${out.from} → P${out.to}`, 'ok')
+    log(t, 'COW', `seq B writes shared logical block ${DIVERGE_AT} — copied ${out.tokens} tokens P${out.from} → P${out.to}`, 'ok')
     if (!fromFork) return needsStart(t, OBSERVE.cowCopied)
     observe({ key: OBSERVE.cowCopied, value: out.tokens, unit: 'tokens' })
     log(t, 'OBSERVE', `${out.tokens} tokens copied (${OBSERVE.cowCopied})`, 'ok')
@@ -546,7 +547,7 @@ export default function BlockTableExplorer() {
             </button>
             <div className="rounded-md border border-line bg-surface-2 p-3">
               <p className="font-mono text-[10px] text-text-2">
-                A and B both map logical blocks 0–2 to physical blocks 0–2. check the pool grid:
+                A and B both map logical blocks 0–{DIVERGE_AT} to physical blocks 0–{DIVERGE_AT}. check the pool grid:
                 refcount should be 2 on each shared block.
               </p>
             </div>
@@ -570,12 +571,13 @@ export default function BlockTableExplorer() {
                 <GitFork size={12} className="mr-1" /> fork beam from B
               </ChipButton>
               <ChipButton onClick={divergeB} color={COLORS.B}>
-                <Copy size={12} className="mr-1" /> diverge B at L2
+                <Copy size={12} className="mr-1" /> diverge B at L{DIVERGE_AT}
               </ChipButton>
             </div>
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
-              forking creates beam C sharing B&apos;s blocks. diverging B at logical block 2 writes
-              into shared physical memory and triggers a 16-token copy-on-write.
+              forking creates beam C sharing B&apos;s blocks. diverging B at logical block {DIVERGE_AT}
+              writes into a shared, partly filled block, so copy-on-write first copies that block&apos;s
+              tokens into a free block.
             </p>
           </ControlGroup>
 

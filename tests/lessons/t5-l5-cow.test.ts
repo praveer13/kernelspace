@@ -1,21 +1,26 @@
 import { describe, expect, test } from 'bun:test'
 import { ALL_LESSONS } from '@/data/lessons'
+import { claimNumber } from '@/data/lessons/claims'
+import { BLOCK_SIZE, PROMPT_TOKENS, tailTokens } from '@/lib/sims/models/blocks'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't5.l5')
 if (!lesson) throw new Error('t5.l5 not found')
 const fig = lesson.blocks.find((b) => b.type === 'diagram')
 if (!fig || fig.type !== 'diagram') throw new Error('t5.l5 has no diagram')
 
-// The scenario of fig 1, held here until the block-table explorer's model carries the same numbers (K0-B7 adds the cross-check).
-const PROMPT = 40
-const BLOCK = 16
-const TAIL = PROMPT % BLOCK // 8: the tokens the first writer must copy
+// Fig 1 and the block-table explorer work the same scenario: the explorer's prompt in the paper's block, and the
+// tokens the first writer copies are the tail the explorer's model computes.
+const PROMPT = PROMPT_TOKENS
+const BLOCK = claimNumber('serving.pagedattention.paper-block-size')
+const TAIL = tailTokens(PROMPT, BLOCK)
 
 const copyStep = fig.steps[fig.predictAt?.step ?? -1]
 
 describe('t5.l5 fig 1: copy-on-write on a partly filled block (K0-B6)', () => {
   test('the prompt is not a whole number of blocks, so the tail is partial', () => {
+    expect(BLOCK).toBe(BLOCK_SIZE)
     expect(TAIL).toBeGreaterThan(0)
+    expect(TAIL).toBeLessThan(BLOCK)
     expect(fig.steps[0]?.caption).toContain(`${PROMPT}-token prompt in blocks of ${BLOCK}`)
   })
 
