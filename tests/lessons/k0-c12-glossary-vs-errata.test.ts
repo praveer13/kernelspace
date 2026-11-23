@@ -24,9 +24,17 @@ describe('K0-C12: a glossary pair does not repeat a pairing an erratum retired',
     expect(`${p.llm} ${p.llmDef}`.toLowerCase()).toContain('kv blocks')
   })
 
+  // Only an erratum whose before-text states a pairing can retire one; some write the pairing with '≡'.
+  const PAIRING = ERRATA.filter((x) => /\b(pair|pairing|twin|isomorphism|maps? to)\b|≡/i.test(x.before))
+
+  test('the pairing filter keeps both 2026-10-04 pairing errata', () => {
+    const ids = PAIRING.map((e) => e.id)
+    expect(ids).toContain('2026-10-04-priority-inversion-analogy')
+    expect(ids).toContain('2026-10-04-allocator-split-coalesce-isomorphism')
+  })
+
   test('no pair twin shares a phrase with an erratum before-text that names the pair', () => {
-    // Only an erratum whose before-text states a pairing can retire one.
-    for (const e of ERRATA.filter((x) => /\b(pair|pairing|twin|isomorphism|maps? to)\b/i.test(x.before))) {
+    for (const e of PAIRING) {
       const before = ` ${words(e.before).join(' ')} `
       const bg = bigrams(e.before)
       for (const p of PAIRS) {

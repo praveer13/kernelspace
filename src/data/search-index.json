@@ -495,7 +495,7 @@
 ["priority-inversion","Priority inversion","Low-priority request holding KV blocks","t2.l4","preemption, eviction, starvation, kv blocks"],
 ["time-slicing","Time-slicing","Chunked prefill (SARATHI)","t5.l8","sarathi, chunked prefill, quantum, fairness"],
 ["mutex-atomics","Mutex / atomics","Kernel reductions & stream sync","t2.l5","lock, atomic, sync, reduction, barrier"],
-["lock-free-queue","Lock-free queue","Prefill-to-decode handoff queue","t2.l5","dynamo, mpmc, ring buffer, disaggregated"],
+["lock-free-queue","Lock-free queue","Stage-to-stage handoff ring","t2.l5","mpmc, ring buffer, pipeline, backpressure"],
 ["epoll","epoll / io_uring","Async token streaming backpressure","t2.l6","async, io, sse, streaming, event loop"],
 ["cache-line","Cache line (64B)","Coalesced HBM access / tiling","t0.l4","coalescing, hbm, burst, bandwidth"],
 ["cache-blocking","Cache blocking","FlashAttention tiling","t4.l6","flashattention, tiling, sram, locality"],
