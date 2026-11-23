@@ -31,7 +31,7 @@ import type { TrackId } from '@/data/lessons/types'
 import LessonRow from '@/pages/lesson/LessonRow'
 import { cn } from '@/lib/utils'
 import { cachedPathPlan, lessonCode, pathOf, PATH_LABEL, type PathGraph } from '@/lib/learner/paths'
-import { currentLesson, readPlacement } from '@/lib/learner/placement'
+import { currentLesson, readPlacement, rLayerNote } from '@/lib/learner/placement'
 import { useCurrentLesson } from '@/lib/learner/up-next'
 
 // the walk loads on demand: it pulls the item player and the generator families, which a map visit never needs
@@ -51,15 +51,15 @@ function TrackLayer({
   open,
   onToggle,
   currentId,
-  rTestOut,
+  rNote,
 }: {
   trackId: TrackId
   open: boolean
   onToggle: () => void
   /** The path plan's current lesson (any track), or null. */
   currentId: string | null
-  /** A placement found Rust reading solid (or skipped it): R is offered as test-outs. */
-  rTestOut: boolean
+  /** The note over the Rust Zero lessons when the plan offers them as test-outs (rLayerNote), else null. */
+  rNote: string | null
 }) {
   const track = getTrack(trackId)!
   const extras = TRACK_EXTRAS[trackId]
@@ -139,11 +139,7 @@ function TrackLayer({
               className="overflow-hidden"
             >
               <div className="border-t border-line px-3 py-3 pl-5">
-                {trackId === 'r' && rTestOut && (
-                  <p className="px-3 pb-3 font-mono text-[11px] text-text-3">
-                    placement found your Rust reading solid: open any lesson here and test out of it.
-                  </p>
-                )}
+                {trackId === 'r' && rNote && <p className="px-3 pb-3 font-mono text-[11px] text-text-3">{rNote}</p>}
                 <div className="divide-y divide-line/60">
                   {lessons.map((l) => (
                     <div key={l.id}>
@@ -327,7 +323,7 @@ export default function CurriculumPage() {
               open={open.has(t.id as TrackId)}
               onToggle={() => toggle(t.id as TrackId)}
               currentId={currentId}
-              rTestOut={plan.testOut.length > 0}
+              rNote={rLayerNote(placement?.rustAnchor, plan.testOut.length > 0)}
             />
           ))}
 
