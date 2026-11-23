@@ -214,7 +214,9 @@ describe('solid and missed', () => {
     expect(w.outcome.result.misconceptions).toEqual([])
     expect(w.outcome.result.solidKcs).toEqual([])
     expect(w.outcome.result.entryTrack).toBe('t0')
-    expect(w.outcome.result.rustAnchor).toBe('skipped')
+    // "Not sure" on the Rust item after a weak walk is a miss, like a skipped core item (K0-FIX4-LEARNER-APP)
+    expect(w.outcome.result.rustAnchor).toBe('missed')
+    expect(w.outcome.result.missedKcs).toContain(RUST_ANCHOR_KC)
     expect(w.outcome.anchorShown).toBe(true)
     expect(w.outcome.pattern).toBeNull()
     expect(w.state.asked).toBe(PROBES.length)
@@ -244,6 +246,42 @@ describe('solid and missed', () => {
       expect(plan.lessons[0]).toBe('t5.l1')
       expect(plan.testOut).toEqual(ALL_LESSONS.filter((l) => l.trackId === 'r').map((l) => l.id))
     }
+  })
+})
+
+describe('"Not sure" on the Rust item keeps Rust Zero in the plan unless the rest of the walk was solid (K0-FIX4-LEARNER-APP)', () => {
+  const graph = (): PathGraph => ({ kcs: KCS, lessons: ALL_LESSONS, labs: [] })
+  const R_IDS = ALL_LESSONS.filter((l) => l.trackId === 'r').map((l) => l.id)
+
+  test('every item "Not sure" on the full ramp and rust-systems: the anchor is a miss, and the ten R lessons stay lessons', () => {
+    for (const path of ['full-ramp', 'rust-systems'] as const) {
+      for (const seed of SEEDS.slice(0, 10)) {
+        const r = drive(real, () => 'skip', seed, path).outcome.result
+        expect(r.rustAnchor).toBe('missed')
+        expect(r.missedKcs).toContain(RUST_ANCHOR_KC)
+        const plan = cachedPathPlan(path, graph(), r)
+        expect(plan.testOut).toEqual([])
+        for (const id of R_IDS) expect(plan.lessons).toContain(id)
+        if (path === 'rust-systems') expect(plan.lessons[0]).toBe('r.l1')
+      }
+    }
+  })
+
+  test('one core KC missed and the Rust item "Not sure": the anchor is a miss, not skipped', () => {
+    const last = THRESHOLD_KCS[THRESHOLD_KCS.length - 1]
+    for (const path of ['full-ramp', 'rust-systems'] as const) {
+      for (const seed of SEEDS.slice(0, 10)) {
+        const learner: Learner = (v, step) => (step.kc === RUST_ANCHOR_KC ? 'skip' : step.kc === last ? { response: wrongResponse(v), conf: 'sure' } : expert(v, step))
+        const r = drive(real, learner, seed, path).outcome.result
+        expect(r.missedKcs).toContain(last)
+        expect(r.rustAnchor).toBe('missed')
+        expect(cachedPathPlan(path, graph(), r).testOut).toEqual([])
+      }
+    }
+  })
+
+  test('serving-first has no Rust Zero lessons: "Not sure" there still reads skipped after any walk', () => {
+    expect(drive(real, () => 'skip', 5, 'serving-first').outcome.result.rustAnchor).toBe('skipped')
   })
 })
 

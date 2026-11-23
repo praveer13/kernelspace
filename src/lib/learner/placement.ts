@@ -397,9 +397,14 @@ export interface WalkOutcome {
 export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now: IsoInstant): WalkOutcome {
   const pattern = blindPattern(state)
   const verdict = (kc: KcId): KcVerdict | undefined => (pattern && state.verdicts[kc] ? 'missed' : state.verdicts[kc])
-  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it, which is not a miss.
+  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it. That reads as
+  // skipped, not a miss, on serving-first (no Rust Zero lessons) or after a walk in which every other KC was solid;
+  // otherwise it stays a miss, as a skipped core item does, so the paths with Rust Zero keep its lessons in the plan
+  // (no Rust Zero lesson has a test-out to stand in for them).
   const anchorAnswers = state.answers[RUST_ANCHOR_KC] ?? []
-  const anchorNotAsked = !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true)
+  const restSolid = state.probes.every((kc) => kc === RUST_ANCHOR_KC || verdict(kc) === 'solid')
+  const anchorNotAsked =
+    !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true) && (anchorOptional(state.path) || restSolid)
   const solidKcs = state.probes.filter((kc) => verdict(kc) === 'solid')
   const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed' && !(anchorNotAsked && kc === RUST_ANCHOR_KC))
 
@@ -428,15 +433,16 @@ export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now
 }
 
 /**
- * The note at the top of the Curriculum's Rust Zero layer, from the placement's Rust anchor, or null when the layer
- * has no test-outs to offer (`testOut`: the plan offers R as test-outs, which a solid or a skipped anchor both give).
- * Only a solid anchor says placement found the learner's Rust solid. It lives here, not in anchor-line.ts, so the
- * Curriculum route reads it from a module it already loads.
+ * The note at the top of the Curriculum's Rust Zero layer, from the placement's Rust anchor, or null when the plan
+ * keeps Rust Zero as lessons (`testOut`: the plan leaves R out, which a solid or a skipped anchor both give). No
+ * Rust Zero lesson has a ticket, so none offers a test-out and the note promises none: the lessons leave the plan
+ * and stay open. Only a solid anchor says placement found the learner's Rust solid. It lives here, not in
+ * anchor-line.ts, so the Curriculum route reads it from a module it already loads.
  */
 export function rLayerNote(rustAnchor: PlacementResult['rustAnchor'] | null | undefined, testOut: boolean): string | null {
   if (!testOut) return null
-  if (rustAnchor === 'solid') return 'placement found your Rust reading solid: open any lesson here and test out of it.'
-  return 'placement has no Rust reading for you: each lesson here offers a test-out, or take it as a lesson.'
+  if (rustAnchor === 'solid') return 'placement found your Rust reading solid: these lessons are not in your plan, and each stays open.'
+  return 'you skipped the Rust question in placement: these lessons are not in your plan, and each stays open.'
 }
 
 /* ------------------------------------------------------------------ */

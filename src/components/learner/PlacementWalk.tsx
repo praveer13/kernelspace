@@ -275,7 +275,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
           {pattern === 'position'
             ? 'Your multiple-choice answers all sat in the same position, so they say little about what you know.'
             : 'Your multiple-choice answers were all the longest option, so they say little about what you know.'}{' '}
-          The ramp starts at its first lesson, and every lesson has a test-out when you want to prove a part of it.
+          The ramp starts at its first lesson, and every lesson of T0 to T7 has a test-out when you want to prove a part of it.
         </p>
       )}
 

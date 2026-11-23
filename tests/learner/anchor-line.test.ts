@@ -20,7 +20,8 @@ const OTHER: LearningPath[] = ['full-ramp', 'rust-systems']
 const GRAPH = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS }
 const PLAN = { lessons: [] as string[] }
 const ANCHOR_MISSED = 'Rust reading: not yet. Rust Zero stays in your plan, braided in just before the lessons that need it.'
-const SOLID_NOTE = 'placement found your Rust reading solid: open any lesson here and test out of it.'
+const SOLID_NOTE = 'placement found your Rust reading solid: these lessons are not in your plan, and each stays open.'
+const SKIPPED_NOTE = 'you skipped the Rust question in placement: these lessons are not in your plan, and each stays open.'
 /** Lesson `l` uses Rust Zero lesson `r`: a KC taught in `l` is one `r` introduces, or requires one. Over every lesson, R or T. */
 const usesR = (r: string, l: string): boolean => {
   const introduced = new Set(KCS.filter((k) => k.lessons[0] === r).map((k) => k.id))
@@ -55,13 +56,34 @@ describe('anchorLine', () => {
     }
   })
 
-  test('the other paths keep their test-out lines, which still name test-outs', () => {
+  test('the other paths say Rust Zero leaves the plan and stays open, with no test-out (no R lesson has a ticket)', () => {
     for (const p of OTHER) {
-      expect(anchorLine('solid', p, PLAN)).toBe('Rust reading: solid. The Rust Zero lessons are offered as test-outs instead of lessons.')
+      expect(anchorLine('solid', p, PLAN)).toBe('Rust reading: solid. Rust Zero is not in your plan; every lesson stays open in the Curriculum.')
       expect(anchorLine('skipped', p, PLAN)).toBe(
-        'Rust reading: skipped. The Rust Zero lessons are offered as test-outs, and each one is still in the Curriculum to take as a lesson.',
+        'Rust reading: skipped. The rest of your walk was solid, so Rust Zero is not in your plan; every lesson stays open in the Curriculum.',
       )
     }
+  })
+
+  test('while a Rust Zero lesson has no ticket, no Rust line, Curriculum note or pattern sentence promises a test-out', () => {
+    const rLessons = ALL_LESSONS.filter((l) => l.trackId === 'r')
+    expect(rLessons.length).toBeGreaterThan(0)
+    if (rLessons.every((l) => l.ticket)) return
+    const entries = ['t0', 't1', 't2', 't3', 't4', 't5'] as const
+    for (const p of ['serving-first', ...OTHER] as LearningPath[]) {
+      for (const a of ANCHORS) {
+        for (const e of entries) {
+          const plan = planFor(p, e, a)
+          for (const shown of [true, false]) expect(anchorLine(a, p, plan, shown)).not.toMatch(/test.?out/i)
+          const note = rLayerNote(a, plan.testOut.length > 0)
+          if (note !== null) expect(note).not.toMatch(/test.?out/i)
+        }
+      }
+    }
+    for (const a of [...ANCHORS, null, undefined]) for (const t of [true, false]) expect(rLayerNote(a, t) ?? '').not.toMatch(/test.?out/i)
+    // the blind-pattern result names the lessons that have a test-out, which Rust Zero's are not
+    const walk = readFileSync(join(import.meta.dir, '../../src/components/learner/PlacementWalk.tsx'), 'utf8')
+    expect(walk).not.toContain('every lesson has a test-out')
   })
 
   test('the learner who skipped the Rust item on a path with Rust Zero is never told it was not asked', () => {
@@ -141,7 +163,7 @@ describe('anchorLine', () => {
 
   test('the Curriculum says placement found Rust solid only for a solid anchor, never for a skipped one', () => {
     expect(rLayerNote('solid', true)).toBe(SOLID_NOTE)
-    expect(rLayerNote('skipped', true)).toBe('placement has no Rust reading for you: each lesson here offers a test-out, or take it as a lesson.')
+    expect(rLayerNote('skipped', true)).toBe(SKIPPED_NOTE)
     for (const p of OTHER) {
       for (const a of ANCHORS) {
         for (const e of ['t0', 't3', 't5'] as const) {
