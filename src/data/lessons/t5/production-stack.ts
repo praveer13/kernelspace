@@ -1,5 +1,6 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
+import { claimCite, claimRelease } from '../claims'
 
 /**
  * Spiral items (wave-2.md §6.2): authored questions on earlier KCs of T3, T4 and T5, drawn by the T5 checkpoint beside
@@ -260,9 +261,9 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
       type: 'prose',
       md: `## Dynamo: the data plane, not the engine
 
-**Design center:** Dynamo (T3.L6) is deliberately **not** an inference engine — it's the distributed layer *around* engines (it runs TRT-LLM, vLLM, or SGLang as workers): KV-aware request routing, prefill/decode disaggregation orchestration, NIXL/UCX-based KV transfer over RDMA/NVLink, planner-driven autoscaling, all with the Rust data plane you studied. Since T3.L6 was written it went GA (v1.3) and kept moving: its **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, then was **deprecated in v1.5.0** (2026-09-21, removal targeted for v1.6.0) in favor of each engine's native KV offload, and **llm-d** (Red Hat/Google/CoreWeave) packages the same architecture Kubernetes-natively. If the engines are databases, Dynamo is the **proxy + replication + sharding tier**.
+**Design center:** Dynamo (T3.L6) is deliberately **not** an inference engine — it's the distributed layer *around* engines (it runs TRT-LLM, vLLM, or SGLang as workers): KV-aware request routing, prefill/decode disaggregation orchestration, NIXL/UCX-based KV transfer over RDMA/NVLink, planner-driven autoscaling, all with the Rust data plane you studied. Since T3.L6 was written it kept moving: its v1.0.0 notes (2026-03-13) call that "the first major release" and describe "production-grade disaggregated serving", and ${claimRelease('status.dynamo.release')} is the newest release we have read. its **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, then was **deprecated in v1.5.0** (2026-09-21), with removal targeted for ${claimCite('status.dynamo.kvbm.removal-target')}, in favor of each engine's native KV offload, and **llm-d** (Red Hat/Google/CoreWeave) packages the same architecture Kubernetes-natively. If the engines are databases, Dynamo is the **proxy + replication + sharding tier**.
 
-**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with NATS, etcd, and transfer fabric of its own. **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L9's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
+**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with a transfer fabric of its own and, in some modes, NATS or etcd (optional: the README at ${claimRelease('status.dynamo.release')} says Dynamo uses TCP for inter-component communication and lists both as not required on Kubernetes). **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L9's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
     },
     {
       type: 'prose',
@@ -372,7 +373,7 @@ First, the T5 spiral checkpoint: eight items, four on this lesson and four that 
           explanation:
             'Operational simplicity wins when the fleet-layer wins (disaggregation, distributed cache) can\'t amortize. The T5.L9 rule: disaggregate at scale/long context; colocate at small scale.',
           why: [
-            'Dynamo adds NATS, etcd and a transfer fabric. One GPU has no second worker to route to or disaggregate onto, so the platform cost buys nothing.',
+            'Dynamo adds a distributed system with a transfer fabric of its own (NATS and etcd are optional, not required). One GPU has no second worker to route to or disaggregate onto, so the platform cost buys nothing.',
             'Right: operational simplicity wins when fleet-level gains cannot amortize. Colocate with chunked prefill at small scale and short context; disaggregate at scale and long context.',
             'Vendor-tuned kernels pay off for a stable, fixed workload where tokens/s/GPU is the margin. As a default on one GPU they add NVIDIA-only lock-in and tuning effort for no fleet-level benefit.',
             'A custom stack rebuilds paging, continuous batching and kernel coverage that engines already ship. Short context removes the need for fleet layers, not for a proper KV manager and scheduler.',
