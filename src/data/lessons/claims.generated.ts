@@ -32,6 +32,14 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 0.011776,
     cite: "0.011776147370379336",
   },
+  "hw.h100-sxm.hbm-bw": {
+    value: 3.35,
+    cite: "3.35",
+  },
+  "hw.h100-sxm.hbm-capacity": {
+    value: 80,
+    cite: "80",
+  },
   "hw.h100-sxm.max-warps-per-sm": {
     value: 64,
     cite: "64",
@@ -122,6 +130,18 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   "serving.pagedattention.throughput-gain-low": {
     value: 2,
     cite: "2",
+  },
+  "serving.sglang-deepseek.cost-per-mtok": {
+    value: 0.2,
+    cite: "0.2",
+  },
+  "serving.sglang-deepseek.gpus-per-node": {
+    value: 8,
+    cite: "8",
+  },
+  "serving.sglang-deepseek.output-tps-per-node": {
+    value: 22300,
+    cite: "22300",
   },
   "status.android.memory-safety-share": {
     cite: "below 20",
@@ -219,6 +239,10 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
   },
   "status.wasi.version": {
     cite: "WASI 0.3.0, shipped 2026-06-11",
+  },
+  "synthetic.cost.gpu-hourly": {
+    value: 2,
+    cite: "2",
   },
   "synthetic.kv.paged-waste": {
     value: 4,
