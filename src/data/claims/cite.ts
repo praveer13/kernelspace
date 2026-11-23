@@ -11,6 +11,12 @@ const REPO_NAMES: Record<string, string> = {
   'vllm-project/vllm': 'vLLM',
   'sgl-project/sglang': 'SGLang',
   'ai-dynamo/dynamo': 'Dynamo',
+  'deepseek-ai/DeepEP': 'DeepEP',
+}
+
+/** A tag as it is; a full commit sha cut to its first seven characters, as GitHub shows it. */
+function refText(ref: string): string {
+  return /^[0-9a-f]{40}$/.test(ref) ? ref.slice(0, 7) : ref
 }
 
 /** A numeric claim's value, unscaled. Throws on an unknown id or a non-numeric claim. */
@@ -18,11 +24,11 @@ export function claimValue(id: string): number {
   return claimNumber(id)
 }
 
-/** The release a claim was read at, e.g. "vLLM v0.34.0". Throws on an unknown id or a claim with no pin. */
+/** The release a claim was read at, e.g. "vLLM v0.34.0" (or "DeepEP f6aa38f" for a commit pin). Throws on an unknown id or a claim with no pin. */
 export function claimRelease(id: string): string {
   const { pin } = getClaim(id)
   if (!pin) throw new Error(`claim ${id} has no pin, so it names no release`)
-  return `${REPO_NAMES[pin.repo] ?? pin.repo} ${pin.ref}`
+  return `${REPO_NAMES[pin.repo] ?? pin.repo} ${refText(pin.ref)}`
 }
 
 /** The value, its release and the day it was read, e.g. "64 tokens/block as of vLLM v0.34.0, read 2026-11-21". */

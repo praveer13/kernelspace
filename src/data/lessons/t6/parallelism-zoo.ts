@@ -181,7 +181,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
     {
       type: 'deepdive',
       title: 'The reference card',
-      md: `Three production configs to recite: **DeepSeek decode** — routed experts EP144, MLA and shared expert DP144 (attention replicated, no TP), attention split in two steps with a 5-stage pipeline to overlap communication, FP8 dispatch (DeepSeek open-infra, Feb 2025). **Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, Oct 2025). **Kimi K2** — 128×H200, P/D disaggregation + large-scale EP, 224k/288k tok/s prefill/decode (lmsys.org, Jul 2025). Each is a point in the five-axis space chosen by a different scarcity: expert balance, sequence length, and fleet-scale goodput respectively.`,
+      md: `Three production configs to recite: **DeepSeek decode** — routed experts EP144, MLA and shared expert DP144 (attention replicated, no TP), two micro-batches through a 5-stage pipeline with attention split in two steps to overlap communication, FP8 dispatch (DeepSeek open-infra, Feb 2025). **Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, Oct 2025). **Kimi K2** — 128×H200, P/D disaggregation + large-scale EP, 224k/288k tok/s prefill/decode (lmsys.org, Jul 2025). Each is a point in the five-axis space chosen by a different scarcity: expert balance, sequence length, and fleet-scale goodput respectively.`,
     },
   ],
   kcs: ['t6.parallel-memory', 't6.parallelism-composition', 't6.context-parallelism'],
