@@ -230,7 +230,7 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           ],
           correct: [1],
           explanation:
-            'Iteration-level scheduling: the batch is edited after every model step (InferenceX measured a mean 11.8 ms per output token for a 70B FP8 model on 4 H100s at 4 users, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, so the scale of a step, not one step). Steps can be this short because switching is metadata (block tables), not a context switch — the main enabler.',
+            'Iteration-level scheduling: the batch is edited after every model step (InferenceX measured a mean 11.8 ms per output token for a 70B FP8 model on 4 H100s at 4 users, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, so the scale of a step, not one step). Re-deciding the batch at every step is affordable because switching is metadata (block tables), not a context switch — the main enabler.',
           why: [
             'That is static batching. Per-request granularity keeps the batch fixed until it drains, so finished sequences wait for slow ones.',
             'Right: the batch is edited after every step, and the mean time per output token InferenceX measured for a 70B model on 4 H100s at 4 users, 11.8 ms, sets the scale. A step boundary can come this often because switching only updates block tables, not a context.',

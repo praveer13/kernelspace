@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'bun:test'
 import { ALL_LESSONS } from '@/data/lessons'
 import { claimNumber } from '@/data/lessons/claims'
@@ -75,5 +76,32 @@ describe('no lesson calls the batch a timeslice or the step a quantum (K0-CLOSE-
     expect(textOf('t5.l7')).toContain(l7.after)
     expect(l1.after).toContain('scheduling boundary, not a timeslice')
     expect(l7.after).toContain('scheduling boundary, not a quantum')
+  })
+})
+
+/**
+ * K0-CLOSE2-G. A step's length is set by its forward pass (weight reads, attention, prefills mixed in), not by how cheap
+ * the batch edit is; cheap switching (block tables, PagedAttention §4.3: "for each decoding iteration, vLLM first selects
+ * a set of candidate sequences for batching") is what makes re-deciding the batch at every step affordable. The home
+ * page's isomorphism beat told the same false account as the lessons did, so it is read here too.
+ */
+describe('the step boundary is cheap to re-decide, and the home page has no timeslice (K0-CLOSE2-G)', () => {
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
+
+  test('t5.l7 says re-deciding the batch is affordable, not that steps are short, because switching is cheap', () => {
+    const l = ALL_LESSONS.find((x) => x.id === 't5.l7')
+    if (!l) throw new Error('t5.l7 not found')
+    const t = JSON.stringify(l)
+    expect(t.toLowerCase()).not.toContain('steps can be this short because')
+    expect(t).toContain('Re-deciding the batch at every step is affordable because switching is metadata (block tables)')
+  })
+
+  test('the home page scroll story does not map a timeslice to a decode step', () => {
+    const t = src('src/components/home/ScrollStory.tsx').toLowerCase()
+    expect(t).not.toContain('timeslice ≡')
+    expect(t).not.toContain('time slice ≡')
+    expect(t).not.toContain('quantum ≡')
+    expect(t).not.toContain('≡ one decode step')
+    expect(t).toContain('quantum edge ≡ decode-step boundary (no timer)')
   })
 })
