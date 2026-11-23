@@ -248,6 +248,8 @@ test('Boot replayed with a stored serving-first path: the path shows as chosen a
   // the replay: the intro offers it, and the last step shows the stored path without a pick this time
   await walkToYou(page, true)
   await expect(page.getByRole('radio', { name: /^Serving first/ })).toBeChecked()
+  // the choice carries its warning: some T5 to T7 lessons lean on Track 2 and Track 4 ideas this path leaves out
+  await expect(page.getByRole('radio', { name: /^Serving first.*Track 2/ })).toBeVisible()
   await expect(page.getByRole('radio', { name: /^Full ramp/ })).not.toBeChecked()
   await expect(page.getByRole('radio', { name: /^Rust systems/ })).not.toBeChecked()
   // the line is the stored path's: it names a first lesson, and no Rust
