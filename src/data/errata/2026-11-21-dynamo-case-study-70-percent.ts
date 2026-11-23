@@ -7,7 +7,7 @@ export default {
   lessons: ['t3.l6'],
   title: "The 70% figure is Chromium's, and Dynamo's Kubernetes operator is Go",
   before: 'The case study labelled 70% as the share of C/C++ CVEs (Microsoft/Google), and said Python handles Kubernetes integration.',
-  after: "70% is Chromium's share of high-severity security bugs that are memory unsafety (912 bugs since 2015). Dynamo's Kubernetes operator is Go; KV bytes move through NIXL, a C++ library.",
+  after: "70% is Chromium's share of high-severity security bugs that are memory unsafety (of 912 high or critical bugs analysed since 2015). Dynamo's Kubernetes operator is Go; KV bytes move through NIXL, a C++ library.",
   why: 'The figure comes from one codebase, not all C/C++ CVEs, and Microsoft was not re-read. Android fell below 20% after moving new code to Rust. The operator module is Go.',
   source: {
     url: 'https://www.chromium.org/Home/chromium-security/memory-safety/',

@@ -123,6 +123,13 @@ export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string;
     value: 2,
     cite: "2",
   },
+  "status.android.memory-safety-share": {
+    cite: "below 20",
+  },
+  "status.chromium.memory-safety-sample": {
+    value: 912,
+    cite: "912",
+  },
   "status.chromium.memory-safety-share": {
     value: 70,
     cite: "70",

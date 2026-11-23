@@ -1,4 +1,9 @@
+import { claimCite, claimNumber } from '../claims'
 import type { Lesson } from '../types'
+
+const CHROMIUM_SHARE = claimNumber('status.chromium.memory-safety-share')
+const CHROMIUM_SAMPLE = claimNumber('status.chromium.memory-safety-sample')
+const ANDROID_SHARE = claimCite('status.android.memory-safety-share')
 
 const lesson: Lesson = {
   id: 't3.l6',
@@ -35,7 +40,7 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
         { value: '~GB/s', label: 'KV transfer', hint: 'Per-worker KV movement between prefill and decode nodes over RDMA/NVLink.' },
         { value: 'ms-scale', label: 'TTFT budget', hint: 'Time-to-first-token targets leave no room for stop-the-world anything.' },
         { value: '0', label: 'GC pauses', hint: 'The entire point of Rust on this path: reclamation is deterministic and free-threaded.' },
-        { value: '70%', label: 'Chromium severe bugs', hint: "Chromium's own count: around 70% of its high-severity security bugs are memory unsafety (912 bugs since 2015) — the C++ bill Dynamo declined." },
+        { value: `${CHROMIUM_SHARE}%`, label: 'Chromium severe bugs', hint: `Chromium's own count: around ${CHROMIUM_SHARE}% of its high-severity security bugs are memory unsafety (of ${CHROMIUM_SAMPLE} high or critical bugs analysed since 2015) — the C++ bill Dynamo declined.` },
       ],
     },
     {
@@ -44,7 +49,7 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
 
 **Why not Python for the data plane?** T0.L5 answered: the GIL serializes bytecode, objects are pointer soup, and pauses are unbudgetable. Python remains excellent for the *planner* — decisions per second: hundreds. The data plane needs decisions per second: millions, while moving GB/s. Different physics, different language. (Notice the honest engineering: they didn't rewrite everything — they drew the boundary at the hot path.)
 
-**Why not C++?** C++ has the speed and the control — it's what the CUDA kernels are written in. What it doesn't have is a safety net for a codebase moving this fast, maintained by a large team, handling untrusted network input. The business case is a measured figure from one large C++ codebase: the Chromium project finds that around 70% of its high-severity security bugs are memory-unsafety problems (an analysis of 912 high or critical bugs since 2015). It is Chromium's count, not a share of all C/C++ CVEs, and it shows how large the class can be in a big, network-facing C++ program. Google's Android team then reports what happens when new code moves to Rust: memory-safety vulnerabilities fell below 20% of the total for the first time (2025 data). Rust offers the same zero-cost abstractions, RAII, and layout control with the borrow checker as a full-time reviewer.
+**Why not C++?** C++ has the speed and the control — it's what the CUDA kernels are written in. What it doesn't have is a safety net for a codebase moving this fast, maintained by a large team, handling untrusted network input. The business case is a measured figure from one large C++ codebase: the Chromium project finds that around ${CHROMIUM_SHARE}% of its high-severity security bugs are memory-unsafety problems (an analysis of ${CHROMIUM_SAMPLE} high or critical bugs since 2015). It is Chromium's count, not a share of all C/C++ CVEs, and it shows how large the class can be in a big, network-facing C++ program. Google's Android team then reports what happens when new code moves to Rust: memory-safety vulnerabilities fell ${ANDROID_SHARE}% of the total for the first time (2025 data). Rust offers the same zero-cost abstractions, RAII, and layout control with the borrow checker as a full-time reviewer.
 
 **Why not Go?** Go was the other serious candidate for systems like this (and plenty of control planes use it). The blockers for *this* path: the GC (sub-millisecond pauses usually — but "usually" under GB/s pressure is a tail-latency gamble), less control over layout (T0.L4's cache-line games matter on this path), and cgo's cost at the CUDA/RDMA boundary. Rust's C ABI interop (T1.L5) is free: call libcuda, libibverbs, NIXL/UCX directly.
 

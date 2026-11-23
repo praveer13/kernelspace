@@ -8,7 +8,7 @@ export default {
   title: 'Dynamo carries requests over TCP by default; NATS is optional',
   before: 'The Dynamo case study named NATS as the message bus of the data plane, and its hook led with "NATS messaging".',
   after: "Dynamo's README (v1.6.2): it uses TCP for inter-component communication, etcd and NATS are not required on Kubernetes, and KV-aware routing does not require NATS.",
-  why: 'Dynamo moved from NATS and etcd to a TCP request plane with Kubernetes-native discovery. A learner who sets up a Dynamo cluster should not expect to run a broker.',
+  why: 'The README lists etcd and NATS as not required for local development or Kubernetes, where native resources handle discovery; Slurm and other deployments may still choose them. A learner on Kubernetes should not expect to run a broker.',
   source: {
     url: 'https://raw.githubusercontent.com/ai-dynamo/dynamo/v1.6.2/README.md',
     title: 'NVIDIA Dynamo README at v1.6.2',
@@ -26,7 +26,7 @@ export default {
       why: [
         'Right: the README says Dynamo uses TCP for inter-component communication, and lists etcd and NATS as not required on Kubernetes.',
         'NATS is an optional backend for some event-backed modes. The default request path does not need a broker.',
-        'etcd was an earlier discovery option; on Kubernetes the cluster resources handle discovery, so etcd is not required.',
+        "etcd is not required on Kubernetes, where the cluster's own resources handle discovery; it remains an option for Slurm and other deployments.",
         'RDMA moves the KV blocks through NIXL. The control and request messages ride TCP.',
       ],
     },
