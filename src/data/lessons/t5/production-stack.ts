@@ -247,7 +247,7 @@ The four: **vLLM** (the open-source reference), **SGLang** (a general engine bui
 
 **Design center:** RadixAttention — the KV cache organized as a **radix tree over token prefixes**, so shared prefixes (system prompts, few-shot templates, multi-turn chats, agent loops) are reused *automatically* across requests with LRU eviction on the tree. If vLLM's prefix cache is a hash map of blocks, SGLang's is a trie: finer-grained sharing, better hit rates on structured workloads. On top of it: a frontend language for constrained/structured generation (regex/JSON-schema decoding at speed), first-class MoE expert parallelism, and — since Dec 2025 — **EPD disaggregation** with Mooncake as its transfer backend (T6.L3).
 
-**What it is now:** SGLang's README introduces it as "an open-source inference framework for large language, vision-language, and diffusion models, optimized for agentic workloads, large-scale serving, and RL rollouts", not as a structured-generation specialist, and its hardware list is far wider than "any CUDA": ${claimCite('status.sglang.hardware')}. Its radix tree is no longer pure Python either: the v0.5.21 notes say the prefix cache "now runs on a Rust core by default".
+**What it is now:** SGLang's README introduces it as "an open-source inference framework for large language, vision-language, and diffusion models, optimized for agentic workloads, large-scale serving, and RL rollouts", not as a structured-generation specialist, and its hardware list is far wider than "any CUDA": ${claimCite('status.sglang.hardware')}. Its radix tree is no longer pure Python either: the release notes that switched it say the prefix cache "now runs on a Rust core by default", and at ${claimRelease('status.sglang.hardware')} \`environ.py\` still makes the Rust core the default.
 
 **Trade-offs chosen:** optimizes hardest for workloads with *repetitive structure* — agents, tool-use loops, RAG with stable templates — where cache-hit rate is the throughput multiplier. Its general-purpose features track vLLM's (it shares much of the kernel ecosystem); the community is smaller. **Choose it when:** your traffic is agentic/templated (cache hits dominate), or structured output is your product's spine.`,
     },
@@ -271,16 +271,16 @@ The four: **vLLM** (the open-source reference), **SGLang** (a general engine bui
       type: 'prose',
       md: `## The comparison, compressed
 
-The table is as of 2026-11-23. Its SGLang cells come from the README and release notes of ${claimRelease('status.sglang.hardware')}, its TRT-LLM cells from the migration guide read at ${claimRelease('status.trtllm.pytorch-sole-backend')}, and its vLLM "Rust front end" from vLLM's release notes (v0.33.0 calls it "a large Rust frontend parity push"); engines change release to release, so a cell older than a release or two is a prompt to look again.
+Most cells are the course's summary of each engine's design, not a reading of one release. Four were checked against a source. SGLang's **Runs on** cell names its release and read date itself. TRT-LLM's **Kind** follows its migration guide: ${claimCite('status.trtllm.pytorch-sole-backend')}. Under **Language core**, SGLang's radix tree defaults to its Rust core at ${claimRelease('status.sglang.hardware')}, and the ${claimRelease('twin.vllm.scheduler')} release notes speak of "the Python and Rust frontends". Engines change release to release, so a cell older than a release or two is a prompt to look again.
 
 | | vLLM | SGLang | TRT-LLM | Dynamo |
 |---|---|---|---|---|
 | **Kind** | engine (library+server) | engine + frontend lang | engine (PyTorch-native, NVIDIA kernels) | distributed data plane |
 | **Design center** | PagedAttention for all | RadixAttention cache reuse | NVIDIA-tuned kernels and runtime | fleet orchestration |
-| **Language core** | Python + CUDA, plus a Rust front end | Python + CUDA, with a Rust radix-tree core by default | Python runtime + C++/CUDA kernels | Rust + Python planner |
+| **Language core** | Python + CUDA; a second, Rust front end | Python + CUDA, with a Rust radix-tree core by default | Python runtime + C++/CUDA kernels | Rust + Python planner |
 | **Signature win** | ecosystem default | agentic/structured traffic | peak per-GPU perf | long-context fleet goodput |
 | **Price** | scheduler overhead | smaller ecosystem | NVIDIA-only depth | operational complexity |
-| **Runs on** | any CUDA (+AMD/TPU ports) | NVIDIA, AMD Instinct, Google TPU, Intel, Apple Silicon, Huawei Ascend, Moore Threads | NVIDIA | wraps the other three |`,
+| **Runs on** | any CUDA (+AMD/TPU ports) | ${claimCite('status.sglang.hardware')} | NVIDIA | wraps the other three |`,
     },
     {
       type: 'reading',

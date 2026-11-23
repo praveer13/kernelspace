@@ -13,14 +13,13 @@ const comparison = blocks.find((b) => b.type === 'prose' && b.md?.startsWith('##
 const md = comparison.md!
 
 describe('t5.l10 comparison table', () => {
-  test('a sentence before the table says "as of <date>"', () => {
+  test('a sentence before the table gives a read date ("read <date>")', () => {
     const before = md.slice(0, md.indexOf('| |'))
-    expect(before).toMatch(/as of \d{4}-\d{2}-\d{2}/)
+    expect(before).toMatch(/read \d{4}-\d{2}-\d{2}/)
   })
-  test('the date is the day the claims behind the table were read', () => {
-    const date = /as of (\d{4}-\d{2}-\d{2})/.exec(md)![1]
+  test('the dates in the table and before it are the days the claims behind the table were read', () => {
     for (const id of ['status.sglang.hardware', 'status.trtllm.pytorch-sole-backend']) {
-      expect(ENGINES_STATUS_CLAIMS.find((c) => c.id === id)!.verifiedAt).toBe(date!)
+      expect(md).toContain(`read ${ENGINES_STATUS_CLAIMS.find((c) => c.id === id)!.verifiedAt}`)
     }
   })
   test('SGLang is not "any CUDA" and TRT-LLM is not a build-time compiler', () => {

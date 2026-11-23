@@ -22,11 +22,10 @@ describe('t5.l3: the ITL comfort chip', () => {
     expect(hint).not.toContain('title and citation')
     expect(hint).not.toContain('no figure of its own')
   })
-  test('says what the erratum\'s after says: one 2019 meta-analysis (Brysbaert) puts reading well above 50 ms per token', () => {
+  test('says what the erratum\'s after says: adult silent reading is far slower than 50 ms per token (K0-FIX4-T5 names no study)', () => {
     const hint = itlHint()
-    expect(erratum.after).toContain('One 2019 meta-analysis of silent reading (Brysbaert) puts reading well above 50 ms per token')
-    expect(hint).toContain('slower than 50 ms per token: one 2019 meta-analysis of silent reading (Brysbaert')
-    expect(hint).toContain('puts it well above that')
+    expect(erratum.after).toContain('Adult silent reading is far slower than 50 ms per token')
+    expect(hint).toContain('Adult silent reading is far slower than 50 ms per token')
   })
   test('gives no reading-speed figure, as the erratum\'s why says', () => {
     expect(itlHint()).not.toMatch(/words per minute|wpm/)
