@@ -325,7 +325,7 @@ describe('homes, order and the ⌘K index', () => {
     expect(ids.indexOf(IX_POINT_CLAIMS[0].id)).toBeGreaterThan(ids.indexOf(PHYSICS_CLAIMS[PHYSICS_CLAIMS.length - 1].id))
   })
 
-  test('the ⌘K index leaves out both groups (S5-D36) and keeps every other claim; the committed file is the builder\'s output', () => {
+  test('the ⌘K index leaves out both physics groups (S5-D36) and keeps every other claim; the committed file is the builder\'s output', () => {
     const left = new Set([...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS].map((c) => c.id))
     const indexed = buildSearchIndex().claims.map((row) => row[0])
     for (const id of left) expect(indexed).not.toContain(id)

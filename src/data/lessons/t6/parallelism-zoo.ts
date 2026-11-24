@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9 gave you three axes (TP, PP, DP) and T6.L1–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and every one of those GPUs is also inside a TP group. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
+      md: `T5.L9 gave you three axes (TP, PP, DP) and T6.L1–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and Meta's CP hosts also sit inside TP groups; DeepSeek's decode units do not, because their attention is data-parallel (DP144) with the same weights on every GPU. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
     },
     {
       type: 'prose',
@@ -30,11 +30,11 @@ const lesson: Lesson = {
       caption: 'fig 1 — the interconnect ladder prices the axes (bandwidth per hop, 2026)',
       height: 52,
       nodes: [
-        { id: 'nvlink', x: 2, y: 6, w: 44, h: 9, label: 'NVLink 5 / NVL72 rack', sub: '~1.8 TB/s bidirectional — TP needs it', color: '#3EF2A4' },
-        { id: 'pcie', x: 2, y: 20, w: 44, h: 9, label: 'PCIe gen5 x16', sub: '~64 GB/s — CPU attach, offload tier', color: '#FBBF24' },
-        { id: 'rdma', x: 2, y: 34, w: 44, h: 9, label: 'RDMA (RoCE / InfiniBand)', sub: '25–100 GB/s — PP, DP, KV, cross-rack', color: '#5CA8FF' },
+        { id: 'nvlink', x: 2, y: 6, w: 44, h: 9, label: 'NVLink 5 / NVL72 rack', sub: '~1.8 TB/s both ways — TP needs it', color: '#3EF2A4' },
+        { id: 'pcie', x: 2, y: 20, w: 44, h: 9, label: 'PCIe gen5 x16', sub: '~64 GB/s — CPU, offload tier', color: '#FBBF24' },
+        { id: 'rdma', x: 2, y: 34, w: 44, h: 9, label: 'RDMA (RoCE / InfiniBand)', sub: '25–100 GB/s — PP, DP, KV, racks', color: '#5CA8FF' },
         { id: 'tp', x: 54, y: 6, w: 20, h: 9, label: 'TP', sub: 'all-reduce', color: '#3EF2A4' },
-        { id: 'epcp', x: 54, y: 20, w: 20, h: 9, label: 'EP / CP', sub: 'all-to-all/ring', color: '#A78BFA' },
+        { id: 'epcp', x: 54, y: 24, w: 20, h: 9, label: 'EP / CP', sub: 'all-to-all/ring', color: '#A78BFA' },
         { id: 'kv', x: 54, y: 34, w: 20, h: 9, label: 'PP / DP / KV xfer', sub: 'acts, replicas, blocks', color: '#5CA8FF' },
       ],
       edges: [
@@ -181,7 +181,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
     {
       type: 'deepdive',
       title: 'The reference card',
-      md: `Three production configs to recite: **DeepSeek decode** — EP144×DP144, dual-batch overlap, FP8 dispatch (DeepSeek open-infra, Feb 2025). **Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, Oct 2025). **Kimi K2** — 128×H200, P/D disaggregation + large-scale EP, 224k/288k tok/s prefill/decode (lmsys.org, Jul 2025). Each is a point in the five-axis space chosen by a different scarcity: expert balance, sequence length, and fleet-scale goodput respectively.`,
+      md: `Three published configs to recite (one production service, two reported runs): **DeepSeek decode** — routed experts EP144, MLA and shared expert DP144 (attention replicated, no TP), two micro-batches through a 5-stage pipeline with attention split in two steps to overlap communication, FP8 dispatch (DeepSeek open-infra, Feb 2025). **Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, Oct 2025). **Kimi K2 benchmark** — P/D disaggregation + large-scale EP on SGLang at one fixed input and output length ([the Mooncake team's post](https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/)), not Moonshot's production. Each is a point in the five-axis space chosen by a different scarcity: expert balance, sequence length, and fleet-scale goodput respectively.`,
     },
   ],
   kcs: ['t6.parallel-memory', 't6.parallelism-composition', 't6.context-parallelism'],

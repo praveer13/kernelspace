@@ -220,13 +220,13 @@ fn cached_entry(map: &mut HashMap<u32, String>, key: u32) -> &String {
 
 ---
 
-On the path where `get` finds a value, `hit` is returned, so its loan must last as long as the caller's reference. Today's compiler applies that to the whole function, including the path where `get` found nothing and no reference exists. So the insert finds `*map` without W, although no run breaks. A more precise analysis, Polonius, accepts it, and stable rustc does not yet. Look the key up once with `entry` and the question is settled before any reference is returned. [R4](/lesson/r.l4) lists the other limits you will meet early.
+On the path where `get` finds a value, `hit` is returned, so its loan must last as long as the caller's reference. Today's compiler applies that to the whole function, including the path where `get` found nothing and no reference exists. So the insert finds `*map` without W, although no run breaks. A more precise analysis, Polonius, accepts it, but no stable release through Rust 1.100.0, Nov 2026, ships Polonius. Look the key up once with `entry` and the question is settled before any reference is returned. [R4](/lesson/r.l4) lists the other limits you will meet early.
 
 The compile items for the lifetimes group have no page of their own, so practise them from the Error Museum entries they come from: [E0106](/errors#E0106), [E0373](/errors#E0373), [E0515](/errors#E0515), [E0521](/errors#E0521), [E0597](/errors#E0597) and [E0716](/errors#E0716). Each shows the diagram, the fix that keeps the program's behaviour, the clone that changes it, and practice items. The conditional return above is E0502, which has its own [entry](/errors#E0502).
 
 ## Prove borrowed views
 
-The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between borrowed strings, defines **Block<'a>**, separates two unrelated lifetimes, and replaces an impossible escaping reference with owned data. T3.L1 picks up this Block, so after the drill it is a reminder, not a cliff.
+The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between borrowed strings, defines **Block<'a>**, separates two unrelated lifetimes, and replaces an impossible escaping reference with owned data. T3.L1 picks up ownership, borrowing and lifetimes again at systems scale, so after the drill they are a reminder, not a cliff.
 
 ---
 

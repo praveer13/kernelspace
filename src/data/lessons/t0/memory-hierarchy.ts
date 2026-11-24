@@ -87,14 +87,14 @@ Every performance instinct you want is already in that paragraph. When a profile
 | DRAM | 32–512 GB | ~100 ns | ~3.5 minutes |
 | NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |
 
-These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table; the ~100 µs random SSD read comes from Eskildsen's [napkin-math](https://github.com/sirupsen/napkin-math) (Dean's 2012 table lists 150 µs). L2 and L3 are typical rounded values (Dean lists L2 at 7 ns). Everything in this lesson, from the DRAM ratio to the NVMe ratio, uses this one set.`,
+These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table. The ~100 µs NVMe figure is a typical modern random read, rounded: Dean's 2012 table lists 150 µs, and Eskildsen's [napkin-math](https://github.com/sirupsen/napkin-math) lists 200 µs for an 8 KiB random read. L2 and L3 are typical rounded values (Dean lists L2 at 7 ns). Everything in this lesson, from the DRAM ratio to the NVMe ratio, uses this one set.`,
     },
     {
       type: 'diagram',
       caption: 'fig 1 — a load instruction walks the hierarchy until something answers',
       height: 52,
       nodes: [
-        { id: 'cpu', x: 2, y: 20, w: 14, h: 10, label: 'CPU core', sub: 'load r1, [addr]' },
+        { id: 'cpu', x: 2, y: 20, w: 14, h: 10, label: 'CPU core', sub: 'load [addr]' },
         { id: 'l1', x: 24, y: 4, w: 16, h: 9, label: 'L1', sub: '~0.5 ns · 48 KiB' },
         { id: 'l2', x: 24, y: 20, w: 16, h: 9, label: 'L2', sub: '~5 ns · 1 MiB' },
         { id: 'l3', x: 24, y: 36, w: 16, h: 9, label: 'L3', sub: '~15 ns · 32 MiB' },

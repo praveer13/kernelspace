@@ -44,7 +44,7 @@ const lesson: Lesson = {
       items: [
         {
           kind: 'numeric',
-          q: 'A vector add has 16,777,216 elements and each workgroup holds 256 invocations. How many workgroups must the dispatch launch so that every element is covered once?',
+          q: 'A vector add has 16,777,216 elements and each workgroup holds 256 invocations. How many workgroups in total must the dispatch launch so that every element is covered once?',
           unit: 'workgroups',
           truth: 65536,
           okWithinFactor: 1.05,
@@ -86,13 +86,16 @@ You write a **kernel**; the host **dispatches** a grid of **workgroups**; each w
 @group(0) @binding(2) var<storage, read_write> out: array<f32>;
 
 @compute @workgroup_size(256)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let i = gid.x;                    // which element am I?
+fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+        @builtin(num_workgroups) nwg: vec3<u32>) {
+    let i = gid.y * (nwg.x * 256u) + gid.x;   // which element am I? (row y, column x)
     if (i < arrayLength(&out)) {      // guard the tail (N % 256 != 0)
         out[i] = a[i] + b[i];         // coalesced: lane i ↔ address i
     }
 }
-// host: dispatchWorkgroups(ceil(N / 256)) — e.g. 65,536 groups for 16M floats
+// host: ceil(N / 256) groups in total, e.g. 65,536 for 16M floats. WebGPU's default cap is
+// 65,535 per dimension, so launch them in two: dispatchWorkgroups(256, 256). That is why
+// the index above joins gid.y and gid.x (one flat dimension of 65,536 fails validation).
 // NOTE: AI = 1 FLOP / 12 B ≈ 0.08 → memory-bound. The GPU will
 // saturate HBM bandwidth, not FLOPs. (T4.L3 called this shot.)`,
         },
@@ -101,13 +104,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
           lang: 'cuda',
           code: `__global__ void vec_add(const float* a, const float* b,
                         float* out, int n) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;   // ≡ gid.x
+    int i = blockIdx.x * blockDim.x + threadIdx.x;   // ≡ i (gid.x on a 1-D grid)
     if (i < n) out[i] = a[i] + b[i];
 }
 // vec_add<<<(n+255)/256, 256>>>(a, b, out, n);`,
         },
       ],
-      chips: ['@workgroup_size(256)', 'gid.x = my element', 'memory-bound by design'],
+      chips: ['@workgroup_size(256)', 'gid.y, gid.x = my element', 'memory-bound by design'],
     },
     {
       type: 'prose',
@@ -116,7 +119,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 Sum 16 million floats. One invocation can't do it (serial = T4.L1's cautionary tale); workgroups must combine their values with coordination. The GPU answer is the **tree reduction**, in two levels:
 
 1. **Inside the workgroup**: each of 256 invocations loads one value into shared memory; then a loop halves the active set each round — 128 add pairs, 64, 32… — with \`workgroupBarrier()\` between rounds so every lane sees the previous round's writes. After \`log2(256) = 8\` rounds, invocation 0 holds the workgroup total and writes ONE value out.
-2. **Across workgroups**: 65,536 partials remain. Redispatch the same reduction over those partials: 16,777,216 → 65,536 → 256 → 1. The playground reports that exact logical topology and returns one scalar while bounding physical storage to a representative 65,536-float sample. Available WebGPU executes the bounded passes; the explicitly labeled CPU/model fallback preserves the same logical topology.
+2. **Across workgroups**: 65,536 partials remain, one per workgroup of the first pass (the first pass's 65,536 workgroups launch as 256 x 256 in two dimensions, because one dimension holds at most 65,535 by default). Redispatch the same reduction over those partials: 16,777,216 → 65,536 → 256 → 1. The playground reports that exact logical topology and returns one scalar while bounding physical storage to a representative 65,536-float sample. Available WebGPU executes the bounded passes; the explicitly labeled CPU/model fallback preserves the same logical topology.
 
 This shape — **parallel work, tree combine, multi-pass** — is everywhere: softmax denominators, layer-norm statistics, top-k, histograms. And it's why ` +
         `attention's online-softmax trick (T4.L6 deepdive) exists: reductions over long sequences are the annoying serial-ish part of otherwise-parallel kernels.`,
@@ -135,8 +138,10 @@ var<workgroup> tile: array<f32, 256>;        // shared SRAM scratchpad
 
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>,
-        @builtin(workgroup_id) wid: vec3<u32>) {
-    let g = wid.x * 256u + lid.x;
+        @builtin(workgroup_id) wid: vec3<u32>,
+        @builtin(num_workgroups) nwg: vec3<u32>) {
+    let wg = wid.y * nwg.x + wid.x;          // flat id on a 1-D or 2-D dispatch
+    let g = wg * 256u + lid.x;
     tile[lid.x] = data[g];                   // coalesced load → SRAM
     workgroupBarrier();                      // everyone parked? proceed.
 
@@ -148,7 +153,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
         workgroupBarrier();                  // round N visible to round N+1
         stride = stride / 2u;
     }
-    if (lid.x == 0u) { partials[wid.x] = tile[0]; }  // one write per group
+    if (lid.x == 0u) { partials[wg] = tile[0]; }  // one write per group
 }`,
         },
       ],
@@ -162,13 +167,13 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
     {
       type: 'callout',
       variant: 'warning',
-      md: `The three ways this kernel breaks, all reproducible in the playground: **(1)** drop a \`workgroupBarrier()\` → nondeterministic sums (a race you can watch). **(2)** Guard the tail wrong (\`i < N\` vs partial workgroups) → silently dropped elements. **(3)** Replace the tree with "everyone atomicAdd's one output" → correct but serialized on one address: 65k atomics queuing where 8 tree rounds sufficed. GPU bugs are pedagogical — the wrong answers are usually *stable-looking*.`,
+      md: `The three ways this kernel breaks. Only the first has a staged symptom in the playground; the tail guard and the atomics are not shown there: **(1)** drop a \`workgroupBarrier()\` → nondeterministic sums on real hardware. The playground does not run your shader for this case: it counts barriers and, if there are not exactly two, stages a deterministic sum that drops every odd element, so it shows the symptom and does not reproduce a race. **(2)** Guard the tail wrong (\`i < N\` vs partial workgroups) → silently dropped elements. **(3)** Replace the tree with "everyone atomicAdd's one output" → correct but serialized on one address: 65k atomics queuing where 8 tree rounds sufficed. GPU bugs are pedagogical — the wrong answers are usually *stable-looking*.`,
     },
     {
       type: 'prose',
       md: `## In the playground
 
-The playground keeps every WGSL preset editable. The 16M vector-add option executes a bounded representative sample, then honestly models exactly 65,536 logical workgroups and 192 MiB of memory traffic so the UI never allocates hundreds of MiB. Reduction runs a shared-memory tree; delete either executable barrier and its result check exposes the race. The multi-pass option models the logical 16,777,216 → 65,536 → 256 → 1 topology while bounded WebGPU or CPU passes reduce the representative sample to exactly one scalar.`,
+The playground keeps every WGSL preset editable. The 16M vector-add option executes a bounded representative sample, then honestly models the count, 65,536 logical workgroups, and 192 MiB of memory traffic so the UI never allocates hundreds of MiB. It counts the workgroups and does not model their two-dimensional shape: its table lists them as one row of 65,536, the shape a real dispatch cannot use on default limits. Reduction runs a shared-memory tree; delete either executable barrier and the playground stages a wrong sum, which its result check flags. The multi-pass option models the logical 16,777,216 → 65,536 → 256 → 1 topology while bounded WebGPU or CPU passes reduce the representative sample to exactly one scalar.`,
     },
     {
       type: 'exercise',
@@ -196,10 +201,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
           ],
           correct: [1],
           explanation:
-            'Both compute "which copy of the kernel am I" across the entire dispatch. Workgroups ≡ blocks, local ids ≡ threadIdx, global ids ≡ the flattened global index.',
+            'Both are the workgroup index times the workgroup size plus the local index along x. Workgroups ≡ blocks, local ids ≡ threadIdx. On a 1-D grid gid.x is the index across the dispatch; on a 2-D dispatch the index joins gid.y and gid.x, as the listing does.',
           why: [
             'That is local_invocation_id. global_invocation_id adds the workgroup offset, so it is unique across the whole dispatch.',
-            'Right: workgroup index times workgroup size plus the local index gives each invocation a unique position across the dispatch.',
+            'Right: workgroup index times workgroup size plus the local index. On a 1-D grid that is each invocation\'s index across the dispatch; the listing\'s 2-D dispatch repeats each gid.x once per gid.y.',
             'The workgroup index is scaled by workgroup size (blockDim), not by the number of workgroups. Scaling by gridDim would collide and skip elements.',
             'It indexes invocations, not warps. Warp-scoped ids come from a separate, optional subgroup feature, not from this built-in.',
           ],

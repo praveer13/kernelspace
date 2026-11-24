@@ -67,9 +67,10 @@ describe("B1/R1: vLLM's default is stated once per lesson, on CUDA, with the sam
     for (const l of ALL_LESSONS) expect(strings(l).join('\n')).not.toMatch(/ROCm[^.;\n]{0,60}?\b(?:keeps|uses)\s+\d/)
   })
 
-  test("the block-size erratum's after gives the same scope words", () => {
+  test("the block-size erratum's after keeps its original scope words", () => {
     expect(blockErratum.after).toContain('on CUDA')
-    expect(blockErratum.after).toContain(String(scope()).replace(/`/g, ''))
+    // History (K0-E4): the published erratum keeps the narrower words it shipped with; the lessons' scope words are wider now.
+    expect(blockErratum.after).toContain("ROCm's paged-attention backend keeps its own size, and an explicit --block-size overrides either")
   })
 })
 

@@ -40,7 +40,7 @@ import { getProgress, useProgress } from '@/lib/progress'
 import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
-import { encodeCfg, pickInitialCfg, pickMachineSource, routeConfigWrite, useSimHost } from '@/lib/sims/host'
+import { encodeCfg, isWidgetKeyTarget, pickInitialCfg, pickMachineSource, routeConfigWrite, useSimHost } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
 import { TaskList } from '@/components/sims/TaskPanel'
 import {
@@ -666,19 +666,13 @@ export function TransportBar({
   idle = false,
   className,
 }: TransportBarProps) {
+  const { embed } = usePlaygroundContext()
   useEffect(() => {
-    if (!keyboard) return
+    // Embedded in a lesson, the page owns the keys (Space scrolls, the arrows turn the page): the sim plays,
+    // steps and resets by its buttons there.
+    if (!keyboard || embed) return
     const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement as HTMLElement | null
-      if (
-        el &&
-        (el.tagName === 'INPUT' ||
-          el.tagName === 'TEXTAREA' ||
-          el.tagName === 'SELECT' ||
-          el.isContentEditable)
-      ) {
-        return
-      }
+      if (e.defaultPrevented || isWidgetKeyTarget(document.activeElement)) return
       if (e.code === 'Space') {
         e.preventDefault()
         onTogglePlay()
@@ -691,7 +685,7 @@ export function TransportBar({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [keyboard, onTogglePlay, onStep, onReset])
+  }, [keyboard, embed, onTogglePlay, onStep, onReset])
 
   const btn =
     'flex h-8 w-8 items-center justify-center rounded-sm border border-line bg-surface-2 text-text-2 transition-all duration-150 hover:border-line-bright hover:text-text-1 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-text-2'

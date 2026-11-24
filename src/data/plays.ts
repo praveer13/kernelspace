@@ -68,7 +68,7 @@ export const PRODUCTION_ROWS: readonly ProductionRow[] = [
     claim: 'production.glibc.bins',
     dial: 'size classes and coalescing',
     lead: 'glibc malloc files free chunks in bins:',
-    tail: '. Small bins hold one size each and large bins a range. That is the size-class dial, and not every bin coalesces: fastbins do not, small and large bins do.',
+    tail: '. Small bins hold one size each and large bins a range. That is the size-class dial, and coalescing comes first: no chunk in these bins borders another chunk in them (chunks waiting in the per-thread cache are not merged). Fastbins, which deferred coalescing, are gone from the newest glibc, and older releases still have them.',
   },
   {
     claim: 'production.glibc.mmap-threshold',

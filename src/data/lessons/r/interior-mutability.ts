@@ -102,7 +102,7 @@ println!("{}", hits.get());`,
 | Checked by | When it shows | A conflicting pair |
 |---|---|---|
 | The compiler, per path and line | before the program runs | E0502: \`&\` then a write |
-| A guard counter inside RefCell | on that line, at run time | panic: BorrowMutError |
+| A guard counter inside RefCell | on that line, at run time | panic: RefCell already borrowed |
 | A lock inside Mutex | on that line, across threads | the second thread waits |
 
 Here is the same shape as the Vec above, with the Vec inside a RefCell.`,
@@ -117,7 +117,7 @@ let log = RefCell::new(vec!["prefill"]);
 let seen = log.borrow();
 log.borrow_mut().push("decode");
 println!("{}", seen.len());`,
-      chips: ['both calls need R only', 'accepted by the compiler', 'panics on line 5: BorrowMutError'],
+      chips: ['both calls need R only', 'accepted by the compiler', 'panics on line 5: RefCell already borrowed'],
       permissions: { trace: 'refcell-conflict' },
       alt: {
         java: `List<String> log = new ArrayList<>(List.of("prefill"));
@@ -131,7 +131,7 @@ for (String entry : log) {
           options: [
             'The compiler rejects line 5 with E0502, because seen still holds a Ref guard on the log cell',
             'It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still in use',
-            'It compiles, then panics on line 5 with BorrowMutError because a Ref guard is still alive',
+            'It compiles, then panics on line 5 with "RefCell already borrowed" for the live guard',
             'It compiles, then panics on line 4 because borrow() needs the cell to be empty first',
           ],
           correct: [2],
@@ -140,7 +140,7 @@ for (String entry : log) {
           why: [
             'To the compiler, borrow and borrow_mut are two shared borrows of log, which never conflict, and both need R. The exclusive-access check happens when the program runs.',
             'The conflict is caught: RefCell refuses to hand out a writer while a reader guard is alive. If it did not, the push could reallocate the Vec under seen.',
-            'Right: the compiler sees nothing wrong, and at run time the cell counts one live reader when borrow_mut asks for exclusive access. It panics with BorrowMutError on line 5.',
+            'Right: the compiler sees nothing wrong, and at run time the cell counts one live reader when borrow_mut asks for exclusive access. It panics on line 5 with "RefCell already borrowed".',
             'borrow() succeeds whenever no writer is live, and on line 4 there is none. The refusal comes later, from borrow_mut.',
           ],
           kcs: ['r.interior-mutability', 'r.borrow-rules'],
@@ -154,9 +154,9 @@ for (String entry : log) {
 | After line | Live guards | What the cell counts | What happens next |
 |---|---|---|---|
 | 4 | \`seen\` | 1 reader | \`borrow_mut\` needs 0 readers |
-| 5 | none new | 1 reader | panic: BorrowMutError |
+| 5 | none new | 1 reader | panic: RefCell already borrowed |
 
-The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors#BorrowMutError) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
+The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The panic message is "RefCell already borrowed". \`BorrowMutError\` is a real type: it is the error \`try_borrow_mut\` returns instead of panicking. The [Error Museum](/errors#BorrowMutError) keeps this one beside the compile-time codes, with the wrong fix that tempts people and the right one.
 
 ## Make the guard shorter
 
@@ -186,9 +186,9 @@ println!("{count} {}", log.borrow().len());`,
     },
     {
       type: 'prose',
-      md: `## Mutex: the same rule across threads
+      md: `## Mutex and RwLock: the rule across threads
 
-**Mutex<T>** applies the rule between threads. \`lock\` also takes \`&self\`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The \`MutexGuard\` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.`,
+**Mutex<T>** is the thread-safe cousin of RefCell, with one simplification: it never shares. \`lock\` also takes \`&self\`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The exact cross-thread counterpart of RefCell is **RwLock<T>**: \`read\` admits many readers and \`write\` admits one writer and no readers. Mutex is the simpler case, exclusive for readers too. The \`MutexGuard\` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.`,
     },
     {
       type: 'code',
@@ -237,7 +237,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
           q: 'A Ref guard from log.borrow() is still alive when log.borrow_mut() runs. Which statement is true?',
           options: [
             'The compiler reports E0502 on that line, since the guard took W and O away from log',
-            'The cell counts one live reader at run time, so it panics with BorrowMutError',
+            'The cell counts a live reader, so it panics with "RefCell already borrowed"',
             'borrow_mut waits until the guard is dropped, the way a Mutex lock would behave',
             'borrow_mut returns an Err value and the program carries on without the write',
           ],
@@ -246,7 +246,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
             'Both calls need only R, so the compiler accepts them. RefCell checks the one-writer-or-many-readers law with a counter, and a writer asked for while a reader is live is a panic.',
           why: [
             'A Ref guard keeps only a shared borrow of log alive, and borrow_mut takes &self too. Two shared borrows do not conflict, so nothing is taken from log at compile time.',
-            'Right: the same law that would be E0502 for a plain &, enforced one step later. borrow_mut finds the reader count above zero and panics with BorrowMutError.',
+            'Right: the same law that would be E0502 for a plain &, enforced one step later. borrow_mut finds the reader count above zero and panics with "RefCell already borrowed".',
             'RefCell never waits. It is single-threaded, so waiting for a guard on the same thread could never end. Blocking is what a Mutex does.',
             'That is try_borrow_mut. The plain borrow_mut has no error return, so a conflict panics and the caller never gets a value to handle.',
           ],

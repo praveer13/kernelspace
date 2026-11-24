@@ -162,18 +162,22 @@ function HeroCard() {
           </div>
         </motion.div>
       </AnimatePresence>
-      <div className="mt-4 flex justify-center gap-1.5">
+      <div className="-mb-[9px] mt-[7px] flex justify-center">
         {FLAGSHIPS.map((_, i) => (
           <button
             key={i}
             type="button"
             aria-label={`Show flagship pair ${i + 1}`}
             onClick={() => setIdx(i)}
-            className={cn(
-              'h-1.5 rounded-full transition-all duration-250',
-              i === idx ? 'w-6 bg-accent' : 'w-1.5 bg-surface-3 hover:bg-line-bright',
-            )}
-          />
+            className="group flex h-6 min-w-6 items-center justify-center px-[9px]"
+          >
+            <span
+              className={cn(
+                'h-1.5 rounded-full transition-all duration-250',
+                i === idx ? 'w-6 bg-accent' : 'w-1.5 bg-surface-3 group-hover:bg-line-bright',
+              )}
+            />
+          </button>
         ))}
       </div>
     </div>
@@ -188,19 +192,8 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
   const reduced = useReducedMotion()
   const [flipped, setFlipped] = useState(false)
   return (
-    <div id={pair.slug} className="[perspective:1200px]">
+    <div id={pair.slug} className="relative [perspective:1200px]">
       <motion.div
-        role="button"
-        tabIndex={0}
-        aria-expanded={flipped}
-        aria-label={`${pair.os} ≡ ${pair.llm} — activate to ${flipped ? 'flip back' : 'flip and read why'}`}
-        onClick={() => setFlipped((f) => !f)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            setFlipped((f) => !f)
-          }
-        }}
         animate={{ rotateY: flipped ? 180 : 0 }}
         transition={
           reduced
@@ -208,13 +201,13 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
             : { duration: 0.5, ease: [0.2, 0.8, 0.3, 1] }
         }
         className={cn(
-          'relative h-[220px] w-full cursor-pointer [transform-style:preserve-3d]',
+          'relative grid min-h-[220px] w-full [transform-style:preserve-3d]',
           flash && 'rounded-lg shadow-[0_0_0_2px_#3EF2A4]',
         )}
       >
         {/* front */}
         <div
-          className="absolute inset-0 flex flex-col rounded-lg border border-line bg-surface-1 p-4 [backface-visibility:hidden] hover:border-line-bright"
+          className="flex flex-col rounded-lg border border-line bg-surface-1 p-4 [grid-area:1/1] [backface-visibility:hidden] hover:border-line-bright"
         >
           <div className="grid flex-1 grid-cols-[1fr_28px_1fr] gap-2">
             <div className="min-w-0">
@@ -245,7 +238,7 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
           </div>
         </div>
         {/* back */}
-        <div className="absolute inset-0 flex flex-col rounded-lg border border-line-bright bg-surface-2 p-4 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div className="flex flex-col rounded-lg border border-line-bright bg-surface-2 p-4 [grid-area:1/1] [backface-visibility:hidden] [transform:rotateY(180deg)]">
           <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
             <ArrowLeftRight size={11} className="text-accent" /> why it holds
           </p>
@@ -256,19 +249,30 @@ function FlipCard({ pair, flash }: { pair: Pair; flash: boolean }) {
             </p>
           )}
           <div className="flex items-center justify-between border-t border-line pt-2">
-            <Link
-              to={`/lesson/${pair.lesson}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 font-mono text-[11px] text-accent hover:underline"
-            >
-              learn the lesson <ArrowRight size={11} />
-            </Link>
+            <span aria-hidden="true" className="h-4" />
             <span className="flex items-center gap-1 font-mono text-[10px] text-text-3">
               flip back <RotateCw size={10} />
             </span>
           </div>
         </div>
       </motion.div>
+      {/* The flip control and the lesson link are siblings, never nested. */}
+      <button
+        type="button"
+        aria-expanded={flipped}
+        aria-label={`${pair.os} ≡ ${pair.llm} — activate to ${flipped ? 'flip back' : 'flip and read why'}`}
+        onClick={() => setFlipped((f) => !f)}
+        className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
+      {flipped && (
+        <Link
+          to={`/lesson/${pair.lesson}`}
+          aria-label={`Learn the lesson: ${pair.os} ≡ ${pair.llm}`}
+          className="absolute bottom-[13px] left-4 z-20 flex min-h-6 items-center gap-1 font-mono text-[11px] text-accent hover:underline"
+        >
+          learn the lesson <ArrowRight size={11} />
+        </Link>
+      )}
     </div>
   )
 }

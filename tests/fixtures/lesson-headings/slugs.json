@@ -1,0 +1,361 @@
+{
+ "r.l1": [
+  "bindings-are-immutable-shadowing-is-a-new-binding",
+  "make-rustc-prove-the-basics",
+  "the-two-small-shapes-the-drill-also-uses"
+ ],
+ "r.l2": [
+  "drill-the-shapes",
+  "four-loops-one-exit-value"
+ ],
+ "r.l3": [
+  "a-move-gives-away-read-and-own",
+  "copy-duplicates-bits-clone-is-explicit-work",
+  "drop-follows-own",
+  "learn-by-repairing-move-errors",
+  "read-write-and-own-on-every-path",
+  "when-clone-is-the-wrong-fix"
+ ],
+ "r.l4": [
+  "borrowing-lends-permissions",
+  "repair-borrows-not-symptoms",
+  "slices-are-borrowed-windows",
+  "what-the-borrow-checker-cannot-see"
+ ],
+ "r.l5": [
+  "model-six-small-domains",
+  "the-question-mark-operator-is-typed-early-return"
+ ],
+ "r.l6": [
+  "build-the-forge-data-paths",
+  "choose-the-iterator-that-matches-ownership"
+ ],
+ "r.l7": [
+  "clone-the-handle-not-the-payload",
+  "pick-the-smallest-ownership-mechanism"
+ ],
+ "r.l8": [
+  "a-write-that-needs-only-r",
+  "make-the-guard-shorter",
+  "mutex-and-rwlock-the-rule-across-threads",
+  "mutex-the-same-rule-across-threads",
+  "one-rule-three-permissions",
+  "refcell-is-the-same-rule-checked-later",
+  "trigger-the-trap-then-remove-it"
+ ],
+ "r.l9": [
+  "a-struct-that-holds-a-loan-block-a",
+  "prove-borrowed-views",
+  "read-the-contract-from-the-caller-s-side",
+  "when-the-checker-is-stricter-than-the-program",
+  "where-a-loan-ends-a-drop-needs-own"
+ ],
+ "r.l10": [
+  "compare-and-exchange-is-conditional-ownership-transfer",
+  "practice-before-lock-free"
+ ],
+ "t0.l1": [
+  "how-this-course-works",
+  "the-same-fifty-year-old-ideas",
+  "why-decode-is-bandwidth-bound-a-preview",
+  "you-are-closer-than-you-think"
+ ],
+ "t0.l2": [
+  "the-numbers-made-human",
+  "the-same-ladder-on-the-gpu",
+  "why-the-hierarchy-exists-at-all"
+ ],
+ "t0.l3": [
+  "memory-is-one-dimensional",
+  "three-hardware-mechanisms-doing-the-damage",
+  "why-this-matters-for-llm-serving"
+ ],
+ "t0.l4": [
+  "aos-the-shape-your-language-gives-you",
+  "carrying-it-forward",
+  "false-sharing-the-line-you-did-not-know-you-were-sharing"
+ ],
+ "t0.l5": [
+  "cpython-reference-counting-and-the-big-lock",
+  "the-contract-your-runtime-signs-for-you",
+  "the-jvm-an-operating-system-for-one-tenant",
+  "where-you-stand"
+ ],
+ "t0.l6": [
+  "making-one-two-commands-no-ceremony",
+  "the-grammar-four-rules",
+  "what-you-ll-hunt-in-this-field-specifically"
+ ],
+ "t1.l1": [
+  "the-heap-memory-without-a-curfew",
+  "the-stack-memory-with-a-discipline",
+  "why-a-serving-engineer-cares"
+ ],
+ "t1.l2": [
+  "manual-memory-the-ownership-question",
+  "the-four-operations-that-s-all-of-it",
+  "the-segfault-demystified-forever"
+ ],
+ "t1.l3": [
+  "from-bytes-to-blocks",
+  "placement-policy-is-a-research-field-in-one-function",
+  "the-contract-and-the-slab",
+  "the-two-operations-that-matter"
+ ],
+ "t1.l4": [
+  "external-fragmentation-waste-between-the-boxes",
+  "internal-fragmentation-waste-inside-the-box",
+  "measuring-it-in-the-wild",
+  "the-fixed-block-maneuver"
+ ],
+ "t1.l5": [
+  "the-abi-the-calling-contract",
+  "the-pipeline-stage-by-stage",
+  "why-a-serving-engineer-cares"
+ ],
+ "t1.l6": [
+  "one-owner-exactly-one-free",
+  "the-through-line",
+  "what-it-costs-honestly"
+ ],
+ "t2.l1": [
+  "in-the-simulator",
+  "the-alternatives-the-industry-built",
+  "what-a-context-switch-actually-does"
+ ],
+ "t2.l2": [
+  "in-the-simulator",
+  "page-faults-are-a-mechanism-not-an-error",
+  "the-tlb-caching-the-answer",
+  "translation-pages-frames-and-the-walk"
+ ],
+ "t2.l3": [
+  "the-candidate-policies",
+  "the-vllm-footnote-you-are-now-ready-for",
+  "thrashing-when-eviction-becomes-the-workload"
+ ],
+ "t2.l4": [
+  "admission-control-the-scheduler-s-other-half",
+  "the-policy-zoo-compressed",
+  "why-batching-is-scheduling"
+ ],
+ "t2.l5": [
+  "lock-free-queues-and-the-aba-problem",
+  "memory-ordering-made-survivable",
+  "the-decision-procedure",
+  "the-mutex-mutual-exclusion-by-waiting"
+ ],
+ "t2.l6": [
+  "checkpoint-yourself",
+  "from-readiness-to-completion",
+  "the-event-loop-you-already-know-and-its-rust-descendant"
+ ],
+ "t2.l7": [
+  "1-2-the-problem-in-os-vocabulary",
+  "1-3-the-problem-in-os-vocabulary",
+  "3-pagedattention-paging-verbatim",
+  "4-5-scheduling-the-t2-l4-layer",
+  "4-pagedattention-paging-verbatim",
+  "4-scheduling-the-t2-l4-layer",
+  "5-6-the-kernel-and-the-numbers",
+  "checkpoint-briefing"
+ ],
+ "t3.l1": [
+  "arc-and-mutex-the-same-shape-across-threads",
+  "graphs-without-leaks-the-arena-first",
+  "rc-and-refcell-shared-ownership-checked-at-run-time",
+  "the-simulator-replay-the-rules-then-refactor",
+  "what-each-one-costs",
+  "what-r-already-settled"
+ ],
+ "t3.l2": [
+  "slices-windows-into-memory-you-don-t-own",
+  "unsafe-the-audited-escape-hatch",
+  "why-this-lesson-sits-here"
+ ],
+ "t3.l3": [
+  "choosing-the-architecture-with-t2-physics",
+  "how-send-sync-fall-out-of-ownership",
+  "in-the-simulator"
+ ],
+ "t3.l4": [
+  "from-the-toy-to-tokio",
+  "half-one-the-compiler-s-state-machine",
+  "half-two-the-waker-and-50-lines-of-executor",
+  "why-this-is-a-serving-systems-lesson"
+ ],
+ "t3.l5": [
+  "and-the-gpu-half",
+  "the-performance-reality-honestly",
+  "what-wasm-actually-is"
+ ],
+ "t3.l6": [
+  "the-takeaway-for-your-own-architecture-reviews",
+  "what-the-data-plane-actually-does",
+  "why-rust-and-not-the-alternatives-argued-properly"
+ ],
+ "t3.l7": [
+  "applied-the-serving-stack-component-by-component",
+  "the-2026-map-honestly-drawn"
+ ],
+ "t4.l1": [
+  "simt-and-the-warp-one-instruction-32-lanes",
+  "why-llms-live-here"
+ ],
+ "t4.l2": [
+  "the-ladder-tier-by-tier",
+  "why-capacity-is-the-serving-bottleneck"
+ ],
+ "t4.l3": [
+  "in-the-playground",
+  "the-graded-pass-fleet-kernels-on-a-b200",
+  "the-three-numbers-and-one-division",
+  "the-two-case-studies-that-run-t5"
+ ],
+ "t4.l4": [
+  "coalescing-the-warp-wide-memory-contract",
+  "occupancy-warps-in-residence",
+  "why-serving-kernels-obsess-over-both"
+ ],
+ "t4.l5": [
+  "in-the-playground",
+  "reduction-the-kernel-that-teaches-cooperation",
+  "the-programming-model-in-one-paragraph"
+ ],
+ "t4.l6": [
+  "flashattention-the-same-trick-one-softmax-harder",
+  "in-the-simulator",
+  "raster-order-launch-tiles-so-a-wave-shares-l2",
+  "tiling-block-the-problem-to-fit-the-fast-tier"
+ ],
+ "t4.l7": [
+  "floating-point-compressed-into-one-paragraph",
+  "how-production-quantization-actually-works",
+  "in-the-quantizer"
+ ],
+ "t5.l1": [
+  "the-forward-pass-as-a-cost-ledger",
+  "the-terms-that-will-recur-locked-in",
+  "why-the-kv-cache-exists"
+ ],
+ "t5.l2": [
+  "in-the-simulator",
+  "the-systems-relevant-consequences"
+ ],
+ "t5.l3": [
+  "the-metrics-defined-properly",
+  "the-tension-batching-buys-throughput-costs-latency",
+  "why-inference-is-not-training-but-smaller"
+ ],
+ "t5.l4": [
+  "in-the-calculator",
+  "the-levers-priced-in-tokens",
+  "worked-example-one-the-8b-on-one-gpu",
+  "worked-example-two-the-70b-that-eats-a-node"
+ ],
+ "t5.l5": [
+  "the-allocation-lifecycle-end-to-end",
+  "the-data-structures-concretely",
+  "what-the-indirection-costs-and-buys"
+ ],
+ "t5.l6": [
+  "automatic-prefix-caching-the-block-hash-design",
+  "radixattention-cache-structure-becomes-scheduling-structure",
+  "the-cluster-is-part-of-the-cache"
+ ],
+ "t5.l7": [
+  "in-the-simulator",
+  "the-scheduler-loop-in-systems-vocabulary"
+ ],
+ "t5.l8": [
+  "chunked-prefill-the-other-convoy-fix",
+  "speculative-decoding-the-draft-verify-trick",
+  "the-family-tree"
+ ],
+ "t5.l9": [
+  "checkpoint",
+  "disaggregation-prefill-and-decode-break-up",
+  "mooncake-the-kv-cache-becomes-a-distributed-store",
+  "the-three-axes-of-parallelism"
+ ],
+ "t5.l10": [
+  "dynamo-the-data-plane-not-the-engine",
+  "sglang-structured-generation-as-a-first-class-citizen",
+  "tensorrt-llm-nvidia-s-own-kernels",
+  "the-comparison-compressed",
+  "vllm-the-reference-implementation",
+  "where-you-go-from-here"
+ ],
+ "t6.l1": [
+  "mla-the-other-half-of-the-deepseek-trick",
+  "what-the-router-costs-you-the-all-to-all"
+ ],
+ "t6.l2": [
+  "mechanism-1-deepep-the-dispatch-combine-library",
+  "mechanism-2-eplb-load-balance-as-a-packing-problem",
+  "mechanism-3-dual-batch-overlap-hide-the-network-under-compute",
+  "mechanism-3-overlap-hide-the-network-under-compute"
+ ],
+ "t6.l3": [
+  "mooncake-grows-up-llm-d-packages-it",
+  "nixl-and-kvbm-the-plumbing-got-a-name",
+  "the-router-is-now-a-cache-scheduler"
+ ],
+ "t6.l4": [
+  "cp-and-the-1m-token-prompt",
+  "the-composition-discipline",
+  "the-five-axes-one-line-each"
+ ],
+ "t6.l5": [
+  "fp4-honestly-what-4-bits-buys-and-what-it-costs"
+ ],
+ "t6.l6": [
+  "the-acceptance-economy"
+ ],
+ "t6.l7": [
+  "the-three-new-problems"
+ ],
+ "t6.l8": [
+  "cache-locality-is-the-agentic-throughput-multiplier",
+  "the-token-mask-is-not-a-string-mask"
+ ],
+ "t6.l9": [
+  "punica-keep-one-base-batch-heterogeneous",
+  "s-lora-page-weights-and-kv-in-one-allocator",
+  "what-one-adapter-costs-in-bytes"
+ ],
+ "t6.l12": [
+  "pool-the-tokens-not-the-cache",
+  "sizing-the-two-pools",
+  "the-ping-pong-pipeline",
+  "when-the-hop-eats-the-gain"
+ ],
+ "t6.l10": [
+  "confidential-gpu-inference-protect-use-not-intent",
+  "prefix-caches-create-a-tenant-visible-timing-oracle",
+  "tool-execution-a-microvm-is-a-boundary-not-a-policy"
+ ],
+ "t7.l1": [
+  "counting-goodput-and-the-error-budget-it-spends",
+  "the-metrics-hardened"
+ ],
+ "t7.l2": [
+  "rule-1-the-traffic-is-the-benchmark",
+  "rule-2-warmup-and-steady-state-or-it-never-happened",
+  "rule-3-percentiles-need-samples-and-load-needs-steps",
+  "rule-4-compare-stacks-on-identical-everything"
+ ],
+ "t7.l3": [
+  "reading-a-frontier-dominated-points-and-the-floor",
+  "the-dial-that-moves-you-along-the-curve-and-the-ones-that-move-the-curve"
+ ],
+ "t7.l4": [
+  "the-levers-priced",
+  "the-napkin-model-that-prices-anything"
+ ],
+ "t7.l5": [
+  "reading-an-incident-before-changing-anything",
+  "sizing-for-the-peak-and-for-losing-a-node",
+  "the-planner-s-playbook-dynamo-s-and-yours"
+ ]
+}

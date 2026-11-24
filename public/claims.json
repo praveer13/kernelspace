@@ -967,30 +967,30 @@
       "kind": "benchmark",
       "value": 20.4,
       "unit": "%",
-      "label": "KV cache memory holding real token states, worst existing system",
+      "label": "KV cache memory holding real token states, Orca (Max) in Figure 2",
       "source": {
-        "url": "https://arxiv.org/abs/2309.06180",
+        "url": "https://arxiv.org/html/2309.06180v1",
         "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
         "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 180,
-      "boundary": "2023 systems that pre-allocate the maximum length per request (FasterTransformer, Orca), on the paper's workloads."
+      "boundary": "Section 1 calls these the existing systems; the figure it points to (Figure 2) holds the Orca variants of the paper's own reimplementation, averaged over the experiment of section 6.2. This end is Orca (Max), which reserves the model's maximum sequence length for every request; the other end is Orca (Oracle), which is told each request's true output length, so even an exact reservation strands memory. Not FasterTransformer, and not Orca as deployed."
     },
     {
       "id": "model.kv.static-utilization-high",
       "kind": "benchmark",
       "value": 38.2,
       "unit": "%",
-      "label": "KV cache memory holding real token states, best existing system",
+      "label": "KV cache memory holding real token states, Orca (Oracle) in Figure 2",
       "source": {
-        "url": "https://arxiv.org/abs/2309.06180",
+        "url": "https://arxiv.org/html/2309.06180v1",
         "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
         "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 180,
-      "boundary": "The other end of the range in model.kv.static-utilization-low."
+      "boundary": "The other end of the range in model.kv.static-utilization-low: Orca (Oracle), the variant told each request's true output length."
     },
     {
       "id": "model.kv.static-utilization",
@@ -1531,17 +1531,17 @@
     {
       "id": "production.glibc.bins",
       "kind": "spec",
-      "value": "fast, unsorted, small, large",
+      "value": "unsorted, small, large",
       "label": "glibc malloc free-chunk bin kinds",
       "source": {
-        "url": "https://sourceware.org/glibc/wiki/MallocInternals",
-        "title": "glibc wiki: MallocInternals",
-        "quote": "The normal bins are divided into \"small\" bins, where each chunk is the same size, and \"large\" bins, where chunks are a range of sizes.",
-        "row": "Arenas > bins"
+        "url": "https://gitlab.com/gnutools/glibc/-/raw/glibc-2.43/malloc/malloc.c",
+        "title": "glibc malloc/malloc.c at tag glibc-2.43 (a mirror of the glibc repository)",
+        "quote": "for the small bins, which all contain the same-sized chunks, but",
+        "row": "malloc.c line 1484 names the small bins, lines 1635 and 1645 the unsorted bin, line 4053 the large bins; line 1478 says no consolidated chunk physically borders another one, and free returns at tcache_put (line 3372) before _int_free_chunk, so chunks in the tcache are not merged; 106 lines of malloc.c at tag glibc-2.42 contain fastbin (ignoring case), and none at glibc-2.43 or glibc-2.44 (tags read on the mirror)"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-22",
       "ttlDays": 365,
-      "boundary": "Per arena, with a per-thread cache (tcache) in front. Fastbins do not coalesce; small and large bins do."
+      "boundary": "Per arena, with a per-thread cache (tcache) in front, in glibc 2.43 and 2.44. glibc 2.42 and earlier also keep fastbins and honour M_MXFAST; in 2.43 and 2.44 M_MXFAST is marked deprecated and setting it has no effect."
     },
     {
       "id": "production.jemalloc.classes-per-doubling",
@@ -6749,6 +6749,829 @@
       "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "When --gpu-memory-utilization is not given and the extensible KV cache is on. With it off, or with the flag set, the value is 0.92 (DEFAULT_GPU_MEMORY_UTILIZATION) or the flag."
+    },
+    {
+      "id": "hw.cuda.coalesce-transaction-bytes",
+      "kind": "spec",
+      "value": 32,
+      "unit": "B",
+      "label": "Bytes in one coalesced global-memory transaction",
+      "source": {
+        "url": "https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html",
+        "title": "CUDA C++ Best Practices Guide, 10.2.1 Coalesced Access to Global Memory",
+        "quote": "the concurrent accesses of the threads of a warp will coalesce into a number of transactions equal to the number of 32-byte transactions necessary to service all of the threads of the warp.",
+        "row": "Best Practices Guide > Coalesced Access to Global Memory"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 365,
+      "boundary": "Compute capability 6.0 and later (the H100 is 9.0). Devices of compute capability 5.2 with L1 caching enabled counted 128-byte aligned segments instead."
+    },
+    {
+      "id": "hw.h100-sxm.max-warps-per-sm",
+      "kind": "spec",
+      "value": 64,
+      "unit": "warps",
+      "label": "Maximum concurrent warps per SM (Hopper, H100 SXM5)",
+      "source": {
+        "url": "https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html",
+        "title": "NVIDIA Hopper Tuning Guide, 1.4.1.1 Occupancy",
+        "quote": "The maximum number of concurrent warps per SM remains the same as in NVIDIA Ampere GPU architecture (that is, 64)",
+        "row": "Hopper Tuning Guide > Occupancy"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 365,
+      "boundary": "Per streaming multiprocessor, on Hopper (compute capability 9.0). The SM count that multiplies it is hw.h100-sxm.sm-count (132 on the SXM5 module)."
+    },
+    {
+      "id": "status.dynamo.transport",
+      "kind": "status",
+      "value": "TCP",
+      "label": "Dynamo default transport",
+      "source": {
+        "url": "https://raw.githubusercontent.com/ai-dynamo/dynamo/v1.6.2/README.md",
+        "title": "NVIDIA Dynamo README at v1.6.2",
+        "quote": "Dynamo uses TCP for inter-component communication."
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "README at v1.6.2: etcd and NATS are \"Not required\" for local development and Kubernetes (\"K8s-native discovery; TCP request plane\"), and \"KV-aware routing does not require NATS\". NATS JetStream-backed modes exist as an opt-in. The README does not name the event plane default, so the course does not either.",
+      "pin": {
+        "repo": "ai-dynamo/dynamo",
+        "ref": "v1.6.2"
+      }
+    },
+    {
+      "id": "status.chromium.memory-safety-share",
+      "kind": "status",
+      "value": 70,
+      "unit": "%",
+      "label": "Chromium memory-unsafe share",
+      "source": {
+        "url": "https://www.chromium.org/Home/chromium-security/memory-safety/",
+        "title": "Chromium Security: Memory safety",
+        "quote": "Around 70% of our high severity security bugs are memory unsafety problems (that is, mistakes with C/ C++ pointers)."
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "Chromium only: \"Analysis based on 912 high or critical severity security bugs since 2015, affecting the Stable channel.\" It is not a share of all C/C++ CVEs. Microsoft's similar figure was not re-read, so the course does not attribute this one to Microsoft."
+    },
+    {
+      "id": "status.chromium.memory-safety-sample",
+      "kind": "status",
+      "value": 912,
+      "unit": "bugs",
+      "label": "Chromium memory-safety analysis sample",
+      "source": {
+        "url": "https://www.chromium.org/Home/chromium-security/memory-safety/",
+        "title": "Chromium Security: Memory safety",
+        "quote": "Analysis based on 912 high or critical severity security bugs since 2015, affecting the Stable channel."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "The whole sample behind status.chromium.memory-safety-share: every high or critical bug analysed, not the memory-unsafe ones among them. Chromium only, Stable channel."
+    },
+    {
+      "id": "status.android.memory-safety-share",
+      "kind": "status",
+      "value": "below 20",
+      "unit": "%",
+      "label": "Android memory-safety share",
+      "source": {
+        "url": "https://blog.google/security/rust-in-android-move-fast-fix-things/",
+        "title": "Google Security Blog: Rust in Android, move fast and fix things (2025-11-13)",
+        "quote": "memory safety vulnerabilities falling below 20% of total vulnerabilities for the first time"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "Google says the 2025 data covers first-party and third-party code changes to the Android platform across C, C++, Java, Kotlin and Rust. The post was published a couple of months before the end of 2025, and Google says the 90-day patch window makes the results very likely close to final. It is the platform total, not a measurement of Rust alone."
+    },
+    {
+      "id": "status.wasi.version",
+      "kind": "status",
+      "value": "WASI 0.3.0, shipped 2026-06-11",
+      "label": "WASI 0.3 release (native async)",
+      "source": {
+        "url": "https://wasi.dev/roadmap",
+        "title": "WASI.dev Roadmap",
+        "quote": "WASI 0.3.0 was an exception to the release train, shipping on June 11, 2026 following a WASI Subgroup vote."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "The roadmap lists 0.3.1 as shipped on August 11, 2026 and says \"WASI 0.3 adds native async support to the Component Model\", with async func, stream<T> and future<T>. The Wasm 3.0 standard (webassembly.org news, published September 17, 2025) lists \"Garbage collection\" among its features. The roadmap calls its dates provisional."
+    },
+    {
+      "id": "status.vllm.speculative-methods",
+      "kind": "status",
+      "value": "EAGLE, MTP, draft, n-gram, suffix",
+      "label": "vLLM spec-decode methods",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/docs/features/speculative_decoding/README.md",
+        "title": "vLLM v0.34.0 docs: Speculative Decoding",
+        "quote": "Model-based methods such as EAGLE, MTP and draft models provide the best latency reduction, while simpler methods such as n-gram and suffix decoding provide modest speedups without increasing workload during peak traffic.",
+        "row": "docs/features/speculative_decoding/README.md, line 9"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.34.0"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "The page also lists LiLiCorr, hidden-state extraction, custom speculators and the dflash and dspark drafters (its `method` row names draft_model, ngram, suffix, mtp, eagle3 and dflash as common values); the claim names the methods the lesson teaches. Medusa and the MLP speculator were removed in the v0.33.0 series (release notes of v0.33.0rc3, published 2026-11-02: \"Medusa and the MLP speculator were removed (#61701)\"). The same page says the standard rejection sampler is \"theoretically lossless up to the precision limits of hardware numerics\" and that FLy \"deliberately relaxes verification and is not distribution preserving\"."
+    },
+    {
+      "id": "status.trtllm.enable-chunked-prefill-default",
+      "kind": "status",
+      "value": "False",
+      "label": "TensorRT-LLM chunked prefill default",
+      "source": {
+        "url": "https://raw.githubusercontent.com/NVIDIA/TensorRT-LLM/v1.4.0rc4/tensorrt_llm/llmapi/llm_args.py",
+        "title": "TensorRT-LLM v1.4.0rc4 LLM API arguments",
+        "quote": "enable_chunked_prefill: bool = Field(default=False, description=\"Enable chunked prefill.\")",
+        "row": "tensorrt_llm/llmapi/llm_args.py, lines 7021-7022 (the call is wrapped over two lines)"
+      },
+      "pin": {
+        "repo": "NVIDIA/TensorRT-LLM",
+        "ref": "v1.4.0rc4"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "This is the default of the LLM API argument, not a statement about the executor: the file says nothing about whether the executor co-schedules an unchunked prefill with running decodes, so the lesson does not claim it either way. v1.4.0rc4 is a release candidate; v1.3.0rc29 carries the same default."
+    },
+    {
+      "id": "status.trtllm.pytorch-sole-backend",
+      "kind": "status",
+      "value": "PyTorch only; TensorRT backend removed",
+      "label": "TensorRT-LLM backends",
+      "source": {
+        "url": "https://raw.githubusercontent.com/NVIDIA/TensorRT-LLM/v1.4.0rc4/docs/source/legacy/tensorrt-backend-removal.md",
+        "title": "TensorRT LLM v1.4.0rc4 docs: Migration Guide: TensorRT Backend Removed",
+        "quote": "The TensorRT engine backend has been removed. PyTorch is now the sole execution backend for TensorRT LLM.",
+        "row": "docs/source/legacy/tensorrt-backend-removal.md, lines 4-5 (the sentence wraps)"
+      },
+      "pin": {
+        "repo": "NVIDIA/TensorRT-LLM",
+        "ref": "v1.4.0rc4"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The guide does not name the release that removed the backend. tensorrt_llm/llmapi/llm_args.py at v1.4.0rc4 declares `backend: Literal[\"pytorch\"]` (marked deprecated, with a TODO to remove the field) in TorchLlmArgs, and the guide lists `LLM(backend=\"tensorrt\")` as raising ValueError, `trtllm-build` as gone and the `tensorrt` pip dependency as dropped. v1.4.0rc4 is a release candidate. The release notes of v1.3.0rc28 list \"Remove deprecated TensorRT serve, evaluation, benchmark, and stress paths (BREAKING)\" (https://github.com/NVIDIA/TensorRT-LLM/releases/tag/v1.3.0rc28), which is how far back the lesson dates the removal; the notes do not say \"the TensorRT backend is removed\" in those words."
+    },
+    {
+      "id": "status.trtllm.dynamo-pin",
+      "kind": "status",
+      "value": "TRT-LLM v1.3.0rc29",
+      "label": "TRT-LLM in Dynamo",
+      "source": {
+        "url": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.6.0",
+        "title": "NVIDIA Dynamo v1.6.0 release notes",
+        "quote": "the engines move to SGLang v0.5.21, TensorRT-LLM v1.3.0rc29, and vLLM v0.31.0",
+        "row": "release notes, opening summary"
+      },
+      "pin": {
+        "repo": "ai-dynamo/dynamo",
+        "ref": "v1.6.0"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "This is the version the v1.6.0 notes name for Dynamo's TensorRT-LLM engine; it is a release candidate by its tag. Dynamo v1.6.2 is newer and its README was read for other facts, but the pins above are what v1.6.0 says; v1.6.1 and v1.6.2 notes were not read for engine pins."
+    },
+    {
+      "id": "status.sglang.hardware",
+      "kind": "status",
+      "value": "NVIDIA, AMD, TPU, Intel, Apple, Ascend, Moore Threads",
+      "label": "SGLang hardware",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/README.md",
+        "title": "SGLang v0.5.23 README: Supported Hardware",
+        "quote": "SGLang supports a wide range of GPUs, TPUs, NPUs, CPUs, and Apple Silicon platforms.",
+        "row": "README.md, line 51; the table at lines 53-61 lists NVIDIA, AMD (Instinct MI300X to MI355X), Google TPU (v6e, v7), Intel (Arc / Arc Pro B-Series GPUs, Xeon CPUs), Apple Silicon, Huawei Ascend and Moore Threads"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.23"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The README opens \"SGLang is an open-source inference framework for large language, vision-language, and diffusion models, optimized for agentic workloads, large-scale serving, and RL rollouts.\" (line 21) and does not use the words \"frontend language\" or \"structured\". The radix-tree core is Rust by default: the v0.5.21 release notes say \"The prefix cache now runs on a Rust core by default (#39627)\" and python/sglang/srt/environ.py at v0.5.23 line 741 reads `SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND = EnvStr(\"rust\")`. The README does not say the scheduler is Rust. Which of these platforms a given model runs on is per-model; the README table is a platform list, not a model matrix."
+    },
+    {
+      "id": "status.llm-d.founders",
+      "kind": "status",
+      "value": "CNCF sandbox; founded by Red Hat, Google Cloud, IBM Research, CoreWeave, NVIDIA",
+      "label": "llm-d founders",
+      "source": {
+        "url": "https://raw.githubusercontent.com/llm-d/llm-d/v1.0.0/README.md",
+        "title": "llm-d v1.0.0 README",
+        "quote": "llm-d is a [Cloud Native Computing Foundation (CNCF)](https://www.cncf.io/) sandbox project, founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA.",
+        "row": "README.md, line 20; line 57 (news list, \"[2026-03]\") links the CNCF post dated 2026/03/24"
+      },
+      "pin": {
+        "repo": "llm-d/llm-d",
+        "ref": "v1.0.0"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The README says nothing about a founder having left or joined later. llm-d v1.0.0 was published 2026-10-20 (its releases page, marked Latest the day it was read) and its notes name DisaggregatedSet (\"manages prefill/decode replicas as one logical unit\") and a v1 router configuration API. The CNCF acceptance date is only as the README's news link gives it (a blog post dated 2026-03-24); the CNCF page itself was not read."
+    },
+    {
+      "id": "status.dynamo.kvbm.removal-target",
+      "kind": "status",
+      "value": "v1.7.0",
+      "label": "Dynamo release that KVBM (KV Block Manager) is targeted for removal in",
+      "source": {
+        "url": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.5.0",
+        "title": "NVIDIA Dynamo v1.5.0 release notes (Breaking Changes: Deprecated and Removed)",
+        "quote": "KVBM (KV Block Manager) is deprecated in v1.5.0 and removal is targeted for v1.7.0"
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "A target in the v1.5.0 notes, not a removal. Dynamo v1.6.0 (2026-10-22) and v1.6.2 (2026-11-05) still ship KVBM; the README feature matrix at both tags still lists it. v1.7.0 exists only as dev snapshots on 2026-11-21. The same notes read \"removal is targeted for v1.6.0\" when the course's backtest snapshot fetched them on 2026-10-06 (docs/backtest/snapshot.json), so the target was edited after the release.",
+      "pin": {
+        "repo": "ai-dynamo/dynamo",
+        "ref": "v1.5.0"
+      }
+    },
+    {
+      "id": "status.dynamo.release",
+      "kind": "status",
+      "value": "v1.6.2",
+      "label": "The newest Dynamo release (the releases page marks it Latest)",
+      "source": {
+        "url": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.6.2",
+        "title": "NVIDIA Dynamo v1.6.2 release notes",
+        "quote": "Dynamo v1.6.2 is a patch release on top of v1.6.1"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "github.com/ai-dynamo/dynamo/releases/latest showed v1.6.2 labelled Latest, released 05 Nov 22:11 (2026-11-05), on the read date. A newer release makes this stale; it says nothing about which release a deployment runs.",
+      "pin": {
+        "repo": "ai-dynamo/dynamo",
+        "ref": "v1.6.2"
+      }
+    },
+    {
+      "id": "status.deepep.api",
+      "kind": "status",
+      "value": "one EPBuffer interface for high-throughput and low-latency EP; V1 removed",
+      "label": "DeepEP expert-parallel API (V2 unified it, V2.5 removed V1)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/DeepEP/blob/f6aa38fe06cd4a0489e7730365d4e0114970a2f3/README.md",
+        "title": "DeepEP README (News and New features)",
+        "quote": "High-throughput and low-latency APIs unified into a single `EPBuffer` interface, with an expanded layout for grouped expert GEMMs"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "Read in the README at a commit, because the repository publishes no release after v1.2.1 (2025-09-16). The README says \"Fully remove V1\" under V2.5 and gives no date for V2 or V2.5, so none is stated here. v1.2.1 still describes two kernel sets: \"high-throughput and low-latency all-to-all GPU kernels\", with low-latency kernels \"with pure RDMA\".",
+      "pin": {
+        "repo": "deepseek-ai/DeepEP",
+        "ref": "f6aa38fe06cd4a0489e7730365d4e0114970a2f3"
+      }
+    },
+    {
+      "id": "status.deepep.first-release",
+      "kind": "status",
+      "value": "February 2025, on day 2 of its Open-Source Week",
+      "label": "When DeepSeek first open-sourced DeepEP",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/README.md",
+        "title": "DeepSeek open-infra-index README (202502 Open-Source Week, Day 2 - DeepEP)",
+        "quote": "Starting **this week** , Feb 24, 2025 we'll open-source 5 repos – one daily drop"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The README lists the week's repositories one per day, and DeepEP is \"Day 2\", so its first release fell in the week starting Feb 24, 2025. Read from the main branch, because the repository has no tags. It dates the V1 interface the lesson describes, not the current one (status.deepep.api)."
+    },
+    {
+      "id": "status.deepseek.production-drafter",
+      "kind": "status",
+      "value": "MTP-1 (one draft token per step), superseded by DSpark",
+      "label": "DeepSeek's production speculative drafter before DSpark, and why it was kept at one token",
+      "source": {
+        "url": "https://arxiv.org/html/2607.05147v1",
+        "title": "DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation (arXiv 2607.05147v1), section 5.4",
+        "quote": "This single-token setup was historically maintained in production because deploying a static multi-token drafter (e.g., MTP-3/5) strictly degrades aggregate throughput under high concurrency due to excessive verification overhead."
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The paper says \"MTP-1 represents the former production setup, having been superseded by DSpark two weeks following the DeepSeek-V4-preview release\", and names the V4-Flash and V4-Pro (preview) serving engines, not DeepSeek-R1. It is the authors' statement about their own deployment, not a measurement the course can repeat."
+    },
+    {
+      "id": "status.deepseek.trtllm-mtp-depth",
+      "kind": "status",
+      "value": "three MTP layers, for single-concurrency DeepSeek-R1 on 8xB200",
+      "label": "NVIDIA TensorRT-LLM's MTP depth for the DeepSeek-R1 min-latency recipe",
+      "source": {
+        "url": "https://nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html",
+        "title": "Pushing Latency Boundaries: Optimizing DeepSeek-R1 Performance on NVIDIA B200 GPUs (TensorRT LLM tech blog), MTP section",
+        "quote": "Based on our exploration, 3x MTP layers configuration demonstrates optimal performance."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "The blog frames its setting as \"single concurrency (min-latency scenario)\" on 8xB200; its own table shows MTP 3 narrowly ahead of MTP 2 and MTP 4. It says nothing about high-concurrency serving or about what DeepSeek runs."
+    },
+    {
+      "id": "status.dynamo.release-first-major",
+      "kind": "status",
+      "value": "v1.0.0",
+      "label": "First major Dynamo release",
+      "source": {
+        "url": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.0.0",
+        "title": "NVIDIA Dynamo v1.0.0 release notes",
+        "quote": "Dynamo v1.0.0 is the first major release of the open-source distributed inference platform. This release delivers production-grade disaggregated serving with comprehensive multimodal and omni-model support, KV cache optimizations, improved handling of agentic workloads, Kubernetes-native deployment at scale, and a stabilized public API.",
+        "row": "Release Notes, first paragraph"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The release page dates v1.0.0 2026-03-13 (its datetime 2026-03-13T20:57:29Z). \"First major\" is the notes' own word for v1.0.0; they do not say \"GA\". A later release does not change which one was first; status.dynamo.release holds the newest one read.",
+      "pin": {
+        "repo": "ai-dynamo/dynamo",
+        "ref": "v1.0.0"
+      }
+    },
+    {
+      "id": "status.loadgen.llmperf",
+      "kind": "status",
+      "value": "archived 2025-12-17, read-only",
+      "label": "LLMPerf (Ray) repository status",
+      "source": {
+        "url": "https://github.com/ray-project/llmperf",
+        "title": "ray-project/llmperf on GitHub (repository banner)",
+        "quote": "This repository was archived by the owner on Dec 17, 2025. It is now read-only."
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "The repository banner as read on the verified date; an archived repository takes no new changes."
+    },
+    {
+      "id": "status.loadgen.genai-perf",
+      "kind": "status",
+      "value": "being phased out; use AIPerf",
+      "label": "GenAI-Perf (NVIDIA) status",
+      "source": {
+        "url": "https://github.com/triton-inference-server/perf_analyzer/blob/main/genai-perf/README.md",
+        "title": "GenAI-Perf README, triton-inference-server/perf_analyzer (line 31)",
+        "quote": "GenAI-Perf is being phased out. We are no longer actively developing new features for GenAI-Perf. For new performance benchmarking needs, please use AIPerf instead."
+      },
+      "verifiedAt": "2026-11-21",
+      "ttlDays": 60,
+      "boundary": "The README on the default branch as read on the verified date; the repository ships no release tag for this notice."
+    },
+    {
+      "id": "status.loadgen.guidellm",
+      "kind": "status",
+      "value": "live",
+      "label": "GuideLLM status and traffic profiles",
+      "source": {
+        "url": "https://github.com/vllm-project/guidellm/blob/v0.8.1/README.md",
+        "title": "GuideLLM README at v0.8.1 (line 30)",
+        "quote": "Generates realistic, configurable traffic patterns across synchronous, concurrent, and rate-based modes, including reproducible sweeps to identify safe operating ranges."
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The README at the tag supports \"live\" and the traffic profiles, nothing more. The recommendation is the vLLM docs' (docs.vllm.ai, benchmarking CLI page, latest, read 2026-11-23): \"For benchmarking production vLLM servers, we recommend GuideLLM, an established performance benchmarking framework with live progress updates and automatic report generation.\"",
+      "pin": {
+        "repo": "vllm-project/guidellm",
+        "ref": "v0.8.1"
+      }
+    },
+    {
+      "id": "status.loadgen.aiperf",
+      "kind": "status",
+      "value": "live",
+      "label": "AIPerf status and benchmarking modes",
+      "source": {
+        "url": "https://github.com/ai-dynamo/aiperf/blob/v0.14.0/README.md",
+        "title": "AIPerf README at v0.14.0 (lines 130, 155, 229)",
+        "quote": "Multiple benchmarking modes: concurrency, request-rate, request-rate with max concurrency, trace replay"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 60,
+      "boundary": "The same README lists \"Arrival Patterns - Constant, Poisson, gamma traffic\" and \"Goodput - SLO-based throughput measurement\". It does not call itself a replacement: that is the GenAI-Perf README's word (status.loadgen.genai-perf).",
+      "pin": {
+        "repo": "ai-dynamo/aiperf",
+        "ref": "v0.14.0"
+      }
+    },
+    {
+      "id": "bench.deepseek-day6.daily-cost",
+      "kind": "benchmark",
+      "value": 87072,
+      "unit": "USD/day",
+      "label": "DeepSeek V3 and R1 serving cost for one day (its stated assumption)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Assuming the leasing cost of one H800 GPU is $2 per hour, the total daily cost amounts to $87,072."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The cost is leasing at the assumed $2 per H800-hour (price.deepseek.h800-hourly-assumption), not DeepSeek's books."
+    },
+    {
+      "id": "bench.deepseek-day6.theoretical-revenue",
+      "kind": "benchmark",
+      "value": 562027,
+      "unit": "USD/day",
+      "label": "DeepSeek V3 and R1 day: revenue if every token were billed at R1 list prices",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "If all tokens were billed at DeepSeek-R1’s pricing (*), the total daily revenue would be $562,027, with a cost profit margin of 545%."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. A list-price theoretical figure: the page itself says actual revenue is substantially lower (V3 is priced below R1, web and app are free, off-peak discounts apply)."
+    },
+    {
+      "id": "bench.deepseek-day6.cost-profit-margin",
+      "kind": "benchmark",
+      "value": 545,
+      "unit": "%",
+      "label": "DeepSeek's \"cost profit margin\" for the day (profit over cost, at R1 list prices)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "the total daily revenue would be $562,027, with a cost profit margin of 545%."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. 545% is (revenue - cost) / cost = (562,027 - 87,072) / 87,072; the gross margin on the same totals is 1 - 87,072 / 562,027 = 84.5%. The page does not define the term; the arithmetic of its own totals does."
+    },
+    {
+      "id": "bench.deepseek-day6.avg-nodes",
+      "kind": "benchmark",
+      "value": 226.75,
+      "unit": "nodes (8 H800 each)",
+      "label": "DeepSeek average node occupancy over the day",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "the combined peak node occupancy for V3 and R1 inference services reached 278, with an average occupancy of 226.75 nodes (each node contains 8 H800 GPUs)."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date."
+    },
+    {
+      "id": "bench.deepseek-day6.input-tokens",
+      "kind": "benchmark",
+      "value": 608000000000,
+      "unit": "tokens/day",
+      "label": "DeepSeek input tokens served in the day",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Total input tokens: 608B, of which 342B tokens (56.3%) hit the on-disk KV cache."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date."
+    },
+    {
+      "id": "bench.deepseek-day6.cache-hit-tokens",
+      "kind": "benchmark",
+      "value": 342000000000,
+      "unit": "tokens/day",
+      "label": "DeepSeek input tokens that hit the on-disk KV cache in the day",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Total input tokens: 608B, of which 342B tokens (56.3%) hit the on-disk KV cache."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The page gives 56.3% as the hit share; 342 / 608 is 56.25%, the rounding of its token counts."
+    },
+    {
+      "id": "bench.deepseek-day6.cache-hit-rate",
+      "kind": "benchmark",
+      "value": 56.3,
+      "unit": "%",
+      "label": "DeepSeek KV-cache hit rate over input tokens, one day",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Total input tokens: 608B, of which 342B tokens (56.3%) hit the on-disk KV cache."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date."
+    },
+    {
+      "id": "bench.deepseek-day6.output-tokens",
+      "kind": "benchmark",
+      "value": 168000000000,
+      "unit": "tokens/day",
+      "label": "DeepSeek output tokens served in the day",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Total output tokens: 168B."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 180,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date."
+    },
+    {
+      "id": "price.deepseek.h800-hourly-assumption",
+      "kind": "price",
+      "value": 2,
+      "unit": "USD/GPU-hr",
+      "label": "DeepSeek's assumed leasing cost of one H800 GPU (day-six cost)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "Assuming the leasing cost of one H800 GPU is $2 per hour, the total daily cost amounts to $87,072."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "An assumption stated by DeepSeek for its own day, not a market price. DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The course uses the same round $2 for an H100 in synthetic.cost.gpu-hourly."
+    },
+    {
+      "id": "price.deepseek.r1-input-cache-hit",
+      "kind": "price",
+      "value": 0.14,
+      "unit": "USD/Mtok",
+      "label": "DeepSeek-R1 list price, input tokens that hit the cache (Feb 2025)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "R1 Pricing: $0.14/M input tokens (cache hit), $0.55/M input tokens (cache miss), $2.19/M output tokens."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The page's markdown escapes the dollar signs; the quote is the rendered text. These are the prices DeepSeek used for the theoretical revenue, not today's price list."
+    },
+    {
+      "id": "price.deepseek.r1-input-cache-miss",
+      "kind": "price",
+      "value": 0.55,
+      "unit": "USD/Mtok",
+      "label": "DeepSeek-R1 list price, input tokens that miss the cache (Feb 2025)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "R1 Pricing: $0.14/M input tokens (cache hit), $0.55/M input tokens (cache miss), $2.19/M output tokens."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The page's markdown escapes the dollar signs; the quote is the rendered text."
+    },
+    {
+      "id": "price.deepseek.r1-output",
+      "kind": "price",
+      "value": 2.19,
+      "unit": "USD/Mtok",
+      "label": "DeepSeek-R1 list price, output tokens (Feb 2025)",
+      "source": {
+        "url": "https://github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md",
+        "title": "DeepSeek open-infra-index, Open-Source Week day 6: DeepSeek-V3/R1 Inference System Overview",
+        "quote": "R1 Pricing: $0.14/M input tokens (cache hit), $0.55/M input tokens (cache miss), $2.19/M output tokens."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "DeepSeek's own totals for the 24 hours from 2025-02-27 12:00 to 2025-02-28 12:00 (UTC+8), all requests from web, app and API. The repository carries no release tag for the page, so the url is the file on its default branch as read on the verified date. The page's markdown escapes the dollar signs; the quote is the rendered text."
+    },
+    {
+      "id": "price.deepseek.v4-pro-output-peak",
+      "kind": "price",
+      "value": 3.96,
+      "unit": "USD/Mtok",
+      "label": "DeepSeek flagship (deepseek-v4-pro) list price, output tokens, peak hours",
+      "source": {
+        "url": "https://api-docs.deepseek.com/quick_start/pricing",
+        "title": "DeepSeek API Docs: Models & Pricing",
+        "quote": "1M OUTPUT TOKENS OFF-PEAK $0.6 $1.98 PEAK $1.2 $3.96",
+        "row": "Model Details > PRICING (2) > 1M OUTPUT TOKENS (columns deepseek-flash, deepseek-v4-pro)"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "The deepseek-v4-pro column (DeepSeek-V4-Pro-0813) of the price page as read on the verified date; the page text is flattened, so the two prices after each label are the deepseek-flash and deepseek-v4-pro columns in that order. Peak hours are 01:00 to 04:00 and 06:00 to 10:00 UTC, Monday to Friday, excluding Chinese public holidays; all other hours are off-peak."
+    },
+    {
+      "id": "price.deepseek.v4-pro-output-offpeak",
+      "kind": "price",
+      "value": 1.98,
+      "unit": "USD/Mtok",
+      "label": "DeepSeek flagship (deepseek-v4-pro) list price, output tokens, off-peak hours",
+      "source": {
+        "url": "https://api-docs.deepseek.com/quick_start/pricing",
+        "title": "DeepSeek API Docs: Models & Pricing",
+        "quote": "1M OUTPUT TOKENS OFF-PEAK $0.6 $1.98 PEAK $1.2 $3.96",
+        "row": "Model Details > PRICING (2) > 1M OUTPUT TOKENS (columns deepseek-flash, deepseek-v4-pro)"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 90,
+      "boundary": "Off-peak is half the peak rate (the page's note 2). The deepseek-v4-pro column as read on the verified date."
+    },
+    {
+      "id": "price.h100.median-2026-11",
+      "kind": "price",
+      "value": 3.98,
+      "unit": "USD/GPU-hr",
+      "label": "H100 on-demand median rental price, November 2026 reading",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
+        "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
+        "quote": "the median on-demand price is $3.98 per GPU per hour across 46 providers with a priced on-demand config"
+      },
+      "verifiedAt": "2026-11-23",
+      "ttlDays": 30,
+      "boundary": "Median of priced on-demand configs across 46 providers, in a sentence the page opens \"As of November 23, 2026\"; it says the median rose about 16% over the past 90 days. The page re-issues its figure within a dated day (this claim held another median read under the same date before), so a reading is one sample of that day. Used only by lesson t7.l4 beside the older reading; price.h100.median (2026-10-04) stays for everything pinned to it."
+    },
+    {
+      "id": "status.meta.ttft-goal",
+      "kind": "status",
+      "value": 350,
+      "unit": "ms",
+      "label": "Meta: first-token latency goal (TTFT)",
+      "source": {
+        "url": "https://engineering.fb.com/2025/10/17/ai-research/scaling-llm-inference-innovations-tensor-parallelism-context-parallelism-expert-parallelism/",
+        "title": "Meta Engineering: Scaling LLM Inference: Innovations in Tensor Parallelism, Context Parallelism, and Expert Parallelism (2025-10-17)",
+        "quote": "Time-to-first-token (TTFT) for prefill: The time it takes for the first part of the response to appear, ideally under 350ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "A goal the post states for the user experience its inference optimizations serve, as read on the verified date. The post does not call it an SLO, does not name an app, and gives no percentile."
+    },
+    {
+      "id": "status.meta.ttit-goal",
+      "kind": "status",
+      "value": 25,
+      "unit": "ms",
+      "label": "Meta: gap-between-tokens goal (TTIT, time to incremental token)",
+      "source": {
+        "url": "https://engineering.fb.com/2025/10/17/ai-research/scaling-llm-inference-innovations-tensor-parallelism-context-parallelism-expert-parallelism/",
+        "title": "Meta Engineering: Scaling LLM Inference: Innovations in Tensor Parallelism, Context Parallelism, and Expert Parallelism (2025-10-17)",
+        "quote": "Time-to-incremental-token (TTIT) for decoding: The latency between subsequent words, targeting less than 25ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "A goal the post states for the user experience its inference optimizations serve, as read on the verified date. The post does not call it an SLO, does not name an app, and gives no percentile."
+    },
+    {
+      "id": "status.mlperf.llama31-8b.conversational-ttft",
+      "kind": "status",
+      "value": 2000,
+      "unit": "ms",
+      "label": "MLPerf Inference Llama3.1-8B conversational TTFT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Conversational category: TTFT/TPOT: 2000 ms/100 ms. Interactive category: TTFT/TPOT: 500 ms/30 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.llama31-8b.conversational-tpot",
+      "kind": "status",
+      "value": 100,
+      "unit": "ms",
+      "label": "MLPerf Inference Llama3.1-8B conversational TPOT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Conversational category: TTFT/TPOT: 2000 ms/100 ms. Interactive category: TTFT/TPOT: 500 ms/30 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.llama31-8b.interactive-ttft",
+      "kind": "status",
+      "value": 500,
+      "unit": "ms",
+      "label": "MLPerf Inference Llama3.1-8B interactive TTFT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Conversational category: TTFT/TPOT: 2000 ms/100 ms. Interactive category: TTFT/TPOT: 500 ms/30 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.llama31-8b.interactive-tpot",
+      "kind": "status",
+      "value": 30,
+      "unit": "ms",
+      "label": "MLPerf Inference Llama3.1-8B interactive TPOT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Conversational category: TTFT/TPOT: 2000 ms/100 ms. Interactive category: TTFT/TPOT: 500 ms/30 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.deepseek-r1.server-ttft",
+      "kind": "status",
+      "value": 2000,
+      "unit": "ms",
+      "label": "MLPerf Inference DeepSeek-R1 server TTFT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Server: TTFT/TPOT: 2000 ms/80 ms. Interactive: TTFT/TPOT: 1500 ms/15 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.deepseek-r1.server-tpot",
+      "kind": "status",
+      "value": 80,
+      "unit": "ms",
+      "label": "MLPerf Inference DeepSeek-R1 server TPOT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Server: TTFT/TPOT: 2000 ms/80 ms. Interactive: TTFT/TPOT: 1500 ms/15 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.deepseek-r1.interactive-ttft",
+      "kind": "status",
+      "value": 1500,
+      "unit": "ms",
+      "label": "MLPerf Inference DeepSeek-R1 interactive TTFT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Server: TTFT/TPOT: 2000 ms/80 ms. Interactive: TTFT/TPOT: 1500 ms/15 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.deepseek-r1.interactive-tpot",
+      "kind": "status",
+      "value": 15,
+      "unit": "ms",
+      "label": "MLPerf Inference DeepSeek-R1 interactive TPOT limit",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (Datacenter benchmarks table, \"Server latency constraint\" column)",
+        "quote": "Server: TTFT/TPOT: 2000 ms/80 ms. Interactive: TTFT/TPOT: 1500 ms/15 ms."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "MLPerf Inference limits per model and scenario, from the rules file on its default branch as read on the verified date (the repository gave no readable release tag for it; the file's own text names the 6.1 submissions, and the v6.1 results were published 2026-09-16). The limits change between rounds. MLPerf checks them at the 99th percentile under Poisson arrivals (status.mlperf.server-tail-percentile)."
+    },
+    {
+      "id": "status.mlperf.server-tail-percentile",
+      "kind": "status",
+      "value": 99,
+      "unit": "%",
+      "label": "MLPerf Inference server and interactive scenarios: tail latency percentile",
+      "source": {
+        "url": "https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc",
+        "title": "MLCommons inference_policies, inference_rules.adoc (scenario table)",
+        "quote": "|Server/Interactive |LoadGen sends new queries to the SUT according to a Poisson distribution | 600 seconds |1 |Benchmark specific |99%*"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "From the rules file on its default branch as read on the verified date: queries arrive by a Poisson process, each run lasts at least 600 seconds, and the tail-latency percentile is 99%. The asterisk marks the theoretical lower limit for very long runs."
+    },
+    {
+      "id": "status.mlperf.round",
+      "kind": "status",
+      "value": "v6.1",
+      "label": "Latest MLPerf Inference round read",
+      "source": {
+        "url": "https://mlcommons.org/2026/09/mlperf-inference-v6-1-results/",
+        "title": "MLCommons: MLPerf Inference v6.1 results (2026-09-16)",
+        "quote": "MLCommons ® announced new results for its industry-standard MLPerf ® Inference v6.1 benchmark suite."
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 60,
+      "boundary": "The round whose results page was the newest read on the verified date; the page says MLPerf Endpoints will replace Inference for the datacenter, so a later round may not exist."
+    },
+    {
+      "id": "status.rust.polonius",
+      "kind": "status",
+      "value": "no stable release through Rust 1.100.0, Nov 2026, ships Polonius",
+      "label": "Polonius is not on stable Rust: the conditional-return borrow is still rejected",
+      "source": {
+        "url": "https://raw.githubusercontent.com/rust-lang/rust/1.100.0/RELEASES.md",
+        "title": "Rust RELEASES.md at tag 1.100.0",
+        "quote": "Version 1.100.0 (2026-11-12)",
+        "row": "Line 1 heads the 1.100.0 notes; no line of the file, for any release, mentions Polonius"
+      },
+      "verifiedAt": "2026-11-22",
+      "ttlDays": 45,
+      "boundary": "Stable Rust up to 1.100.0 (2026-11-12): RELEASES.md at that tag never mentions Polonius. Polonius Alpha is on nightly only; the Rust blog (https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/, 2026-08-04) says \"Then, we are aiming to stabilize prior to the end of the year!\", hence the short TTL. The conditional return (r.l4 get_or_insert, r.l9 cached) was compiled with E0502 on rustc 1.96.0 and compiles with -Zpolonius=next on nightly-2026-05-01; it was not compiled on 1.100.0. When Polonius stabilises, this sentence turns false and so do the items resting on that limit: the r.l4 quiz question on the conditional return, the r.l9 cached example and the compile-bank items built on it (pinned to rustc 1.96.0, which keeps rejecting it). The r.l3, r.l4, r.l8 and r.l9 permission diagrams stay drawn with Aquascope on nightly-2026-05-01, which predates Polonius on nightly."
     }
   ]
 }

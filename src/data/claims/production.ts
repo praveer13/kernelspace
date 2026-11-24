@@ -14,9 +14,9 @@ const GLIBC_MALLOPT = {
   url: 'https://man7.org/linux/man-pages/man3/mallopt.3.html',
   title: 'mallopt(3), Linux man-pages',
 }
-const GLIBC_INTERNALS = {
-  url: 'https://sourceware.org/glibc/wiki/MallocInternals',
-  title: 'glibc wiki: MallocInternals',
+const GLIBC_MALLOC_C = {
+  url: 'https://gitlab.com/gnutools/glibc/-/raw/glibc-2.43/malloc/malloc.c',
+  title: 'glibc malloc/malloc.c at tag glibc-2.43 (a mirror of the glibc repository)',
 }
 const JEMALLOC_MAN = {
   url: 'https://jemalloc.net/jemalloc.3.html',
@@ -76,16 +76,16 @@ export const PRODUCTION_CLAIMS: Claim[] = [
   {
     id: 'production.glibc.bins',
     kind: 'spec',
-    value: 'fast, unsorted, small, large',
+    value: 'unsorted, small, large',
     label: 'glibc malloc free-chunk bin kinds',
     source: {
-      ...GLIBC_INTERNALS,
-      quote: 'The normal bins are divided into "small" bins, where each chunk is the same size, and "large" bins, where chunks are a range of sizes.',
-      row: 'Arenas > bins',
+      ...GLIBC_MALLOC_C,
+      quote: 'for the small bins, which all contain the same-sized chunks, but',
+      row: 'malloc.c line 1484 names the small bins, lines 1635 and 1645 the unsorted bin, line 4053 the large bins; line 1478 says no consolidated chunk physically borders another one, and free returns at tcache_put (line 3372) before _int_free_chunk, so chunks in the tcache are not merged; 106 lines of malloc.c at tag glibc-2.42 contain fastbin (ignoring case), and none at glibc-2.43 or glibc-2.44 (tags read on the mirror)',
     },
-    verifiedAt: '2026-10-05',
+    verifiedAt: '2026-11-22',
     ttlDays: 365,
-    boundary: 'Per arena, with a per-thread cache (tcache) in front. Fastbins do not coalesce; small and large bins do.',
+    boundary: 'Per arena, with a per-thread cache (tcache) in front, in glibc 2.43 and 2.44. glibc 2.42 and earlier also keep fastbins and honour M_MXFAST; in 2.43 and 2.44 M_MXFAST is marked deprecated and setting it has no effect.',
   },
   {
     id: 'production.jemalloc.classes-per-doubling',

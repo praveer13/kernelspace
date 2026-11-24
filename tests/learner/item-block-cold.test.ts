@@ -255,6 +255,22 @@ describe('the off-path collapse', () => {
     await m.unmount()
   })
 
+  test('a path the engine delivers while the block loads is the path the block reads (a cold load before the ledger has merged)', async () => {
+    // the store hydrates from its snapshot, which holds no path; the engine's boot, which `events` awaits, brings the stored one
+    useProgress.setState({ working: { ...saved.working, 'boot:path': undefined } as never })
+    const events = (useProgress.controls.engine as unknown as () => Promise<{ events: (f?: { refPrefix?: string }) => Promise<LedgerEvent[]> }>)
+    const base = await events()
+    ;(useProgress.controls as { engine: unknown }).engine = async () => {
+      await Promise.resolve()
+      useProgress.setState({ working: { ...saved.working, 'boot:path': 'serving-first' } as never })
+      return base
+    }
+    const m = await mountReading(dom, reading())
+    await dom.until(() => options(m.container).length > 0)
+    expect(buttonNamed(m.container, 'Practice anyway')).toBeUndefined()
+    await m.unmount()
+  })
+
   test('an item block (not reading) never collapses for the path', async () => {
     useProgress.setState({ working: { ...saved.working, 'boot:path': 'full-ramp' } as never })
     const block: ItemBlockData = { type: 'item', title: 'Borrow it', family: 'compile', variants: VARIANTS, count: 1, predict: false }

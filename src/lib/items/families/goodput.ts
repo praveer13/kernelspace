@@ -73,9 +73,8 @@ const SYNTHETIC = {
   /** rows further from the knee: a step down by this percentage, or up by this one */
   downPct: { min: 70, max: 95 },
   upPct: { min: 110, max: 180 },
-  /** a sweep's saturation throughput in tok/s, and which rung of the ladder has half of it */
-  peakTps: { min: 1000, max: 8000, step: 500 },
-  halfRungs: [1, 2, 3],
+  /** a sweep's p95 TPOT is this percentage of its mean TPOT (synthetic), so a row's tok/s is c x 1,000 ÷ (p95 ÷ this) */
+  p95OverMeanPct: 120,
 
   /** operating points: tok/s/user values a point may have, the floors an SLO may set, and the floors whose period in ms is whole (level 3) */
   tuGrid: [4, 5, 6, 8, 10, 12, 15, 18, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 120],
@@ -136,7 +135,6 @@ const ceilDiv = (a: number, b: number): number => (a - (a % b)) / b + (a % b ===
 const floorDiv = (a: number, b: number): number => (a - (a % b)) / b
 const PASS_PCTS = range(SYNTHETIC.passPct)
 const FAIL_PCTS = range(SYNTHETIC.failPct)
-const TPS_PEAKS = range(SYNTHETIC.peakTps)
 const TG_FIRST = range(SYNTHETIC.tgFirst)
 const LETTERS = ['A', 'B', 'C', 'D', 'E']
 /** Peaks of two significant digits, ascending: 10 to 99, 100 to 990, 1,000 to 9,900. */
@@ -231,23 +229,72 @@ function sweepOf(p: Params): Sweep {
   return { conc, tps, tpot, limit, key, rate: tpot.map((x) => floorDiv(MS_PER_S, x)), floor: interactive ? MS_PER_S / limit : 0, interactive }
 }
 
+/** A row's tok/s: c streams, each one token per mean TPOT, and the p95 TPOT a fixed multiple of the mean. */
+const tpsOf = (c: number, p95: number): number => Math.floor((c * MS_PER_S * SYNTHETIC.p95OverMeanPct) / (100 * p95))
+
+/** Whether the table's tok/s rises from one row to the next, as the learner reads it (whole numbers). */
+const rises = (c0: number, t0: number, c1: number, t1: number): boolean => tpsOf(c1, t1) > tpsOf(c0, t0)
+
+/** The integers a percentage range holds. */
+const pcts = (lo: number, hi: number): number[] => range({ min: lo, max: hi })
+const DOWN_PCTS = pcts(SYNTHETIC.downPct.min, SYNTHETIC.downPct.max)
+const UP_PCTS = pcts(SYNTHETIC.upPct.min, SYNTHETIC.upPct.max)
+
+/** For each row k that can be the knee, the (key %, next %) pairs that keep tok/s rising from row k to row k + 1. */
+export type KneeRows = { keys: number[]; pairs: [number, number][][] }
+
+/**
+ * The feasible knee rows depend only on the ladder, the limit and the level (9 x 10 x 4 at most), so they are worked out
+ * once and kept: drawing them afresh on every make cost about four times the rest of the family's time (K0-FIX-T7).
+ * The arrays and their order are the ones the draw used before, so the same seed draws the same sweep.
+ */
+const KNEE_ROWS = new Map<string, KneeRows>()
+
+export function kneeRows(ladder: number[], limit: number, level: Level): KneeRows {
+  const id = `${ladder.join(',')}|${limit}|${level}`
+  const hit = KNEE_ROWS.get(id)
+  if (hit) return hit
+  const [kLo, kHi] = SYNTHETIC.keyPct[level]
+  const [nLo, nHi] = SYNTHETIC.nextPct[level]
+  const [keyPcts, nextPcts] = [pcts(kLo, kHi), pcts(nLo, nHi)]
+  const pairs = ladder.slice(0, SIX - 1).map((_, k) => {
+    const out: [number, number][] = []
+    for (const kp of keyPcts) for (const np of nextPcts) if (rises(ladder[k], Math.floor((limit * kp) / 100), ladder[k + 1], Math.ceil((limit * np) / 100))) out.push([kp, np])
+    return out
+  })
+  const rows = { keys: pairs.map((_, k) => k).filter((k) => pairs[k].length > 0), pairs }
+  KNEE_ROWS.set(id, rows)
+  return rows
+}
+
 function drawKnee(r: Rng, level: Level): Params {
   const ladder = r.pick(SYNTHETIC.ladders)
   const limit = r.pick(level === TRANSFER ? SYNTHETIC.interactiveTpotMs : SYNTHETIC.kneeTpotMs)
-  // the knee is never the last row, so some row is over the limit and the peak throughput is not an answer
-  const key = r.int(0, SIX - 2)
-  const [kLo, kHi] = SYNTHETIC.keyPct[level]
-  const [nLo, nHi] = SYNTHETIC.nextPct[level]
+  // the knee is never the last row, so some row is over the limit and the peak throughput is not an answer.
+  // Throughput is concurrency over mean TPOT, so it rises only while TPOT grows slower than concurrency does: the knee
+  // is drawn among the rows where the step past it can be both over the limit and slower than the ladder's step.
+  // On the linear ladders (steps of 1.2x to 2x) only the early rows can, so at levels 0 and 1 the first two rows are the
+  // knee more often than one time in five (about 30 % each at level 0). That skew is accepted: verify:generators' blind-
+  // strategy gate still passes, and the knee follows from the table, not from where it usually sits.
+  const { keys, pairs } = kneeRows(ladder, limit, level)
+  const key = r.pick(keys)
+  const [kp, np] = r.pick(pairs[key])
   const tpot: number[] = []
-  tpot[key] = Math.floor((limit * r.int(kLo, kHi)) / 100)
-  tpot[key + 1] = Math.ceil((limit * r.int(nLo, nHi)) / 100)
-  for (let i = key - 1; i >= 0; i--) tpot[i] = Math.max(1, Math.min(Math.floor((tpot[i + 1] * r.int(SYNTHETIC.downPct.min, SYNTHETIC.downPct.max)) / 100), tpot[i + 1] - 1))
-  for (let i = key + 2; i < SIX; i++) tpot[i] = Math.max(Math.ceil((tpot[i - 1] * r.int(SYNTHETIC.upPct.min, SYNTHETIC.upPct.max)) / 100), tpot[i - 1] + 1)
-  // throughput saturates: P · c / (c + c½), strictly rising so the largest concurrency always has the most tok/s
-  const peak = r.pick(TPS_PEAKS)
-  const half = ladder[r.pick(SYNTHETIC.halfRungs)]
-  const tps: number[] = []
-  ladder.forEach((c, i) => tps.push(Math.max(Math.floor((peak * c) / (c + half)), i === 0 ? 1 : tps[i - 1] + 1)))
+  tpot[key] = Math.floor((limit * kp) / 100)
+  tpot[key + 1] = Math.ceil((limit * np) / 100)
+  // rows further out step by the drawn percentage, held to the steps that keep throughput rising
+  for (let i = key - 1; i >= 0; i--) {
+    const step = (pct: number): number => Math.max(1, Math.min(Math.floor((tpot[i + 1] * pct) / 100), tpot[i + 1] - 1))
+    const ok = DOWN_PCTS.filter((pct) => rises(ladder[i], step(pct), ladder[i + 1], tpot[i + 1]))
+    tpot[i] = step(ok.length > 0 ? r.pick(ok) : SYNTHETIC.downPct.max)
+  }
+  for (let i = key + 2; i < SIX; i++) {
+    const step = (pct: number): number => Math.max(Math.ceil((tpot[i - 1] * pct) / 100), tpot[i - 1] + 1)
+    const ok = UP_PCTS.filter((pct) => rises(ladder[i - 1], tpot[i - 1], ladder[i], step(pct)))
+    tpot[i] = step(ok.length > 0 ? r.pick(ok) : SYNTHETIC.upPct.min)
+  }
+  // throughput is what the other two columns say, never drawn on its own
+  const tps = ladder.map((c, i) => tpsOf(c, tpot[i]))
   return { conc: join(ladder), tps: join(tps), tpot: join(tpot), limit, surface: level === TRANSFER ? 'rate' : 'tpot' }
 }
 
@@ -671,7 +718,7 @@ const L1_TABLE: Params = {
 
 const gen: Gen = {
   id: 'goodput',
-  version: 1,
+  version: 2,
   title: 'Goodput: SLO counts, the knee, the frontier and replicas',
   kcs: [KC.goodput, KC.goodputCurve, KC.paretoFrontier, KC.capacityPlanning],
   variants: VARIANTS,

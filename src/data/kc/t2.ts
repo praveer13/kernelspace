@@ -191,7 +191,7 @@ export const T2_KCS: readonly Kc[] = [
   {
     id: 't2.async-tasks',
     title: 'Async tasks and blocking',
-    can: 'You can say why a suspended task costs hundreds of bytes, and why one blocking call stalls its whole thread.',
+    can: 'You can say why a task costs its live locals, not a thread stack, and why one blocking call stalls its thread.',
     track: 't2',
     kind: 'concept',
     lessons: ['t2.l6'],

@@ -28,7 +28,7 @@ const lesson: Lesson = {
       {
         prompt: 'A service is slow between tokens and also turns requests away when it is busy. Name the two memory walls behind those symptoms and one fix for each.',
         model:
-          'Capacity wall: concurrent requests times context times bytes per token exceeds the HBM left after the weights, so requests are not admitted; fix it with paging, KV quantization or GQA. Bandwidth wall: the weight and cache bytes read per step set the step time, so ITL rises; fix it with batching, quantization or sharding.',
+          'Capacity wall: concurrent requests times context times bytes per token exceeds the HBM left after the weights, so requests are not admitted; fix it with paging, KV quantization or GQA. Bandwidth wall: the weight and cache bytes read per step set the step time, so ITL rises; fix it with a smaller running batch, fewer bytes per step (quantization, a shorter cache) or more bandwidth per step (sharding).',
         ideas: [
           'Capacity wall: cache bytes exceed the HBM left after weights, so admission stops',
           'Bandwidth wall: the bytes read per step set ITL',
@@ -142,7 +142,7 @@ And the formula's blind spot: it prices *residency*. The per-step **bandwidth** 
     {
       type: 'callout',
       variant: 'warning',
-      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with batching, quant, shorter cache). Teams routinely fix the wrong one: more replicas do not speed ITL; sharding one model across GPUs can, until communication dominates; faster kernels don't add capacity. Name the wall before you buy the fix.`,
+      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with a smaller running batch, fewer bytes per step via quantization or a shorter cache, or more bandwidth per step via sharding; a bigger batch raises ITL). Teams routinely fix the wrong one: more replicas do not speed ITL; sharding one model across GPUs can, until communication dominates; faster kernels don't add capacity. Name the wall before you buy the fix.`,
     },
     {
       type: 'prose',

@@ -302,7 +302,7 @@ const BEATS: Beat[] = [
     rightLabel: 'LLM serving · 2020s',
     left: Beat3Left,
     right: Beat3Right,
-    lines: ['context switch ≡ iteration-level scheduling', 'timeslice ≡ one decode step', 'runqueue ≡ waiting requests'],
+    lines: ['context switch ≡ iteration-level scheduling', 'quantum edge ≡ decode-step boundary (no timer)', 'runqueue ≡ waiting requests'],
   },
 ]
 

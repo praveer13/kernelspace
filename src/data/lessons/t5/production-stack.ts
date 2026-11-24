@@ -1,5 +1,6 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
+import { claimCite, claimRelease } from '../claims'
 
 /**
  * Spiral items (wave-2.md §6.2): authored questions on earlier KCs of T3, T4 and T5, drawn by the T5 checkpoint beside
@@ -230,7 +231,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `You've assembled every piece: the memory hierarchy (T0), allocators and paging (T1–T2), Rust's role (T3), the GPU's physics (T4), and the serving algorithms (T5). This final lesson reads the four production stacks as *engineering arguments* — each one's design center, the trade-offs it chose, and when it wins. No marketing, no benchmarks-by-vendor; just architecture, using the vocabulary you now own.
 
-The four: **vLLM** (the open-source reference), **SGLang** (the structured-generation specialist), **TensorRT-LLM** (NVIDIA's kernel-tuned performance stack), and **Dynamo** (NVIDIA's distributed data plane — which is a different *kind* of thing, as you'll see).`,
+The four: **vLLM** (the open-source reference), **SGLang** (a general engine built around cache reuse), **TensorRT-LLM** (NVIDIA's kernel-tuned performance stack), and **Dynamo** (NVIDIA's distributed data plane — which is a different *kind* of thing, as you'll see).`,
     },
     {
       type: 'prose',
@@ -246,36 +247,40 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
 
 **Design center:** RadixAttention — the KV cache organized as a **radix tree over token prefixes**, so shared prefixes (system prompts, few-shot templates, multi-turn chats, agent loops) are reused *automatically* across requests with LRU eviction on the tree. If vLLM's prefix cache is a hash map of blocks, SGLang's is a trie: finer-grained sharing, better hit rates on structured workloads. On top of it: a frontend language for constrained/structured generation (regex/JSON-schema decoding at speed), first-class MoE expert parallelism, and — since Dec 2025 — **EPD disaggregation** with Mooncake as its transfer backend (T6.L3).
 
+**What it is now:** SGLang's README introduces it as "an open-source inference framework for large language, vision-language, and diffusion models, optimized for agentic workloads, large-scale serving, and RL rollouts", not as a structured-generation specialist, and its hardware list is far wider than "any CUDA": ${claimCite('status.sglang.hardware')}. Its radix tree is no longer pure Python either: the release notes that switched it (PR #39627) say the prefix cache "now runs on a Rust core by default", and at ${claimRelease('twin.sglang.treecore')} \`environ.py\` still makes the Rust core the default.
+
 **Trade-offs chosen:** optimizes hardest for workloads with *repetitive structure* — agents, tool-use loops, RAG with stable templates — where cache-hit rate is the throughput multiplier. Its general-purpose features track vLLM's (it shares much of the kernel ecosystem); the community is smaller. **Choose it when:** your traffic is agentic/templated (cache hits dominate), or structured output is your product's spine.`,
     },
     {
       type: 'prose',
       md: `## TensorRT-LLM: NVIDIA's own kernels
 
-**Design center:** squeeze the GPU with NVIDIA's own kernels and runtime. TRT-LLM began as a *build-time* compiler (models became pre-built TensorRT engines), but in the 1.x line the PyTorch backend is the default: the stack is architected on PyTorch, with a Python \`LLM\` API over a \`PyExecutor\` that owns the scheduler, the KV-cache manager and the sampler. The speed comes from custom kernels for attention, GEMMs and MoE, CUDA graphs, an overlap scheduler, FP8/FP4 paths, speculative decoding, wide expert parallelism and P/D disaggregation, all tuned per GPU generation by NVIDIA's kernel teams. Peak single-node throughput and latency numbers typically belong here, especially on flagship NVIDIA hardware with FP8 or FP4.
+**Design center:** squeeze the GPU with NVIDIA's own kernels and runtime. TRT-LLM began as a *build-time* compiler (models became pre-built TensorRT engines), but that path is gone: ${claimCite('status.trtllm.pytorch-sole-backend')} (its migration guide: "PyTorch is now the sole execution backend"; the release notes of an earlier release candidate list the removal of the TensorRT serve, evaluation, benchmark and stress paths). The stack is architected on PyTorch, with a Python \`LLM\` API over a \`PyExecutor\` that owns the scheduler, the KV-cache manager and the sampler. The speed comes from custom kernels for attention, GEMMs and MoE, CUDA graphs, an overlap scheduler, FP8/FP4 paths, speculative decoding, wide expert parallelism and P/D disaggregation, all tuned per GPU generation by NVIDIA's kernel teams. Peak single-node throughput and latency numbers typically belong here, especially on flagship NVIDIA hardware with FP8 or FP4.
 
-**Trade-offs chosen:** performance and NVIDIA-hardware depth over breadth. The stack is deepest exactly on NVIDIA (obviously), the best-tuned paths follow NVIDIA's newest hardware and recipes, and engine versions move fast: Dynamo v1.5.0 pins TRT-LLM 1.3.0rc25, a release candidate, so name versions when you compare. **Choose it when:** tokens/s/GPU is your margin and your model set is stable — inference as a *fixed* production workload tuned like the binary it is.`,
+**Trade-offs chosen:** performance and NVIDIA-hardware depth over breadth. The stack is deepest exactly on NVIDIA (obviously), the best-tuned paths follow NVIDIA's newest hardware and recipes, and engine versions move fast: the TensorRT-LLM that Dynamo's release notes name is itself a release candidate (${claimCite('status.trtllm.dynamo-pin')}), so name versions when you compare. **Choose it when:** tokens/s/GPU is your margin and your model set is stable — inference as a *fixed* production workload tuned like the binary it is.`,
     },
     {
       type: 'prose',
       md: `## Dynamo: the data plane, not the engine
 
-**Design center:** Dynamo (T3.L6) is deliberately **not** an inference engine — it's the distributed layer *around* engines (it runs TRT-LLM, vLLM, or SGLang as workers): KV-aware request routing, prefill/decode disaggregation orchestration, NIXL/UCX-based KV transfer over RDMA/NVLink, planner-driven autoscaling, all with the Rust data plane you studied. Since T3.L6 was written it went GA (v1.3) and kept moving: its **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, then was **deprecated in v1.5.0** (2026-09-21, removal targeted for v1.6.0) in favor of each engine's native KV offload, and **llm-d** (Red Hat/Google/CoreWeave) packages the same architecture Kubernetes-natively. If the engines are databases, Dynamo is the **proxy + replication + sharding tier**.
+**Design center:** Dynamo (T3.L6) is deliberately **not** an inference engine — it's the distributed layer *around* engines (it runs TRT-LLM, vLLM, or SGLang as workers): KV-aware request routing, prefill/decode disaggregation orchestration, NIXL/UCX-based KV transfer over RDMA/NVLink, planner-driven autoscaling, all with the Rust data plane you studied. Since T3.L6 was written it has kept moving. The notes of ${claimRelease('status.dynamo.release-first-major')} call it "the first major release" and describe "production-grade disaggregated serving"; ${claimRelease('status.dynamo.release')} is the newest release we have read. Its **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, then was **deprecated in v1.5.0** (2026-09-21), with removal targeted for ${claimCite('status.dynamo.kvbm.removal-target')}, in favor of each engine's native KV offload, and **llm-d** packages the same architecture Kubernetes-natively (${claimCite('status.llm-d.founders')}). If the engines are databases, Dynamo is the **proxy + replication + sharding tier**.
 
-**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with NATS, etcd, and transfer fabric of its own. **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L9's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
+**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with a transfer fabric of its own and, in some modes, NATS or etcd (optional: the README at ${claimRelease('status.dynamo.transport')} says Dynamo uses TCP for inter-component communication and lists both as not required on Kubernetes). **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L9's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
     },
     {
       type: 'prose',
       md: `## The comparison, compressed
 
+Most cells are the course's summary of each engine's design, not a reading of one release. Three were checked against a source. SGLang's **Runs on** cell names its release and read date itself. TRT-LLM's **Kind** follows its migration guide: ${claimCite('status.trtllm.pytorch-sole-backend')}. Under **Language core**, SGLang's radix tree defaults to its Rust core at ${claimRelease('twin.sglang.treecore')}. Engines change release to release, so a cell older than a release or two is a prompt to look again.
+
 | | vLLM | SGLang | TRT-LLM | Dynamo |
 |---|---|---|---|---|
 | **Kind** | engine (library+server) | engine + frontend lang | engine (PyTorch-native, NVIDIA kernels) | distributed data plane |
 | **Design center** | PagedAttention for all | RadixAttention cache reuse | NVIDIA-tuned kernels and runtime | fleet orchestration |
-| **Language core** | Python + CUDA | Python + CUDA | Python runtime + C++/CUDA kernels | Rust + Python planner |
+| **Language core** | Python + CUDA; a second, Rust front end | Python + CUDA, with a Rust radix-tree core by default | Python runtime + C++/CUDA kernels | Rust + Python planner |
 | **Signature win** | ecosystem default | agentic/structured traffic | peak per-GPU perf | long-context fleet goodput |
 | **Price** | scheduler overhead | smaller ecosystem | NVIDIA-only depth | operational complexity |
-| **Runs on** | any CUDA (+AMD/TPU ports) | any CUDA | NVIDIA | wraps the other three |`,
+| **Runs on** | any CUDA (+AMD/TPU ports) | ${claimCite('status.sglang.hardware')} | NVIDIA | wraps the other three |`,
     },
     {
       type: 'reading',
@@ -330,10 +335,10 @@ First, the T5 spiral checkpoint: eight items, four on this lesson and four that 
           ],
           correct: [1],
           explanation:
-            'TRT-LLM 1.x runs on a PyTorch-based runtime by default, not a pre-built engine. NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling buy peak steady-state speed; the cost is NVIDIA-only depth.',
+            'TRT-LLM now runs only on a PyTorch-based runtime, with no pre-built engine to compile. NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling buy peak steady-state speed; the cost is NVIDIA-only depth.',
           why: [
             'That is vLLM\'s trade: Python-first velocity and breadth over peak micro-efficiency. TRT-LLM trades breadth for NVIDIA-tuned kernels and runtime, so its edge is peak per-GPU speed, not the widest model coverage.',
-            'Right: TRT-LLM 1.x defaults to a PyTorch-based runtime with NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling for peak steady-state throughput; the price is NVIDIA-only depth.',
+            'Right: TRT-LLM runs on a PyTorch-based runtime (the TensorRT engine backend is removed) with NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling for peak steady-state throughput; the price is NVIDIA-only depth.',
             'That is Dynamo\'s role. TRT-LLM is an engine that serves a model on its GPUs; fleet routing and autoscaling sit in a layer around engines.',
             'That is SGLang\'s design center. TRT-LLM targets per-GPU speed on a stable model set, not a structured-output frontend language.',
           ],
@@ -372,7 +377,7 @@ First, the T5 spiral checkpoint: eight items, four on this lesson and four that 
           explanation:
             'Operational simplicity wins when the fleet-layer wins (disaggregation, distributed cache) can\'t amortize. The T5.L9 rule: disaggregate at scale/long context; colocate at small scale.',
           why: [
-            'Dynamo adds NATS, etcd and a transfer fabric. One GPU has no second worker to route to or disaggregate onto, so the platform cost buys nothing.',
+            'Dynamo adds a distributed system with a transfer fabric of its own (NATS and etcd are optional, not required). One GPU has no second worker to route to or disaggregate onto, so the platform cost buys nothing.',
             'Right: operational simplicity wins when fleet-level gains cannot amortize. Colocate with chunked prefill at small scale and short context; disaggregate at scale and long context.',
             'Vendor-tuned kernels pay off for a stable, fixed workload where tokens/s/GPU is the margin. As a default on one GPU they add NVIDIA-only lock-in and tuning effort for no fleet-level benefit.',
             'A custom stack rebuilds paging, continuous batching and kernel coverage that engines already ship. Short context removes the need for fleet layers, not for a proper KV manager and scheduler.',

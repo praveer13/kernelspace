@@ -92,7 +92,7 @@ Within inference there are exactly two phases, and T4.L3 already classified them
       md: `## The metrics, defined properly
 
 - **TTFT (time to first token):** from request arrival to the first generated token. Driven by queue time + prefill compute (∝ prompt tokens, compute-bound) + any KV transfers (disaggregated setups, T5.L9). The user's "is it alive?" signal.
-- **ITL / TPOT (inter-token latency / time per output token):** the decode loop's period per token — bandwidth-bound (at least the weight + KV bytes read per step ÷ bandwidth, and every user in the batch waits the whole step). The user's "is it fast?" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms.
+- **ITL / TPOT (inter-token latency / time per output token):** the decode loop's period per token — bandwidth-bound (at least the weight + KV bytes read per step ÷ bandwidth, and every user in the batch waits the whole step). The user's "is it fast?" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms (the course's rule of thumb, not a measured reading speed).
 - **Throughput:** tokens/s aggregate (the provider's margin) and its normalized form, **tok/s/GPU** or **tok/s/$**.
 - **Goodput:** throughput *subject to SLOs* — e.g., requests/s with TTFT < 2 s and ITL < 100 ms. **The only honest capacity metric**: raw throughput numbers hide the latency collapse that produced them.
 
@@ -103,7 +103,7 @@ The phase split explains the product shape of every serving API you've used: why
       stats: [
         { value: '∝ prompt × params', label: 'TTFT driver', hint: 'Prefill FLOPs scale with prompt length — compute-bound, tensor cores busy.' },
         { value: '∝ bytes/token', label: 'ITL driver', hint: 'Weight + KV reads per step ÷ HBM bandwidth — the roofline slope.' },
-        { value: '<100 ms', label: 'ITL comfort', hint: 'Streaming feels responsive; human reading speed is ~50 ms/token.' },
+        { value: '<100 ms', label: 'ITL comfort', hint: 'Streaming feels responsive. Adult silent reading is far slower than 50 ms per token at T5.L2\'s rule of about 0.75 words per token.' },
         { value: 'goodput', label: 'the real KPI', hint: 'Throughput within SLO. Everything else is marketing.' },
       ],
     },

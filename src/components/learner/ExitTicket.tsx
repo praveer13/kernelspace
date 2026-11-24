@@ -39,7 +39,6 @@ import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import {
   earlierKcsOf,
-  isNonMcq,
   judgeTicket,
   makeGenPool,
   planTicket,
@@ -48,6 +47,7 @@ import {
   type TicketVerdict,
 } from '@/lib/learner/ticket'
 import type { TicketPlan } from '@/lib/learner/types'
+import { nonMcqWord, ticketRule } from '@/lib/learner/ticket-rule'
 
 export interface ExitTicketProps {
   lesson: Lesson
@@ -135,11 +135,6 @@ const BUTTON =
 
 /** The anchors the lesson page scrolls to: a test-out is not the exit ticket, and a page can show both. */
 const marks = (form: TicketForm) => (form === 'testout' ? { id: 'test-out', 'data-ks-testout': '' } : { id: 'exit-ticket', 'data-ks-ticket': '' })
-
-const NON_MCQ_WORD = (plan: TicketPlan): string => {
-  const kinds = new Set(plan.items.filter(isNonMcq).map((it) => (it.source === 'cr' ? 'written' : 'numeric')))
-  return kinds.size === 1 ? [...kinds][0] : 'written or numeric'
-}
 
 export default function ExitTicket({ lesson, form: formProp, trackColor, fallback, onClose, onResolved, className }: ExitTicketProps) {
   const form: TicketForm = formProp ?? lesson.ticket?.form ?? 'ticket'
@@ -251,10 +246,7 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
 
   const { plan: p } = load
   const last = p.items.length - 1
-  const rule =
-    p.form === 'spiral'
-      ? `${p.items.length} items · pass with ${p.passRule.minCorrect} right, at least one of them ${NON_MCQ_WORD(p)}`
-      : `${p.items.length} items · pass with ${p.passRule.minCorrect} right, including the ${NON_MCQ_WORD(p)} one`
+  const rule = ticketRule(p)
 
   return (
     <section
@@ -331,7 +323,7 @@ export function Verdict({
 }) {
   const testout = plan.form === 'testout'
   const tally = `${verdict.correct} of ${verdict.of} right`
-  const word = NON_MCQ_WORD(plan)
+  const word = nonMcqWord(plan)
   // Continue anyway leaves the page's focus on a button that is about to unmount: New numbers takes it first
   const newRef = useRef<HTMLButtonElement>(null)
   if (verdict.ok) {
@@ -340,7 +332,7 @@ export function Verdict({
         <p className="flex items-start gap-2 text-body text-text-1">
           <Check size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
           <span>
-            <strong>{testout ? 'Tested out' : 'Passed'}</strong> · {tally}, the {word} item included.
+            <strong>{testout ? 'Tested out' : 'Passed'}</strong> · {tally}, the {word} item included{word === 'written' ? ' (self-checked)' : ''}.
           </span>
         </p>
         <p className="text-body-sm text-text-2">

@@ -142,7 +142,8 @@ export default function ItemCard({
   )
 
   const awaitingGen = isGen && !gen
-  const primaryLabel = view.kind === 'cr' && draft.kind === 'cr' && !draft.revealed ? 'Show the model answer' : 'Submit'
+  // an unrevealed written item shows only its own "Show the model answer" button (ConstructedAnswer): no second one here
+  const awaitingReveal = view.kind === 'cr' && draft.kind === 'cr' && !draft.revealed
 
   const submit = useCallback(() => {
     // when the family's checker cannot load, grade by the shared rules so the item is not stuck
@@ -320,13 +321,13 @@ export default function ItemCard({
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {!phase.done && (
+        {!phase.done && !awaitingReveal && (
           <button
             type="submit"
             disabled={awaitingGen && !loadError}
             className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground disabled:cursor-wait disabled:opacity-60 motion-safe:transition-transform motion-safe:duration-150 motion-safe:active:scale-[.97]"
           >
-            {primaryLabel}
+            Submit
             <kbd className="ml-2 hidden rounded border border-accent-foreground/30 px-1 font-mono text-[10px] md:inline">Enter</kbd>
           </button>
         )}

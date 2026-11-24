@@ -12,7 +12,7 @@
 import { atlasRow } from '@/data/atlas'
 import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
-import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
+import { claimRef, finishInstance, workedSteps, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
 import { gradeResponse } from '@/lib/items/grade'
 import type { AnswerSpec, Gen, Instance, Level, Params, PromptPart, RatioRule, SolutionStep, VariantSpec } from '@/lib/items/types'
 import { BITS_PER_BYTE, DTYPE_BYTES, formatNumber, type Dtype } from '@/lib/items/units'
@@ -309,10 +309,8 @@ function build(vs: VariantSpec, level: Level, seed: number, p: Params): Instance
       stem = [t(`A matmul kernel computes a ${num(p, 'tm')} × ${num(p, 'tn')} output tile of C, loading the matching tiles of A and B in ${dtype.toUpperCase()} (${formatNumber(bytes(dtype))} B per value) and counting only that traffic. What is its arithmetic intensity, in FLOP per byte?`)]
       answer = { kind: 'numeric', truth, unit: 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
   }
-  // level 0 shows every step with the last blanked; level 1 blanks one in the middle
   const full = steps(vs.id, p, truth)
-  const blankAt = level === 0 ? full.length - 1 : Math.floor((full.length - 1) / 2)
-  const worked = level < 2 ? full.map((s, i) => (i === blankAt ? blanked(s) : s)) : undefined
+  const worked = workedSteps(full, level, blanked)
   return finishInstance(gen, {
     variant: vs.id,
     seed,
@@ -423,7 +421,7 @@ const pin = (name: string, source: string, variant: string, level: Level, p: Par
 
 const gen: Gen = {
   id: 'roofline',
-  version: 2,
+  version: 3, // gen-literal-ok: the generator version
   title: 'Roofline: ridge, bound class and decode speed',
   kcs: [KC.ridgePoint, KC.boundClassification, KC.decodeBandwidth, KC.tilingIntensity],
   variants: VARIANTS,

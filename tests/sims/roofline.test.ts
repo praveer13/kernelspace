@@ -55,6 +55,7 @@ import {
   attentionBytes,
   batchToRidge,
   boundOf,
+  coalesceFactor,
   decodeAI,
   dtypeMultiplier,
   gpuMapMs,
@@ -374,7 +375,7 @@ describe('what the sim reports (and what it does not)', () => {
     expect(clean / H100_BW).toBeLessThan(0.8)
     expect(clean / conflict).toBeLessThan(32) // only the shared half slows
     expect(accessResult('staged', H100_BW, true, true).effectiveBandwidth).toBe(clean)
-    expect(accessResult('strided', H100_BW, false, false).effectiveBandwidth).toBeCloseTo(H100_BW / 32, 9)
+    expect(accessResult('strided', H100_BW, false, false).effectiveBandwidth).toBeCloseTo(H100_BW / 8, 9)
   })
 
   test('the tiers: shared, L2 and HBM bandwidth by working set, and PCIe overrides them', () => {
@@ -504,7 +505,7 @@ describe('predict → run → explain, end to end', () => {
     expect(ok('roof.occupancy', 64, 128)).toBe(false)
     expect(ok('roof.coalesce', 75, 74.9)).toBe(true)
     expect(ok('roof.coalesce', 100, 74.9)).toBe(false) // forgot the shared-memory traffic
-    expect(ok('roof.coalesce', 3, 74.9)).toBe(false) // the strided figure
+    expect(ok('roof.coalesce', 12.5, 74.9)).toBe(false) // the strided figure
     expect(ok('roof.bank', 8.8, 8.78)).toBe(true)
     expect(ok('roof.bank', 32, 8.78)).toBe(false) // the conflict's 32× applies to one half only
     expect(ok('roof.tiers', 6, 5.97)).toBe(true)
@@ -991,5 +992,13 @@ describe('RooflineSim reports what the learner does (mounted)', () => {
     await key('ArrowRight') // 129
     expect(seen).toEqual([{ key: 'roof.occupancy', value: 128, unit: 'registers' }])
     await m.unmount()
+  })
+})
+
+describe('the strided factor is useful bytes over transaction bytes', () => {
+  test('coalesceFactor(strided) is one 4-byte word per 32-byte transaction, from the claim', async () => {
+    await import('../../src/data/claims/lazy/gpu-limits')
+    const { claimNumber } = await import('../../src/data/claims')
+    expect(coalesceFactor('strided')).toBe(4 / claimNumber('hw.cuda.coalesce-transaction-bytes'))
   })
 })

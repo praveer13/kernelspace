@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { KCS } from '../../src/data/kc'
+import { BOOT_KCS, KCS } from '../../src/data/kc'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { seedFor } from '../../src/lib/items/core'
 import { loadAllFamilies } from '../../src/lib/items/registry'
@@ -12,6 +12,8 @@ import {
   MAX_PROBES,
   composeExtra,
   composeSession,
+  canKeepGoing,
+  eligibleKcs,
   budgetLine,
   confusableGroups,
   interleaveConfusable,
@@ -361,6 +363,62 @@ describe('"keep going" (spec §6.3 step 5)', () => {
   test('nothing when no carded KC has a generator, and it never serves authored items', () => {
     expect(composeExtra(set([card(U1)]), composerContent(), NOW, 3)).toEqual([])
     expect(composeExtra(cards, composerContent([], { make: () => null }), NOW, 3)).toEqual([])
+  })
+})
+
+describe('"keep going" practises only on passed ideas (K0-A5)', () => {
+  const boot = BOOT_KCS.map((kc) => card(kc, { lastReviewDay: D(10) }))
+  const bootCards = set(boot)
+  const bootSet = new Set<string>(BOOT_KCS)
+  const intro = (kc: string) => KCS.find((k) => k.id === kc)!.lessons[0]
+
+  test('Boot cards and no passed lesson: nothing is eligible and nothing is served', () => {
+    const eligible = eligibleKcs(KCS, {})
+    expect(BOOT_KCS.some((kc) => eligible.has(kc))).toBe(false)
+    expect(composeExtra(bootCards, composerContent(), NOW, 3, undefined, (kc) => eligible.has(kc))).toEqual([])
+  })
+
+  test('a read-only lesson is not passed', () => {
+    const eligible = eligibleKcs(KCS, { [intro(BOOT_KCS[0])]: { status: 'read' } })
+    expect(eligible.has(BOOT_KCS[0])).toBe(false)
+  })
+
+  test('after the introducing lesson is done, items come only for the KCs it teaches', () => {
+    const lesson = intro(BOOT_KCS[0])
+    const eligible = eligibleKcs(KCS, { [lesson]: { status: 'done' } })
+    expect(eligible.has(BOOT_KCS[0])).toBe(true)
+    const slots = composeExtra(bootCards, composerContent(), NOW, 3, undefined, (kc) => eligible.has(kc))
+    expect(slots.length).toBeGreaterThan(0)
+    for (const s of slots) {
+      expect(eligible.has(s.kc)).toBe(true)
+      expect(bootSet.has(s.kc)).toBe(true)
+    }
+    const taught = new Set(KCS.filter((k) => k.lessons.includes(lesson)).map((k) => k.id))
+    for (const s of slots) expect(taught.has(s.kc)).toBe(true)
+  })
+
+  test('a KC placement found solid is eligible without a passed lesson', () => {
+    const eligible = eligibleKcs(KCS, {}, [BOOT_KCS[0]])
+    expect(eligible.has(BOOT_KCS[0])).toBe(true)
+    expect(eligible.has(BOOT_KCS[1])).toBe(false)
+  })
+
+  // Today offers "Keep going" only when canKeepGoing holds (K0-FIX-LEARNER-APP: the button's own rule, tested here)
+  test('after Boot alone there is no eligible KC, so Today offers no "Keep going"', () => {
+    const pool = composerContent().pool
+    expect(BOOT_KCS.some((kc) => pool.families(kc).length > 0)).toBe(true)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}), pool)).toBe(false)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, { [intro(BOOT_KCS[0])]: { status: 'read' } }), pool)).toBe(false)
+  })
+
+  test('a passed lesson or a solid placement KC brings the button back, but only for a carded KC with a generator', () => {
+    const pool = composerContent().pool
+    const served = BOOT_KCS.find((kc) => pool.families(kc).length > 0) as string
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, { [intro(served)]: { status: 'done' } }), pool)).toBe(true)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}, [served]), pool)).toBe(true)
+    // eligible but not carded, or carded and eligible with no generator family: nothing to serve
+    expect(canKeepGoing(set([]), eligibleKcs(KCS, {}, [served]), pool)).toBe(false)
+    expect(canKeepGoing(bootCards, eligibleKcs(KCS, {}, [served]), { families: () => [] })).toBe(false)
   })
 })
 

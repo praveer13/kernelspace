@@ -1,8 +1,10 @@
 import type { Lesson } from '../types'
 import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
 
-// The worked setup uses 16-token blocks; vLLM's default block is its own claim, and the sentence below computes from it.
+// The worked setup uses the paper's block, read from its claim; vLLM's default block is its own claim. Both sentences below compute from them.
 const PROMPT = 130
+const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
+const PAPER_FULL = Math.floor(PROMPT / PAPER_BLOCK)
 const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
 const ENGINE_CITE = claimCite('production.vllm.block-size')
 const ENGINE_FULL = Math.floor(PROMPT / ENGINE_BLOCK)
@@ -35,7 +37,7 @@ const lesson: Lesson = {
       {
         prompt: 'Explain why a prefix-affinity router needs a load guard, and what it does when the guard trips.',
         model:
-          'Routing only by longest cached prefix herds every request that shares a popular system prompt onto the one worker that holds it, until queueing costs more than the prefill it saves. The guard allows only a bounded imbalance over the least-loaded worker. If no cache owner passes it, the router picks the least-loaded worker and accepts the miss.',
+          'Routing only by longest cached prefix herds every request that shares a popular system prompt onto the one worker that holds it, until queueing costs more than the prefill it saves. The guard allows only a bounded imbalance over the least-loaded worker. If no owner passes it, the least-loaded worker wins the tie and the router accepts the miss.',
         ideas: [
           'Longest-prefix routing herds traffic onto one warm worker',
           'The guard allows only a bounded imbalance over the least-loaded worker',
@@ -99,7 +101,7 @@ That removes work rather than making it faster. A 2,048-token system prompt foll
 
 vLLM-style **Automatic Prefix Caching (APC)** hashes full token blocks. Each key includes the parent hash and the next block's token ids, plus every value that can change K/V: model, adapter, multimodal inputs, and cache salt where isolation requires it. A request walks its prompt block by block until the first miss. Hits reuse physical KV blocks by refcount; misses prefill normally, then become cache entries when their blocks are complete.
 
-The block boundary matters. With the paper's 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens); the two-token tail cannot be shared safely yet. vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}). At ${ENGINE_BLOCK} tokens per block the same ${PROMPT} tokens give ${ENGINE_FULL} blocks (${ENGINE_FULL * ENGINE_BLOCK} tokens), and up to ${ENGINE_BLOCK - 1} matching tokens at the end of a prefix are never shared, because only full blocks are cached. The payoff is nevertheless exact: **cached tokens do zero model work**. APC helps shared system prompts, repeated document prefixes, retries, parallel samples, and multi-turn chat. It does not help unrelated prompts, and it does not accelerate decode — only the prefill work that already exists in the cache.`,
+The block boundary matters. With the paper's ${PAPER_BLOCK}-token blocks, ${PROMPT} identical leading tokens produce ${PAPER_FULL} reusable blocks (${PAPER_FULL * PAPER_BLOCK} tokens); the ${PROMPT - PAPER_FULL * PAPER_BLOCK}-token tail cannot be shared safely yet. vLLM's default on CUDA is ${ENGINE_CITE} (${ENGINE_BLOCK_SCOPE}). At ${ENGINE_BLOCK} tokens per block the same ${PROMPT} tokens give ${ENGINE_FULL} blocks (${ENGINE_FULL * ENGINE_BLOCK} tokens), and up to ${ENGINE_BLOCK - 1} matching tokens at the end of a prefix are never shared, because only full blocks are cached. The payoff is nevertheless exact: **cached tokens do zero model work**. APC helps shared system prompts, repeated document prefixes, retries, parallel samples, and multi-turn chat. It does not help unrelated prompts, and it does not accelerate decode — only the prefill work that already exists in the cache.`,
     },
     {
       type: 'diagram',
@@ -107,11 +109,11 @@ The block boundary matters. With the paper's 16-token blocks, 130 identical lead
       height: 58,
       nodes: [
         { id: 'root', x: 3, y: 23, w: 15, h: 9, label: 'root', sub: 'no KV' },
-        { id: 'sys', x: 27, y: 23, w: 20, h: 9, label: '[system…]', sub: '384 tok · blocks 7–30', color: '#22D3EE' },
+        { id: 'sys', x: 25, y: 23, w: 20, h: 9, label: '[system…]', sub: '384 tok · blocks 7–30', color: '#22D3EE' },
         { id: 'tools', x: 57, y: 7, w: 19, h: 9, label: '[tools…]', sub: '+160 tok · blocks 42–51', color: '#3EF2A4' },
         { id: 'docs', x: 57, y: 23, w: 19, h: 9, label: '[RAG doc…]', sub: '+256 tok · blocks 61–76', color: '#A78BFA' },
         { id: 'chat', x: 57, y: 39, w: 19, h: 9, label: '[turn 1…]', sub: '+96 tok · blocks 81–86', color: '#FB7185' },
-        { id: 'query', x: 82, y: 22, w: 15, h: 11, label: 'new query', sub: 'system + doc + new tail' },
+        { id: 'query', x: 84, y: 22, w: 14, h: 11, label: 'new query', sub: 'sys+doc+tail' },
       ],
       edges: [
         { from: 'root', to: 'sys' },
@@ -163,24 +165,24 @@ Eviction operates from the leaves. Removing an internal node would invalidate ev
       type: 'code',
       filename: 'prefix_router.rs — locality with a load guard',
       lang: 'rust',
-      code: `fn choose_worker(req: &[u32], workers: &[Worker]) -> usize {
-    let min_load = workers.iter().map(Worker::load).min().unwrap_or(0);
+      code: `fn choose_worker(req: &[u32], workers: &[Worker]) -> Option<usize> {
+    // None for an empty fleet: min() has nothing to return
+    let min_load = workers.iter().map(Worker::load).min()?;
     let guard = min_load + 4; // do not herd onto one hot cache owner
 
     workers.iter()
         .enumerate()
-        .filter(|(_, w)| w.load() <= guard)
+        .filter(|(_, w)| w.load() <= guard) // the least-loaded worker always passes
         .max_by_key(|(_, w)| (w.cached_prefix_len(req), Reverse(w.load())))
+        // equal prefix, so Reverse(load) picks the least-loaded
         .map(|(i, _)| i)
-        .unwrap_or_else(|| workers.iter().enumerate()
-            .min_by_key(|(_, w)| w.load()).unwrap().0)
 }`,
-      chips: ['longest prefix first', 'bounded imbalance', 'JSQ fallback'],
+      chips: ['longest prefix first', 'bounded imbalance', 'least-loaded tie-break'],
     },
     {
       type: 'reading',
       title: 'Read it in Rust: the router',
-      lead: '`choose_worker`\'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `unwrap_or_else` runs its fallback only on `None`. The closures borrow what they read (`guard`, `workers`).',
+      lead: '`choose_worker`\'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `choose_worker` hands that `Option` back, as `min()?` does for an empty fleet. The closures borrow what they read (`guard`, `workers`).',
       variants: ['verdict.iterators-ownership', 'fix.closures-collections', 'verdict.enums-option-result', 'fix.iterators-ownership', 'verdict.closures-collections', 'fix.enums-option-result'],
       count: 3,
     },
@@ -188,7 +190,7 @@ Eviction operates from the leaves. Removing an internal node would invalidate ev
       type: 'prose',
       md: `## The cluster is part of the cache
 
-An engine-local hit is useless if the router sends the request to another worker. Round-robin scatters related chats; join-shortest-queue protects load but ignores expensive warm state. A **prefix-affinity router** scores each worker by its longest cached prefix, then applies a load guard so one popular system prompt cannot herd the whole fleet onto one GPU. When every cache-owning worker is beyond the guard, it falls back to the least-loaded worker and pays the miss deliberately.
+An engine-local hit is useless if the router sends the request to another worker. Round-robin scatters related chats; join-shortest-queue protects load but ignores expensive warm state. A **prefix-affinity router** scores each worker by its longest cached prefix, then applies a load guard so one popular system prompt cannot herd the whole fleet onto one GPU. When every cache-owning worker is beyond the guard, every worker still allowed has no cached prefix, so the tie-break on lower load picks the least-loaded one and the router pays the miss deliberately.
 
 That creates the metric pair a production scoreboard needs: **KV hit rate** (cached prompt tokens ÷ prompt tokens) and **TTFT SLO attainment**. Hit rate without latency can hide an overloaded hot worker; latency without hit rate cannot explain why identical prompts have different cost. Open the Fleet's cluster mode and run the same shared-prefix trace under round-robin, JSQ, and prefix affinity. The traffic is held constant; only the information available to the router changes.`,
     },
@@ -253,7 +255,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
       type: 'callout',
       variant: 'warning',
       title: 'Cache keys are an isolation boundary',
-      md: `A cache hit changes latency. If mutually untrusted tenants share a namespace, an attacker may probe timing to infer whether another tenant recently used a prefix. Salt or partition cache keys by trust domain, avoid caching sensitive prefixes, and make eviction/accounting tenant-aware. Wave 6 returns to this as a full side-channel lesson; for now remember: a performance cache is also shared state, and shared state is observable.`,
+      md: `A cache hit changes latency. If mutually untrusted tenants share a namespace, an attacker may probe timing to infer whether another tenant recently used a prefix. Salt or partition cache keys by trust domain, avoid caching sensitive prefixes, and make eviction/accounting tenant-aware. T6.L10 treats this as a full section on the timing oracle; for now remember: a performance cache is also shared state, and shared state is observable.`,
     },
     {
       type: 'field-note',
@@ -314,10 +316,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'A longer match means more tensors to move to the chosen worker, and the router should prefer short matches',
           ],
           correct: [1],
-          explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, then falls back to least-loaded placement.',
+          explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, and equal scores go to the least-loaded worker.',
           why: [
             'A hit reuses K/V for every layer, so the engine skips all forward work for the cached tokens, MLP included. The lesson\'s 2,048-of-2,176-token example is 94% reusable input.',
-            'Right: the goal is TTFT under load, not hit rate alone. Affinity scores locality within a bounded load imbalance, then falls back to the least-loaded worker.',
+            'Right: the goal is TTFT under load, not hit rate alone. Affinity scores locality within a bounded load imbalance, and equal scores go to the least-loaded worker.',
             'Cached K/V is immutable and refcounted, so any later request with the same prefix can map it read-only. Cross-request reuse is exactly what APC provides.',
             'Affinity routing sends the request to the worker that already holds the prefix, so no K/V moves. Preferring longer matches is the point; the risk is overload.',
           ],

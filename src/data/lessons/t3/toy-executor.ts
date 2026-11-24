@@ -53,7 +53,7 @@ trait Future {
         { caption: 'The executor pops task #7 and calls poll(). The future runs — real code executing on the executor\'s thread — until it needs the socket.', active: ['exec', 'fut'], edges: ['exec->fut'] },
         { caption: 'Socket not ready (EAGAIN). The future registers its WAKER with the reactor (epoll/io_uring interest list) and returns Pending. The thread is now FREE to poll other tasks — this is the whole trick.', active: ['fut', 'io', 'wake'], edges: ['fut->io', 'fut->wake'] },
         { caption: 'Bytes arrive; the reactor fires; wake() pushes task #7 back to the executor\'s queue. No thread slept for this connection — one thread multiplexes thousands.', active: ['wake', 'requeue'], edges: ['wake->requeue', 'requeue->exec'] },
-        { caption: 'Re-polled, the future resumes at its saved state, reads the bytes, and either finishes (Ready) or parks at the next await. A task is just a resumable function with ~300 B of state.', active: ['exec', 'fut'], edges: ['exec->fut'] },
+        { caption: 'Re-polled, the future resumes at its saved state, reads the bytes, and either finishes (Ready) or parks at the next await. A task is just a resumable function whose state is the locals live across its awaits: about 1 KiB for T2.L6\'s echo task, most of it the read buffer.', active: ['exec', 'fut'], edges: ['exec->fut'] },
       ],
     },
     {
@@ -62,53 +62,81 @@ trait Future {
 
 Polling has one obvious flaw: if a future returns Pending, when do we poll again? Re-polling in a hot loop would burn a core per task. The answer is the **Waker**: a handle the executor hands down via \`Context\`. A future that can't proceed arranges for its waker to be called when progress is possible (the reactor, a timer wheel, another task), then returns Pending and *costs nothing* until woken.
 
-The executor is then shockingly small: a queue of ready tasks, a loop that polls each with a waker wired to re-enqueue, done. This is a real (single-threaded, no-frills) executor core:`,
+The executor is then shockingly small: a queue of ready tasks, a loop that polls each with a waker wired to re-enqueue, done. This is a real executor core: one thread polls; any thread (a timer, a reactor) may wake a task:`,
     },
     {
       type: 'code',
       filename: 'toy_executor.rs — the heart of tokio, miniaturized',
       lang: 'rust',
       code: `use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
 use std::future::Future;
-use std::task::{Context, Poll, Waker};
+use std::pin::Pin;
+use std::sync::{Arc, Condvar, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread;
+use std::time::Duration;
+
+type Queue = Arc<(Mutex<VecDeque<Arc<Task>>>, Condvar)>;
 
 struct Task {
-    fut: Mutex<Box<dyn Future<Output = ()> + Send>>,
-    queue: Arc<Mutex<VecDeque<Arc<Task>>>>,   // re-enqueue handle
+    // Pin<Box<..>>: the state machine may point into itself, so it must not move once polled.
+    // None once the future has finished.
+    fut: Mutex<Option<Pin<Box<dyn Future<Output = ()> + Send>>>>,
+    queue: Queue,
 }
 
-impl Task {
-    fn wake(self: &Arc<Self>) {
-        self.queue.lock().unwrap().push_back(self.clone());  // ready again
+impl Wake for Task {                       // std turns Arc<Task> into a Waker: no unsafe
+    fn wake(self: Arc<Self>) {
+        let (q, ready) = &*self.queue;
+        q.lock().unwrap().push_back(self.clone());
+        ready.notify_one();                // the executor's own wake path
     }
 }
 
-struct Executor { queue: Arc<Mutex<VecDeque<Arc<Task>>>> }
+struct Executor { queue: Queue }
 
 impl Executor {
-    fn spawn<F: Future<Output = ()> + Send + 'static>(&self, f: F) {
-        self.queue.lock().unwrap().push_back(Arc::new(Task {
-            fut: Mutex::new(Box::new(f)),
-            queue: self.queue.clone(),
-        }));
+    fn spawn(&self, f: impl Future<Output = ()> + Send + 'static) {
+        let task = Arc::new(Task { fut: Mutex::new(Some(Box::pin(f))), queue: self.queue.clone() });
+        task.wake();                       // "ready" is the starting state
     }
-
-    fn run(&self) {
-        loop {
-            let task = match self.queue.lock().unwrap().pop_front() {
-                Some(t) => t,
-                None => { thread::park(); continue; }   // sleep until a wake
-            };
-            let waker: Waker = make_waker(task.clone());      // wires wake()
+    fn run(&self, mut live: usize) {
+        let (q, ready) = &*self.queue;
+        while live > 0 {
+            let task = {
+                let mut q = q.lock().unwrap();
+                while q.is_empty() { q = ready.wait(q).unwrap(); }   // sleeps without the lock
+                q.pop_front().unwrap()
+            };                              // queue lock released before the poll
+            let waker = Waker::from(task.clone());
             let mut cx = Context::from_waker(&waker);
-            if let Poll::Ready(()) = task.fut.lock().unwrap().as_mut().poll(&mut cx) {
-                // task complete — drop it
-            }                                       // else: Pending; a future
-        }                                           // wake() will re-queue it
+            let mut slot = task.fut.lock().unwrap();
+            if let Some(fut) = slot.as_mut() {
+                if fut.as_mut().poll(&mut cx).is_ready() { *slot = None; live -= 1; }
+            }                               // Pending: nothing to do; a wake() re-queues it
+        }
+    }
+}
+
+// A leaf future: Pending once, and a helper thread wakes it after \`ms\`.
+struct Sleep { ms: u64, started: bool, done: Arc<Mutex<bool>> }
+impl Future for Sleep {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if *self.done.lock().unwrap() { return Poll::Ready(()); }
+        if !self.started {
+            self.started = true;
+            let (waker, done, ms) = (cx.waker().clone(), self.done.clone(), self.ms);
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(ms));
+                *done.lock().unwrap() = true;
+                waker.wake();
+            });
+        }
+        Poll::Pending                       // the wake path is the helper thread
     }
 }`,
-      chips: ['poll once per wake', 'Pending = free', 'thread::park between events'],
+      chips: ['poll once per wake', 'Pending = free', 'Condvar wait between events'],
     },
     {
       type: 'prose',
@@ -135,7 +163,7 @@ An inference engine's control plane is an async-runtime workload: thousands of S
     {
       type: 'callout',
       variant: 'info',
-      md: `**Build this.** Lab 05, [Async, Demystified](/forge/toy-executor), is this executor in a file you edit: \`spawn\`, \`run\` and \`block_on\` in \`src/executor.rs\`, with the unsafe waker plumbing already given. Start with its first check, \`block_on\`, which needs only \`spawn\`, \`run\` and one wrapper task. The page grades each of the six checks on its own, so that first green arrives before you touch the other five. Readiness: R7 and R8.`,
+      md: `**Build this.** Lab 05, [Async, Demystified](/forge/toy-executor), is this executor in a file you edit, in a single-threaded shape: tasks are shared with \`Rc\` in place of \`Arc\` and locks, \`run\` takes each future out of its task and puts it back, so the queue is never held across a poll, and a stale wake after a task has finished is skipped and is not counted as a poll. You write \`spawn\`, \`run\` and \`block_on\` in \`src/executor.rs\`, with the unsafe waker plumbing already given. Start with its first check, \`block_on\`, which needs only \`spawn\`, \`run\` and one wrapper task. The page grades each of the six checks on its own, so that first green arrives before you touch the other five. Readiness: R7 and R8.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: an executor keeps re-polling a Pending task until
     // it is ready. No research file names an executor misconception; this one is the lesson's own named footgun ("the
@@ -158,7 +186,7 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         offer: [0, 2, 3, 4],
         why: [
           'True: futures are inert, so nothing runs until an executor polls one. A JavaScript Promise, by contrast, starts at once.',
-          'False: a Pending task leaves the queue and costs nothing until its waker fires. Polling it on every pass would burn a core per task, and the executor in this lesson parks its thread when the queue is empty.',
+          'False: a Pending task leaves the queue and costs nothing until its waker fires. Polling it on every pass would burn a core per task, and the executor in this lesson waits on a condition variable when the queue is empty.',
           'True: the waker is the future\'s way back onto the queue, so it has to be registered before Pending is returned.',
           'True: wake() pushes the task onto the ready queue, and the next poll resumes it at its saved state.',
         ],

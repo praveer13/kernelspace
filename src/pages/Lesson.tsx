@@ -34,6 +34,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
+import { isLessonKeyTarget } from '@/lib/sims/host'
 import { selectTrackPct, useProgress } from '@/lib/progress'
 import type { LessonStatus } from '@/lib/progress'
 import { MINUTES, localDateKey, selectRings } from '@/lib/economy'
@@ -55,6 +56,8 @@ import type { PlacementResult, Recommendation } from '@/lib/learner/types'
 import type { RecommendContent, RecommendState } from '@/lib/learner/recommend'
 import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
+import { resolveAnchor } from '@/pages/lesson/anchor-aliases'
+import { alsoNext } from '@/pages/lesson/also-next'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
 import { FINISH_BAR_SCROLL_PADDING, gradedSurfaceInView, scrollBehavior } from '@/lib/lesson-scroll'
@@ -406,7 +409,7 @@ function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const rows: [string, string][] = [
-    ['← / →', 'previous / next lesson'],
+    ['← / →', 'previous / next lesson (not while a control has focus)'],
     ['j / k', 'next / previous section'],
     ['e', 'jump to exercise'],
     ['m', 'jump to the ticket, or Up Next'],
@@ -607,7 +610,16 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
 
   if (load.status === 'error' || (load.status === 'ready' && !rec)) return <NextLessonLink lesson={lesson} trackColor={trackColor} />
   if (!rec) return <div data-up-next-slot aria-busy="true" className="min-h-[9.5rem] rounded-lg border border-line bg-surface-1" />
-  return <UpNextCard rec={rec} as="h2" />
+  const also = alsoNext(rec, lesson, nextLesson(lesson))
+  if (!also) return <UpNextCard rec={rec} as="h2" />
+  return (
+    <div className="flex flex-col gap-2">
+      <UpNextCard rec={rec} as="h2" />
+      <Link to={lessonPath(also.lesson)} data-also-next className="font-mono text-[11px] text-text-3 underline-offset-2 hover:text-text-1 hover:underline">
+        {also.lead}: {also.label}
+      </Link>
+    </div>
+  )
 }
 
 /** The pre-Wave-1 footer link, kept as the fallback and for the last lesson's way on to the capstone. */
@@ -763,8 +775,9 @@ function LessonView({ lesson }: { lesson: Lesson }) {
 
   /* resume position (runs after Layout's scroll-to-top); a #heading link (⌘K opens KCs at their H2) wins over it */
   useEffect(() => {
-    const anchor = decodeURIComponent(hash.slice(1))
-    if (anchor && headings.some((h) => h.id === anchor)) {
+    const anchor = resolveAnchor(lesson.id, hash, headings.map((h) => h.id))
+    if (anchor) {
+      if (`#${anchor}` !== hash) navigate({ hash: `#${anchor}` }, { replace: true })
       const id = requestAnimationFrame(() =>
         requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior })),
       )
@@ -780,7 +793,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
       )
       return () => cancelAnimationFrame(id)
     }
-  }, [lesson.id, hash, headings])
+  }, [lesson.id, hash, headings, navigate])
 
   /* scroll driver: progress bar + pct readout (refs), throttled store save */
   useEffect(() => {
@@ -914,8 +927,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   /* keyboard shortcuts (lesson.md §6) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (e.defaultPrevented || isLessonKeyTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       switch (e.key) {
         case 'ArrowLeft':

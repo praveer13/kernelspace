@@ -1,4 +1,13 @@
 import type { Lesson } from '../types'
+import { claimCite, claimNumber, claimRelease } from '../claims'
+
+const SPEC_METHODS = claimCite('status.vllm.speculative-methods')
+const SGLANG_CHUNK = claimNumber('production.sglang.chunked-prefill-size').toLocaleString('en-US')
+const TRT_CHUNKED = claimCite('status.trtllm.enable-chunked-prefill-default')
+const SGLANG_RELEASE = claimRelease('production.sglang.chunked-prefill-size')
+// The tag of that release, for a link to SGLang's source at the release the sentence is dated by.
+const SGLANG_TAG = SGLANG_RELEASE.replace(/^SGLang /, '')
+const VLLM_SCHED_RELEASE = claimRelease('twin.vllm.scheduler')
 
 const lesson: Lesson = {
   id: 't5.l8',
@@ -84,30 +93,30 @@ The observation: many tokens are *easy* — function words, boilerplate, code pu
 
 1. **Draft** the next k tokens with a small/fast model (e.g. a 100M-param drafter next to your 70B target) — k serial steps, but each ~100× cheaper than a target step.
 2. **Verify all k in one parallel forward pass of the target model** — one *prefill-shaped* (compute-bound, wide) pass over the k drafted tokens instead of k serial decode steps.
-3. **Accept the longest prefix where the target's distribution agrees** (with a rejection-sampling rule that keeps the output *exactly* as the target model would have produced — this is lossless, not approximate), and resume from the first mismatch.
+3. **Accept the longest prefix where the target's distribution agrees** (with a rejection-sampling rule that keeps the output on the target model's distribution, up to floating-point rounding — lossless in distribution, not approximate, though not token-for-token identical to a run without speculation), and resume from the first mismatch.
 
-The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; verification reuses those idle FLOPs to check k tokens per weight-read instead of 1 — **arithmetic intensity × k on the same bandwidth.** Model the acceptance of each drafted token as a probability α (a simplification: independent per position). The pass emits the accepted prefix plus one bonus token from the target itself, so the expected tokens per verification step is **E = (1 − α^(k+1)) / (1 − α)** — α = 0.7, k = 4 gives E ≈ 2.8. E is capped at 1/(1 − α) however long you draft, and each extra draft token adds only α^(k+1) to it. Typical acceptance rates (60–80% on predictable text) yield **1.5–2.5× decode speedups** once draft and verify costs are paid, with bit-identical output. And you've met the pattern before: it's the JIT's speculate-and-deopt (T0.L5), branch prediction (T4.L1), and optimistic concurrency control — optimism + cheap validation + safe rollback.`,
+The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; verification reuses those idle FLOPs to check k tokens per weight-read instead of 1 — **arithmetic intensity × k on the same bandwidth.** Model the acceptance of each drafted token as a probability α (a simplification: independent per position). The pass emits the accepted prefix plus one bonus token from the target itself, so the expected tokens per verification step is **E = (1 − α^(k+1)) / (1 − α)** — α = 0.7, k = 4 gives E ≈ 2.8. E is capped at 1/(1 − α) however long you draft, and each extra draft token adds only α^(k+1) to it. Typical acceptance rates (60–80% on predictable text) yield **1.5–2.5× decode speedups** once draft and verify costs are paid, and the **output distribution unchanged**: rejection sampling guarantees it, up to floating-point rounding (Leviathan et al.: "without changing the distribution"). vLLM also ships an opt-in verifier, FLy, that relaxes the check and is lossy. And you've met the pattern before: it's the JIT's speculate-and-deopt (T0.L5), branch prediction (T4.L1), and optimistic concurrency control — optimism + cheap validation + safe rollback.`,
     },
     {
       type: 'diagram',
       caption: 'fig 1 — one speculative round: draft 4, verify 1 pass, accept 3',
       height: 52,
       nodes: [
-        { id: 'draft', x: 2, y: 8, w: 26, h: 10, label: 'draft model (tiny)', sub: '4 cheap serial steps', color: '#5CA8FF' },
-        { id: 'd1', x: 34, y: 2, w: 12, h: 7, label: '" the"' },
-        { id: 'd2', x: 34, y: 11, w: 12, h: 7, label: '" quick"' },
-        { id: 'd3', x: 34, y: 20, w: 12, h: 7, label: '" brown"' },
-        { id: 'd4', x: 34, y: 29, w: 12, h: 7, label: '" dog"', color: '#FF5C6C' },
-        { id: 'verify', x: 52, y: 12, w: 22, h: 10, label: 'target model', sub: 'ONE parallel pass over 4', color: '#A78BFA' },
-        { id: 'accept', x: 80, y: 6, w: 18, h: 9, label: 'accept 3', sub: '+1 bonus token', color: '#3EF2A4' },
-        { id: 'reject', x: 80, y: 22, w: 18, h: 9, label: 'reject "dog"', sub: 'resume from mismatch', color: '#FF5C6C' },
+        { id: 'draft', x: 2, y: 8, w: 28, h: 10, label: 'draft model', sub: '4 cheap serial steps', color: '#5CA8FF' },
+        { id: 'd1', x: 32, y: 2, w: 14, h: 7, label: '" the"' },
+        { id: 'd2', x: 32, y: 11, w: 14, h: 7, label: '" quick"' },
+        { id: 'd3', x: 32, y: 20, w: 14, h: 7, label: '" brown"' },
+        { id: 'd4', x: 32, y: 29, w: 14, h: 7, label: '" dog"', color: '#FF5C6C' },
+        { id: 'verify', x: 53, y: 9, w: 22, h: 10, label: 'target model', sub: 'one pass, all 4', color: '#A78BFA' },
+        { id: 'accept', x: 78, y: 6, w: 21, h: 9, label: 'accept 3', sub: '+1 bonus token', color: '#3EF2A4' },
+        { id: 'reject', x: 78, y: 22, w: 21, h: 9, label: 'reject "dog"', sub: 'resume here', color: '#FF5C6C' },
       ],
       edges: [
         { from: 'draft', to: 'd1' },
         { from: 'd1', to: 'd2' },
         { from: 'd2', to: 'd3' },
         { from: 'd3', to: 'd4' },
-        { from: 'd4', to: 'verify', label: 'verify all' },
+        { from: 'd4', to: 'verify', label: 'verify' },
         { from: 'verify', to: 'accept' },
         { from: 'verify', to: 'reject' },
       ],
@@ -115,7 +124,7 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
         { caption: 'The tiny drafter autoregresses 4 candidate tokens — 4 serial steps, each ~1/100 the cost of a target step.', active: ['draft', 'd1', 'd2', 'd3', 'd4'], edges: ['draft->d1', 'd1->d2', 'd2->d3'] },
         { caption: 'The 70B target scores all 4 positions in ONE wide pass (compute-bound — the ALUs were idle anyway). Cost ≈ one decode step.', active: ['verify'], edges: ['d4->verify'] },
         { caption: 'Distribution check: " the quick brown" matches the target\'s own choices — accepted. Bonus: the pass also yields the NEXT token for free. 4 tokens for ~1 step\'s price.', active: ['accept'], edges: ['verify->accept'] },
-        { caption: '" dog" disagrees — rejected (rejection sampling keeps output EXACTLY target-equivalent; this is lossless). Resume from the mismatch. Speedup = accepted/round ≈ 1.5–2.5×.', active: ['reject'], edges: ['verify->reject'] },
+        { caption: '" dog" disagrees — rejected (rejection sampling keeps the output on the target\'s distribution, up to floating-point rounding). Resume from the mismatch. Speedup = accepted/round ≈ 1.5–2.5×.', active: ['reject'], edges: ['verify->reject'] },
       ],
       predictAt: {
         step: 2,
@@ -140,7 +149,7 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
       type: 'statline',
       stats: [
         { value: '1.5–2.5×', label: 'typical speedup', hint: 'Acceptance-rate dependent; boilerplate/code accepts better than creative text.' },
-        { value: '0', label: 'quality delta', hint: 'Rejection sampling makes output distributionally identical to the target model.' },
+        { value: '0', label: 'quality delta', hint: 'Rejection sampling keeps the output on the target model\'s distribution, up to floating-point rounding.' },
         { value: 'k ≈ 4–8', label: 'draft length', hint: 'Separate draft model, cheap per token. E = (1 − α^(k+1)) / (1 − α) flattens as k grows; T6.L6 shows why MTP stops at k ≈ 2–4.' },
         { value: '~free', label: 'verify FLOPs', hint: 'The wide pass uses ALUs that decode was leaving idle — the roofline pays you back.' },
       ],
@@ -157,12 +166,12 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
 
 Continuous batching (T5.L7) schedules *sequences*, but prefill is still atomic: one 100k-token prompt's prefill is a multi-second compute-bound job that, run whole, stalls every decode in the batch (ITL spike for all users — a convoy inside the continuous schedule). **Chunked prefill** slices the prefill into fixed-size chunks (e.g. 2k tokens) and interleaves them with decode iterations: each step mixes one prefill chunk + the running decodes.
 
-The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: total goodput rises, and a long prompt no longer holds every decode for its whole prefill. It does not make ITL free. Each mixed step still carries up to one chunk of prefill, so a long prompt delays running decodes by about one chunk, not by the whole prefill, and the chunk budget trades ITL against TTFT: smaller chunks give better ITL, larger chunks give better TTFT. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
+The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: total goodput rises, and a long prompt no longer holds every decode for its whole prefill. It does not make ITL free. Each mixed step still carries up to one chunk of prefill, so a long prompt delays running decodes by about one chunk, not by the whole prefill, and the chunk budget trades ITL against TTFT: smaller chunks give better ITL, larger chunks give better TTFT. Engines differ on how much of this they switch on for you. vLLM chunks prefill and batches it with running decodes by default (as of ${VLLM_SCHED_RELEASE} its scheduler has no prefill or decode phase: each step spends one token budget across running and waiting requests). SGLang chunks prefill by default too (${SGLANG_CHUNK} tokens a chunk on an H100 when \`--chunked-prefill-size\` is not given, as of ${SGLANG_RELEASE}) but mixes decodes into those chunks only when \`enable_mixed_chunk\` is set ([its scheduler field](https://github.com/sgl-project/sglang/blob/${SGLANG_TAG}/python/sglang/srt/arg_groups/fields/schedule.py)). TensorRT-LLM chunks prefill only when you set \`enable_chunked_prefill\` (its default in the LLM API's arguments is ${TRT_CHUNKED}; nothing here says whether its executor co-schedules an unchunked prefill with decodes). So this is a design every engine can run, not a default every engine ships, and it is why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
     },
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Speculative decoding is your **JIT speculation** (T0.L5) and your **optimistic UI update**: run the cheap guess, validate against the authority, roll back on mismatch — bit-identical either way. Chunked prefill is **GC incrementalization** (ZGC slicing stop-the-world into mutator-time slices) and **cooperative multitasking**: no job may monopolize the loop; big jobs are sliced so small jobs' latency survives. Same law everywhere in this course: slice the big serial thing; interleave it with the latency-sensitive thing.`,
+      md: `Speculative decoding is your **JIT speculation** (T0.L5) and your **optimistic UI update**: run the cheap guess, validate against the authority, roll back on mismatch — the same distribution of outputs either way. Chunked prefill is **GC incrementalization** (ZGC slicing stop-the-world into mutator-time slices) and **cooperative multitasking**: no job may monopolize the loop; big jobs are sliced so small jobs' latency survives. Same law everywhere in this course: slice the big serial thing; interleave it with the latency-sensitive thing.`,
     },
     {
       type: 'callout',
@@ -173,7 +182,7 @@ The roofline blessing: decode iterations are bandwidth-bound with idle compute, 
       type: 'prose',
       md: `## The family tree
 
-Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra heads on the target itself (no separate model, better acceptance); **self-speculative** (draft = early-exit layers); **prompt lookup** (draft from the prompt — great for RAG/code editing where outputs repeat inputs); and **tree verification** — verify multiple draft branches per pass. Same draft-verify spine, different drafters. Meanwhile chunked prefill's cousins are **prefill prioritization policies** and, at the limit, full **disaggregation**. T5.L9 next: what happens when the machine itself is distributed across nodes.`,
+Variants worth recognizing in the wild: **EAGLE and MTP** — draft with extra heads or layers on the target itself (no separate model, better acceptance). Medusa, the plain-heads version, was removed from vLLM in v0.33.0; vLLM's docs name, among others, these methods: ${SPEC_METHODS}, and the same page also lists LiLiCorr and the \`dflash\` and \`dspark\` drafters. Other variants: **self-speculative** (draft = early-exit layers); **prompt lookup** (draft from the prompt — great for RAG/code editing where outputs repeat inputs); and **tree verification** — verify multiple draft branches per pass. Same draft-verify spine, different drafters. Meanwhile chunked prefill's cousins are **prefill prioritization policies** and, at the limit, full **disaggregation**. T5.L9 next: what happens when the machine itself is distributed across nodes.`,
     },
     {
       type: 'quiz',
@@ -192,7 +201,7 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
           why: [
             'The drafter is deliberately much weaker (for example 100M against 70B). Its guesses are only proposals; the target checks every one, so quality does not depend on the drafter.',
             'Right: accepted sequences match the target\'s own distribution, and mismatches are resampled from an adjusted one. The gain is a roofline trade of idle ALUs for fewer serial steps.',
-            'Verification runs the deployed target model, at whatever precision it is served, with no extra quantization for the verify pass. Speculation reproduces that target\'s output distribution exactly because of its acceptance rule. Quantization is a separate, lossy decode remedy.',
+            'Verification runs the deployed target model, at whatever precision it is served, with no extra quantization for the verify pass. Speculation reproduces that target\'s output distribution, up to floating-point rounding, because of its acceptance rule. Quantization is a separate, lossy decode remedy.',
             'A top-k rule would be approximate and change the output distribution. Lossless speculation accepts token x with probability min(1, p_target(x) / p_draft(x)) and resamples on rejection.',
           ],
           kcs: ['t5.speculative-decoding'],

@@ -61,7 +61,7 @@ fn bump_cas() {
         {
           label: 'Java',
           lang: 'java',
-          code: `// 1. synchronized: monitor lock, JVM may bias/thin-lock it
+          code: `// 1. synchronized: monitor lock (thin lock, inflating to a heavyweight monitor under contention)
 synchronized (lock) { counter++; }
 
 // 2. AtomicLong: CAS in a loop, userspace only
@@ -112,12 +112,12 @@ Lock-free has its own trap, and it is beautiful: **ABA**. Thread 1 reads pointer
       caption: 'fig 1 — ABA: the pointer is the same, the world is not',
       height: 50,
       nodes: [
-        { id: 't1', x: 2, y: 6, w: 20, h: 9, label: 'thread 1', sub: 'CAS(head, A, A.next)', color: '#22D3EE' },
-        { id: 't2', x: 2, y: 34, w: 20, h: 9, label: 'thread 2', sub: 'runs while T1 sleeps', color: '#FB7185' },
+        { id: 't1', x: 2, y: 6, w: 20, h: 9, label: 'thread 1', sub: 'CAS(head, A→B)', color: '#22D3EE' },
+        { id: 't2', x: 2, y: 34, w: 20, h: 9, label: 'thread 2', sub: 'runs; T1 sleeps', color: '#FB7185' },
         { id: 's1', x: 34, y: 6, w: 28, h: 8, label: 'head→A→B→C', sub: 'T1 reads head = A' },
-        { id: 's2', x: 34, y: 22, w: 28, h: 8, label: 'head→C (A,B popped)', sub: 'T2: pop A, pop B' },
-        { id: 's3', x: 34, y: 38, w: 28, h: 8, label: 'head→A→C (A recycled!)', sub: 'T2: push A back' },
-        { id: 'boom', x: 74, y: 22, w: 22, h: 10, label: 'CAS succeeds ✗', sub: 'B is lost — corruption', color: '#FF5C6C' },
+        { id: 's2', x: 34, y: 22, w: 28, h: 8, label: 'head→C', sub: 'T2: pop A, pop B' },
+        { id: 's3', x: 34, y: 38, w: 28, h: 8, label: 'head→A→C', sub: 'T2: push recycled A' },
+        { id: 'boom', x: 73, y: 22, w: 25, h: 10, label: 'CAS succeeds ✗', sub: 'head = B (freed!)', color: '#FF5C6C' },
       ],
       edges: [
         { from: 't1', to: 's1' },
@@ -154,7 +154,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
         'Switch to per-thread striped counters (the LongAdder move): watch throughput scale with cores.',
         'Replay the ABA trace in the queue inspector; then enable tagged pointers and re-run.',
       ],
-      note: `Three durable lessons: uncontended everything is fast (measure only under contention); contention on one cache line is the real enemy (stripe, pad, or shard); and CAS correctness is about *history*, not just values — hence version tags.`,
+      note: `The contention lab is a model, not a measurement: its numbers show the shape of contention, not how fast these primitives run on your machine. Three durable lessons: uncontended everything is fast (measure only under contention); contention on one cache line is the real enemy (stripe, pad, or shard); and CAS correctness is about *history*, not just values — hence version tags.`,
     },
     {
       type: 'quiz',

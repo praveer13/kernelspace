@@ -4,7 +4,7 @@ import { claimNumber, getClaim } from '@/data/claims'
 import { claimCite, claimRelease } from '@/data/claims/cite'
 import '@/data/claims/lazy/kvpool'
 import * as lessonClaims from '@/data/lessons/claims'
-import { LESSON_CLAIMS, OUT, render } from '../../scripts/gen-lesson-claims'
+import { claimImports, LESSON_CLAIMS, OUT, render } from '../../scripts/gen-lesson-claims'
 
 const root = new URL('../../src/data/lessons/', import.meta.url).pathname
 function files(dir: string): string[] {
@@ -56,18 +56,6 @@ describe('the lessons read their claims from a generated snapshot (K0-Z2 fix)', 
  * ('@/...', relative, or a dynamic import()) is resolved, and none may land in src/data/claims/. The snapshot's generator,
  * scripts/gen-lesson-claims.ts, is the one module that reads the registry for the lessons, and it lives outside.
  */
-const SRC = new URL('../../src/', import.meta.url).pathname
-export function claimImports(file: string, src: string): string[] {
-  const specs = [...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]!)
-  return specs.filter((spec) => {
-    let target: string
-    if (spec.startsWith('@/')) target = `${SRC}${spec.slice(2)}`
-    else if (spec.startsWith('.')) target = new URL(spec, `file://${file}`).pathname
-    else return false
-    return target === `${SRC}data/claims` || target.startsWith(`${SRC}data/claims/`) || target.startsWith(`${SRC}data/claims.`)
-  })
-}
-
 describe('no lesson module imports src/data/claims by any path', () => {
   test('the resolver catches an alias, a relative path and a dynamic import', () => {
     const at = `${root}t1/probe.ts`

@@ -1,3 +1,4 @@
+import { claimNumber } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -7,7 +8,7 @@ const lesson: Lesson = {
   index: 6,
   title: 'Rust Ownership as the Answer',
   minutes: 20,
-  hook: 'Every pain from this track — use-after-free, double-free, leaks, races — solved by the compiler, before your code ever runs.',
+  hook: 'Use-after-free, double-free and data races from this track are rejected by the compiler before your code ever runs; out-of-bounds reads become run-time panics.',
   exercise: 'read',
   kcs: ['t1.ownership-answer', 't1.memory-errors'],
   ticket: {
@@ -83,9 +84,9 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `Take stock of what this track has taught you to fear. Dangling pointers to dead stack frames. Reads past the array that silently corrupt. Double-frees that hand two owners the same memory. Leaks that only the OOM killer notices. Data races that need exactly the wrong interleaving to lose your data. Each is a distinct bug with a distinct flavor of pain — and Microsoft and Google have both published the same statistic about their C/C++ codebases: **~70% of serious security vulnerabilities are memory-safety bugs.**
+      md: `Take stock of what this track has taught you to fear. Dangling pointers to dead stack frames. Reads past the array that silently corrupt. Double-frees that hand two owners the same memory. Leaks that only the OOM killer notices. Data races that need exactly the wrong interleaving to lose your data. Each is a distinct bug with a distinct flavor of pain — and the Chromium project reports the bill for one big C++ codebase: **around ${claimNumber('status.chromium.memory-safety-share')}% of its high-severity security bugs are memory-unsafety problems**. It is one project's count, not a share of all C/C++ CVEs.
 
-Rust's pitch is audacious: *all of the above, caught at compile time, with zero runtime cost — no GC, no reference counting on every object, no pauses.* This lesson shows you the single idea that delivers it, at the level of T1's vocabulary. T3 will make you fluent; today is about *believing it's possible*.`,
+Rust's pitch is audacious, and it is specific. The *temporal* bugs (use after free, double free, dangling references) and data races are rejected at compile time, with no GC, no reference counting on every object, and no pauses. The *spatial* bug is not: an out-of-bounds index is checked at run time and panics, as in Java, and safe Rust can still leak (an \`Rc\` cycle). This lesson shows you the single idea that delivers it, at the level of T1's vocabulary. T3 will make you fluent; today is about *believing it's possible*.`,
     },
     {
       type: 'prose',
@@ -131,7 +132,7 @@ fn race_free() {
 
 // …and every borrow is lifetime-checked: a reference can never
 // outlive its owner, so use-after-free cannot compile either.`,
-      chips: ['move semantics', '&T xor &mut T', 'RAII drop', 'zero runtime cost'],
+      chips: ['move semantics', '&T xor &mut T', 'RAII drop', 'no GC, no pauses'],
     },
     {
       type: 'callout',
@@ -159,7 +160,7 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
         },
         {
           os: 'ownership (Rust)',
-          osLine: 'Safety at compile time: prove one owner per value, zero runtime cost.',
+          osLine: 'Temporal safety at compile time: prove one owner per value, with no GC and no per-object counting.',
           llm: 'Dynamo data plane',
           llmLine: 'Rust orchestrates the KV transfers that NIXL (C++) performs between nodes; no GC pause is affordable on that path.',
           breaks: 'Ownership is checked at compile time inside one process; it does not cover bytes in flight on the network or in device memory, where unsafe and FFI code still carry the invariants.',
@@ -263,7 +264,7 @@ Next track: the operating system. You have built memory management by hand; now 
           ],
           correct: [1],
           explanation:
-            'The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (70% CVE stat) or GC pauses. Rust is the only mainstream language offering both halves.',
+            `The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (Chromium's ${claimNumber('status.chromium.memory-safety-share')}% share of high-severity bugs) or GC pauses. Rust is the only mainstream language offering both halves.`,
           why: [
             'Reverses the ecosystem. CUDA toolchains, kernel libraries, and NVIDIA\'s own libraries are C++-first; Rust reaches them through bindings, so tooling is not the motive.',
             'Right: it keeps the control and speed of C++ and removes the memory-bug class at compile time, with no GC pauses to blow tail-latency budgets.',

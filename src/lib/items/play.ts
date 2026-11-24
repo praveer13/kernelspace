@@ -179,6 +179,120 @@ function authoredView(q: QuizQuestion, seed: number): Pick<ChoiceView, 'kind' | 
 }
 
 /**
+ * A reference to a track or lesson of the course ("T2.L4", "T6.L4's", "(T4)", "T6/T7"): it points at a lesson and
+ * says nothing of its own, so it is neither a word nor a number. Upper-case T only, so a cache level ("L2") stays a number.
+ */
+const LESSON_REF = /\bT\d+(?:\.L\d+)?\b/g
+
+/** Lower-case words of a sentence, the leading "Right:" or "Correct:" label and any lesson reference dropped, punctuation read as a space. */
+function wordsOf(text: string): string[] {
+  return text
+    .replace(LESSON_REF, ' ')
+    .toLowerCase()
+    .replace(/^\s*(right|correct)\s*:\s*/, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w !== '')
+}
+
+/** Words that carry no content of their own: a sentence that differs from the why only in these says nothing new. */
+const FUNCTION_WORDS = new Set(
+  'the and that this these those for with from its are was were has have had but then than when into also which because while there their them they you your our'.split(' '),
+)
+/** Content words: three letters or more and not a function word, or any word with a digit. */
+const contentWords = (words: readonly string[]): string[] => [...new Set(words.filter((t) => (t.length >= 3 && !FUNCTION_WORDS.has(t)) || /\d/.test(t)))]
+/** A near-copy has at least this many content words: a shorter sentence shares its words with a why by chance. */
+const NEAR_COPY_MIN = 3
+/** At most this many content words a near-copy may bring that the why lacks ("for exactly this reason")... */
+const NEW_WORDS_MAX = 2
+/** ...and at most this share of its content words. Three new words ("and cycles still leak") is something the why lacks. */
+const NEW_SHARE_MAX = 1 / 3
+/**
+ * A long sentence is a near-copy, whatever its count of new words, when fewer than this share of its content words
+ * are new: three rewordings in a 21-word restatement ("Layout must match the access pattern: row-wise access ...")
+ * add nothing, while four new words in sixteen ("Trie-shaped sharing beats hash-map sharing ...") make a comparison
+ * the why lacks.
+ */
+const NEW_SHARE_LONG = 1 / 4
+
+/**
+ * An operator of a formula: "tokens/s ≈ BW ÷ bytes-per-token". "=" is left out: between words the explanations use it
+ * for "means" ("Three wide wait bars + one absent = rank 4 is the straggler"), and between numbers the digit rule
+ * already reads it.
+ */
+const FORMULA_OPERATOR = /[÷×≈]/g
+/** A why that states a formula of its own ("tokens/s ≈ bandwidth ÷ bytes per token", "AI × bandwidth", "2,250 / 8 = 281.25"). */
+const WHY_FORMULA = /[÷×≈=]/
+
+/**
+ * The words of each operand next to a formula operator ("tokens/s ≈ BW ÷ bytes-per-token" gives tokens, s, bw, bytes,
+ * per, token), of any length: a formula's operands are often short ("BW", "k", "N"), which contentWords does not see.
+ */
+function operandWords(sentence: string): string[] {
+  const out: string[] = []
+  for (const m of sentence.matchAll(FORMULA_OPERATOR)) {
+    const at = m.index ?? 0
+    const left = /(\S+)\s*$/.exec(sentence.slice(0, at).replace(FORMULA_OPERATOR, ' '))?.[1] ?? ''
+    const right = /^\s*(\S+)/.exec(sentence.slice(at + 1).replace(FORMULA_OPERATOR, ' '))?.[1] ?? ''
+    out.push(...wordsOf(left), ...wordsOf(right))
+  }
+  return out
+}
+
+/** A formula the why lacks: the sentence holds one with an operand the why does not name, and the why states none (t6.l1#0). */
+const addsFormula = (sentence: string, why: string, have: ReadonlySet<string>): boolean =>
+  !WHY_FORMULA.test(why) && operandWords(sentence).some((t) => !have.has(t))
+
+/**
+ * True when one sentence of an explanation says nothing the key's why does not: it brings no number the why lacks
+ * (a lesson reference, LESSON_REF, is not one) and no formula the why lacks (addsFormula: the formula is the relation
+ * the why only names), and either the why, label removed, contains it, or it is a near-copy
+ * of NEAR_COPY_MIN content words or more whose new words are few: all but NEW_WORDS_MAX of them (and no more than
+ * NEW_SHARE_MAX of them) occur in the why, or, in a long sentence, fewer than NEW_SHARE_LONG of them are new.
+ * "Engines gate speculation on batch occupancy for exactly this reason" repeats a why that says "Engines gate
+ * speculation on occupancy"; "That is the price of crossing threads, and cycles still leak" adds to one that ends at
+ * "the price of crossing threads".
+ */
+export function sentenceRepeatsWhy(sentence: string, why: string): boolean {
+  const e = wordsOf(sentence)
+  const w = wordsOf(why)
+  const mine = contentWords(e)
+  if (mine.length === 0 || w.length === 0) return false
+  const have = new Set(w)
+  if (mine.some((t) => /\d/.test(t) && !have.has(t))) return false
+  if (addsFormula(sentence, why, have)) return false
+  if (` ${w.join(' ')} `.includes(` ${e.join(' ')} `)) return true
+  if (mine.length < NEAR_COPY_MIN) return false
+  const added = mine.filter((t) => !have.has(t)).length
+  return (added <= NEW_WORDS_MAX && added <= mine.length * NEW_SHARE_MAX) || added < mine.length * NEW_SHARE_LONG
+}
+
+const SENTENCE_END = /(?<=[.!?])\s+/
+const sentencesOf = (text: string): string[] => text.split(SENTENCE_END).filter((t) => t.trim() !== '')
+
+/**
+ * True when the explanation says nothing the key's why does not: every sentence of it repeats the why
+ * (sentenceRepeatsWhy). An authored question carries both, and the verdict would read the same sentence twice. An
+ * explanation with one sentence that adds something is not a repeat: that sentence prints.
+ */
+export function explanationRepeatsWhy(explanation: string, why: string): boolean {
+  const all = sentencesOf(explanation)
+  return all.length > 0 && all.every((t) => sentenceRepeatsWhy(t, why))
+}
+
+/**
+ * What the page prints as the explanation of a choice view: the explanation without the sentences a key's why
+ * already says, word for word or as a near-copy (sentenceRepeatsWhy), or null when none is left.
+ */
+export function explanationToPrint(view: PlayView): string | null {
+  if (view.kind !== 'choice' || !view.explanation) return view.explanation ?? null
+  const keys = view.options.filter((o) => view.correct.includes(o.id) && o.why !== '').map((o) => o.why)
+  const kept = sentencesOf(view.explanation).filter((sentence) => !keys.some((why) => sentenceRepeatsWhy(sentence, why)))
+  return kept.length === 0 ? null : kept.join(' ')
+}
+
+/**
  * The display model for an item. Options are shuffled by `seed` (choice items, generated or authored);
  * everything else is the item as authored. A generated item's prompt is used as it is: claims and values
  * stay structured so the player can render them as chips.

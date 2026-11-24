@@ -392,12 +392,14 @@ describe('the constructed response after the reveal', () => {
 
 describe('the card renders every source', () => {
   for (const [name, item] of SOURCES) {
-    test(`${name}: a form with the question, a 44 px submit, and an empty live region`, () => {
+    test(`${name}: a form with the question, a 44 px submit (a written item shows its reveal first), and an empty live region`, () => {
       const html = render(item)
       expect(html).toContain('<form')
       expect(html).toContain('min-h-11')
       expect(html).toMatch(/role="status"[^>]*aria-live="polite"/)
-      expect(html).toContain('type="submit"')
+      // an unrevealed written item has no Submit yet: its only button is "Show the model answer" (see the test below)
+      if (item.source === 'cr') expect(html).toContain('data-ks-reveal')
+      else expect(html).toContain('type="submit"')
       const text = textOf(html)
       const first = playView(item).prompt.stem[0]
       expect(first.t === 'text' && text).toContain(first.t === 'text' ? first.text.slice(0, 24) : '')
@@ -426,7 +428,9 @@ describe('the card renders every source', () => {
   test('a constructed response shows the textarea and "Show the model answer", not the model answer or the ideas', () => {
     const html = render(cr)
     expect(html).toContain('<textarea')
-    expect(html).toContain('Show the model answer')
+    // one button, the written item's own reveal: no second "Show the model answer" and no Submit before the reveal
+    expect(html.match(/Show the model answer/g)).toHaveLength(1)
+    expect(html).not.toContain('type="submit"')
     expect(html).not.toContain(CR.model)
     expect(html).not.toContain(CR.ideas[0])
   })

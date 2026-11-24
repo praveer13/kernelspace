@@ -46,8 +46,8 @@ const lesson: Lesson = {
           why: [
             'That would hold if the counters were on separate lines. Here they share one 64-byte line, and coherence works per line, not per variable.',
             'Thread startup is a one-off cost. The loss here is on every increment, so it cannot be a small fixed overhead.',
-            'The OS schedules these threads on separate cores that run in parallel. The slowdown comes from the cores, not the scheduler.',
-            'Right: each write takes the line away from every other core, so ownership ping-pongs on every increment. The result can be 10x to 50x slower than one thread.',
+            'The OS schedules these threads on separate cores that run in parallel. If the total comes out near one thread\'s, the time went to the cores fighting over the line, not to the scheduler.',
+            'Right: each write takes the line away from every other core, so ownership ping-pongs on every increment. The result can be slower than one thread: about 1.6x slower in the run measured for this lesson, on six hyperthreaded performance cores. How much depends on the chip: on some older chips, such as the quad-core Drepper measured, the penalty stayed small and the threads came close to scaling, so the slowdown is this run\'s result, not every chip\'s.',
           ],
           revealAt: 'False sharing: the line you did not know you were sharing',
           kcs: ['t0.false-sharing'],
@@ -155,15 +155,15 @@ final class Requests {
 
 There is a darker second half to the 64-byte rule. Caches are kept *coherent* across cores, and the unit they keep coherent is the whole line, not the byte. Fine — unless two threads are working on *different variables that happen to share a line*.
 
-Picture a classic pattern: 8 worker threads, each incrementing its own counter in a contiguous \`u64 counts[8]\` array. Logically independent — zero sharing. Physically, all 8 counters live in **one** 64-byte line, and your "perfectly parallel" counter update runs **10–50× slower** than single-threaded. The figure below steps through what the hardware does to cause that. This is **false sharing**, and it is one of the nastiest performance bugs in concurrent code because the source looks correct, scales negatively with cores, and never shows up in profilers as anything but "mysterious stalls."`,
+Picture a classic pattern: 8 worker threads, each incrementing its own counter in a contiguous \`u64 counts[8]\` array. Logically independent — zero sharing. Physically, all 8 counters live in **one** 64-byte line, and your "perfectly parallel" counter update can gain **nothing over single-threaded, or even run slower**: about 1.6× slower on the 8-thread run measured for this lesson, on a desktop Core i5's six hyperthreaded performance cores. How much depends on the chip. Drepper's [What Every Programmer Should Know About Memory](https://akkadia.org/drepper/cpumemory.pdf) measured the penalty growing with each processor added to a four-processor machine; on a single quad-core chip it stayed small and did not grow with the number of cores. The figure below steps through what the hardware does to cause that. This is **false sharing**, and it is one of the nastiest performance bugs in concurrent code because the source looks correct, fails to scale with cores, and never shows up in profilers as anything but "mysterious stalls."`,
     },
     {
       type: 'diagram',
       caption: 'fig 1 — one cache line, two writers: the ping-pong of false sharing',
       height: 46,
       nodes: [
-        { id: 'core0', x: 2, y: 6, w: 18, h: 9, label: 'core 0', sub: 'writes counter A' },
-        { id: 'core1', x: 2, y: 30, w: 18, h: 9, label: 'core 1', sub: 'writes counter B' },
+        { id: 'core0', x: 2, y: 6, w: 18, h: 9, label: 'core 0', sub: 'writes A' },
+        { id: 'core1', x: 2, y: 30, w: 18, h: 9, label: 'core 1', sub: 'writes B' },
         { id: 'line', x: 40, y: 16, w: 26, h: 12, label: 'cache line 0x…40', sub: '[ A:8B | B:8B | … ] 64 B' },
         { id: 'l1a', x: 76, y: 6, w: 20, h: 9, label: 'L1 (core 0)', sub: 'exclusive?' },
         { id: 'l1b', x: 76, y: 30, w: 20, h: 9, label: 'L1 (core 1)', sub: 'invalid!' },
@@ -211,8 +211,9 @@ struct CountersBad([AtomicU64; 8]);   // 8 × 8 B = 64 B exactly
 struct Padded(AtomicU64);             // one counter per cache line
 struct CountersGood([Padded; 8]);     // 8 lines, zero false sharing
 
-// typical result: 10–50× faster on 8 cores, identical source logic`,
-      chips: ['#[repr(align(64))]', 'MESI coherence', '10–50×'],
+// measured: 8 threads on 6 hyperthreaded P-cores, i5-13600KF, rustc 1.96.0 -O:
+// padded ran 6-8x faster than unpadded; identical source logic`,
+      chips: ['#[repr(align(64))]', 'MESI coherence', '6–8× measured'],
     },
     {
       type: 'callout',
@@ -239,9 +240,9 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/4 of peak).',
         'Switch to SoA and rerun — watch bandwidth approach the DRAM roof.',
         'Run the 8-thread counter without padding; watch the line ping-pong counter explode.',
-        'Enable 64-byte padding and rerun: same code, 10–50× throughput.',
+        'Enable 64-byte padding and rerun: same code, several times the throughput (the simulator is a model and shows about 38×; the run measured for this lesson, 8 threads on six hyperthreaded performance cores, gave 6–8×).',
       ],
-      note: `You just demonstrated the two sides of the 64-byte rule: SoA maximizes *useful bytes per line fetched*; padding eliminates *unwanted sharing per line written*. Together they explain why "data-oriented design" people sound obsessed with layout — on memory-bound workloads, layout **is** the algorithm.`,
+      note: `You just demonstrated the two sides of the 64-byte rule: SoA maximizes *useful bytes per line fetched*; padding eliminates *unwanted sharing per line written*. Together they explain why "data-oriented design" people sound obsessed with layout — on memory-bound workloads, layout **is** the algorithm. The simulator is a model: it charges a fixed cost for each line transfer, so padding shows about 38 times faster there, against 6–8× in the run measured for this lesson on six hyperthreaded performance cores; on real hardware, core count and topology move the figure.`,
     },
     {
       type: 'quiz',

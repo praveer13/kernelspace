@@ -101,7 +101,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
         { id: 'roof', x: 56, y: 6, w: 40, h: 8, label: 'perf = peak FLOPs', sub: 'compute-bound region', color: '#A78BFA' },
         { id: 'ridge', x: 44, y: 16, w: 12, h: 10, label: 'ridge', sub: '~295 F/B', color: '#3EF2A4' },
         { id: 'decode', x: 6, y: 44, w: 26, h: 8, label: 'decode · AI ≈ 0.5–4', sub: 'bandwidth wall', color: '#FB7185' },
-        { id: 'prefill', x: 64, y: 44, w: 30, h: 8, label: 'prefill/matmul · AI ≈ 100+', sub: 'at the compute roof', color: '#3EF2A4' },
+        { id: 'prefill', x: 64, y: 44, w: 30, h: 8, label: 'prefill · AI ≈ 100+', sub: 'matmul at the compute roof', color: '#3EF2A4' },
       ],
       edges: [
         { from: 'slope', to: 'ridge' },
@@ -112,7 +112,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       steps: [
         { caption: 'Left of the ridge, the bandwidth slope rules: performance is AI × 3.35 TB/s, period. The ALUs are starved.', active: ['slope'] },
         { caption: 'Right of the ridge, the flat roof: you\'re doing enough math per byte that FLOPs, not bandwidth, are the binding constraint.', active: ['roof'] },
-        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: ~5 ms/token is physics, not engineering.', active: ['decode'] },
+        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: on one H100 each decode step re-reads all ~16 GB of weights, so a step takes at least about 5 ms. At batch 1 that is the floor per token, which only more tokens per weight read (speculative decoding, T5.L8) or fewer bytes per weight (quantization) can lower.', active: ['decode'] },
         { caption: 'PREFILL and big-batch matmul live at the roof: each weight participates in hundreds of MACs (batch × seq), AI ≈ 100–1000+. This is why prefill and decode have different economics, metrics (TTFT vs ITL), and optimizations.', active: ['prefill'] },
       ],
       predictAt: {
@@ -149,7 +149,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
 
 **Decode, batch 1, 8B FP16 model.** Per token: \`~2 FLOPs × 8e9 params = 16 GFLOPs\` of math against \`~16 GB\` of weight reads (plus KV). AI ≈ 1 FLOP/byte — *300× below* the ridge. Attainable rate = \`3.35 TB/s ÷ 16 GB ≈ 200 tokens/s\` — the ALUs could do the math in microseconds; the memory system takes 5 ms. **This is the entire economics of chat inference.** And now the levers announce themselves: **batching** (N sequences share each weight read → AI × N → the single most important throughput lever), **quantization** (FP8/INT4 cuts bytes per weight 2–4× → directly multiplies the rate, T4.L7), **speculative decoding** (verify K drafted tokens per weight read → AI × K, T5.L8).
 
-**Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len × (params/bytes) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
+**Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len FLOP/byte at FP16 (2 × seq_len FLOPs per 2-byte weight, the parameter count cancels) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
     },
     {
       type: 'callout',
@@ -315,7 +315,7 @@ The simulator is a live roofline: predict and place each row of the B200 table, 
           ],
           correct: [1],
           explanation:
-            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode — the physics floor behind the 5 ms/token number.',
+            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode: the bandwidth floor that keeps an 8B FP16 model on one H100 at about 5 ms per decode step or more.',
           why: [
             'Peak applies only above the ridge, near 295 FLOP/byte. Below it attainable performance is AI × bandwidth, and AI = 1 is far below.',
             'Right: the ridge is about 295 FLOP/byte, so AI = 1 sits far left on the slope. Attainable is AI × bandwidth, a fraction of one percent of peak.',

@@ -6,7 +6,7 @@
  * read it through the observations the sim emits, and phone mode draws the canonical outcome from `PHONE_MODELS`
  * without the sim. Every function takes a state and returns a new one, so the sim's handlers log and observe
  * outside React's updaters. The scenario is synthetic: a pool of 10 physical blocks of 16 tokens (the 2023
- * paper's size; a model setting, not vLLM's current default), two sequences sharing a 48-token prompt, and a
+ * paper's size; a model setting, not vLLM's current default), two sequences sharing a 40-token prompt, and a
  * 64-token request that needs 4 blocks.
  * No React, no DOM, no clock: it runs under `bun test`.
  */
@@ -14,16 +14,22 @@
 import type { CanonicalOutcome } from '@/lib/sims/host'
 
 export const BLOCK_SIZE = 16
-export const PROMPT_TOKENS = 48
+export const PROMPT_TOKENS = 40
 export const INITIAL_POOL = 10
 export const SWEEP_SIZES: readonly number[] = [4, 8, 16, 32, 64]
 /** A block-table entry costs this many bytes in the sweep's overhead column. */
 export const ENTRY_BYTES = 8
 /** A new request is 64 tokens: four 16-token blocks. */
 export const NEW_REQUEST_BLOCKS = 4
-/** The prompt's logical blocks: L0..L2. Beam B diverges at the last one. */
-export const PROMPT_BLOCKS = PROMPT_TOKENS / BLOCK_SIZE
+/** The prompt's logical blocks: L0..L2 (L0 and L1 full, L2 partly filled). Beam B diverges at the last one. */
+export const PROMPT_BLOCKS = Math.ceil(PROMPT_TOKENS / BLOCK_SIZE)
 export const DIVERGE_AT = PROMPT_BLOCKS - 1
+/**
+ * The tokens a prompt's last block holds: the blocks before it are full, so the last holds the rest. It is partly
+ * filled unless the prompt is a multiple of the block size; copy-on-write on that block copies exactly these tokens.
+ */
+export const tailTokens = (promptTokens: number, blockSize: number): number =>
+  promptTokens - (Math.ceil(promptTokens / blockSize) - 1) * blockSize
 
 /** Ids a new request can take, in order; the component colours the first four and greys the rest. */
 const REQUEST_IDS = ['D', 'E', 'F', 'G', 'H'] as const
@@ -55,7 +61,7 @@ export interface PoolState {
 
 const emptyPool = (size: number): PhysicalBlock[] => Array.from({ length: size }, (_, i) => ({ id: i, refcount: 0, seqs: [] }))
 
-/** Two sequences, A and B, map the same three physical blocks: a 48-token prompt paid once. */
+/** Two sequences, A and B, map the same three physical blocks: a 40-token prompt paid once. */
 export function initialState(poolSize: number = INITIAL_POOL): PoolState {
   const pool = emptyPool(poolSize)
   const logical = Array.from({ length: PROMPT_BLOCKS }, (_, i) => i)
@@ -117,7 +123,9 @@ export type DivergeResult =
 
 /**
  * B writes into its last prompt block. A block with one owner is written in place; a shared one is copied
- * first: one free block gets all BLOCK_SIZE tokens, B's table points at it, and the original loses B's reference.
+ * first: one free block gets the tokens the shared block holds (the partly filled tail, tailTokens(PROMPT_TOKENS,
+ * BLOCK_SIZE) of them; a full block is never written, so it is never copied), B's table points at it, and the original
+ * loses B's reference.
  */
 export function divergeB(s: PoolState, tick: number): DivergeResult {
   if (!hasSeq(s, 'C')) return { kind: 'no-fork', state: s }
@@ -135,7 +143,7 @@ export function divergeB(s: PoolState, tick: number): DivergeResult {
     return blk
   })
   const seqs = s.seqs.map((q): Sequence => (q.id === 'B' ? { ...q, logicalBlocks: q.logicalBlocks.map((pid, i) => (i === DIVERGE_AT ? to : pid)) } : q))
-  return { kind: 'copied', state: { pool, seqs }, from: oldPid, to, tokens: BLOCK_SIZE }
+  return { kind: 'copied', state: { pool, seqs }, from: oldPid, to, tokens: tailTokens(PROMPT_TOKENS, BLOCK_SIZE) }
 }
 
 /* ------------------------------------------------------------------ */
@@ -228,7 +236,7 @@ export function resizePool(s: PoolState, size: number): ResizeResult {
 
 export interface SweepRow {
   size: number
-  /** Block-table entries the 48-token prompt needs. */
+  /** Block-table entries the 40-token prompt needs. */
   entries: number
   /** Unused token slots in the prompt's last block. */
   tailWaste: number
@@ -305,7 +313,7 @@ function cowOutcome(): CanonicalOutcome {
   return {
     actual: out.tokens,
     unit: 'tokens',
-    summary: `B's write copies one block, ${out.tokens} tokens of KV, into free block P${out.to}. The original P${out.from} drops from refcount ${before} to ${after} and stays with A and C. The other ${PROMPT_TOKENS - out.tokens} prompt tokens are not copied.`,
+    summary: `B's write copies one partly filled block, ${out.tokens} tokens of KV, into free block P${out.to}. The original P${out.from} drops from refcount ${before} to ${after} and stays with A and C. The other ${PROMPT_TOKENS - out.tokens} prompt tokens are not copied.`,
     chart: {
       kind: 'bars',
       xLabel: 'what is copied',
@@ -365,7 +373,7 @@ function sweepOutcome(): CanonicalOutcome {
   return {
     actual: at.tailWaste,
     unit: 'tokens',
-    summary: `A ${PROMPT_TOKENS}-token prompt in ${at.size}-token blocks fills ${at.entries} block and leaves ${at.tailWaste} token slots unused. At ${BLOCK_SIZE} tokens it leaves none and needs ${sweepRow(BLOCK_SIZE).entries} table entries.`,
+    summary: `A ${PROMPT_TOKENS}-token prompt in ${at.size}-token blocks fills ${at.entries} block and leaves ${at.tailWaste} token slots unused. At ${BLOCK_SIZE} tokens it leaves ${sweepRow(BLOCK_SIZE).tailWaste} and needs ${sweepRow(BLOCK_SIZE).entries} table entries.`,
     chart: {
       kind: 'bars',
       xLabel: 'block size (tokens)',
@@ -377,7 +385,7 @@ function sweepOutcome(): CanonicalOutcome {
       caption: `Block-size sweep for a ${PROMPT_TOKENS}-token prompt`,
       columns: ['Block size (tokens)', 'Table entries', 'Unused slots (tokens)', 'Unused (% of prompt)', `Table overhead (B at ${ENTRY_BYTES} B per entry)`],
       rows: SWEEP.map((r) => [r.size, r.entries, r.tailWaste, r.wastePct, r.overheadBytes]),
-      announce: `At ${at.size}-token blocks the prompt leaves ${at.tailWaste} unused slots; at ${BLOCK_SIZE} tokens it leaves none.`,
+      announce: `At ${at.size}-token blocks the prompt leaves ${at.tailWaste} unused slots; at ${BLOCK_SIZE} tokens it leaves ${sweepRow(BLOCK_SIZE).tailWaste}.`,
     },
   }
 }

@@ -22,7 +22,7 @@ async function families(): Promise<Gen[]> {
   return Promise.all(names.map(async (n) => ((await import(new URL(n, DIR).href)) as { default: Gen }).default))
 }
 
-/** The text of every chip PromptView draws for an instance: value and claim parts, and each step's result. */
+/** The text of every chip PromptView draws for an instance: value and claim parts, and each step's result unless the step's text already ends with it. */
 function chips(inst: Instance, solution: readonly SolutionStep[]): string[] {
   const out: string[] = []
   const take = (parts: readonly PromptPart[]) => {
@@ -32,7 +32,11 @@ function chips(inst: Instance, solution: readonly SolutionStep[]): string[] {
   for (const g of inst.prompt.givens ?? []) take([g.value])
   for (const s of [...(inst.prompt.worked ?? []), ...solution]) {
     take(s.text)
-    if (s.result) out.push(`${formatNumber(s.result.value)}${s.result.unit ? ` ${s.result.unit}` : ''}`)
+    if (!s.result) continue
+    const shown = `${formatNumber(s.result.value)}${s.result.unit ? ` ${s.result.unit}` : ''}`
+    // a step whose text already ends with its value is drawn once: that value is the chip, not a second one
+    const last = s.text[s.text.length - 1]
+    if (!(last && (last.t === 'value' || last.t === 'claim') && partText(last) === shown)) out.push(shown)
   }
   return out
 }

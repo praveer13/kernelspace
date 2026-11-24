@@ -48,12 +48,30 @@ function inOrder(groups: readonly Claim[]): Claim[] {
 }
 
 async function loadPhysicsGroups(): Promise<readonly Claim[]> {
-  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }, { KVPOOL_CLAIMS }] = await Promise.all([
+  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }, { KVPOOL_CLAIMS }, { GPU_LIMITS_CLAIMS }, { PLATFORMS_CLAIMS }, { ENGINES_STATUS_CLAIMS }, { LANDSCAPE_T6_CLAIMS }, { ECONOMICS_CLAIMS }, { RUST_LANG_CLAIMS }] = await Promise.all([
     import('@/data/claims/lazy/physics'),
     import('@/data/claims/lazy/ix-points'),
     import('@/data/claims/lazy/kvpool'),
+    import('@/data/claims/lazy/gpu-limits'),
+    import('@/data/claims/lazy/platforms'),
+    import('@/data/claims/lazy/engines-status'),
+    import('@/data/claims/lazy/landscape-t6'),
+    import('@/data/claims/lazy/economics'),
+    import('@/data/claims/lazy/rust-lang'),
   ])
-  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS]
+  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...ENGINES_STATUS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS, ...RUST_LANG_CLAIMS]
+}
+
+/**
+ * Below sm the rows stack and the header row is sr-only, so each stacked field carries its column's name where a sighted
+ * reader sees it. Hidden from sm up (the header row is visible there) and from assistive tech (which reads the header).
+ */
+function Caption({ children }: { children: string }) {
+  return (
+    <span aria-hidden="true" className="mr-2 inline-block w-[9ch] text-[10px] text-text-3 sm:hidden">
+      {children}
+    </span>
+  )
 }
 
 export function ClaimsTable({ className }: { className?: string }) {
@@ -85,8 +103,8 @@ export function ClaimsTable({ className }: { className?: string }) {
       <p role="status" className={typeof late === 'string' ? 'p-2.5 font-mono text-[11px] text-text-3' : 'sr-only'}>
         {late === 'loading' ? 'loading the physics claims…' : late === 'failed' ? 'The physics claims did not load; reload the page to list them.' : ''}
       </p>
-      <table className="w-full font-mono text-[12px]" data-testid="claims-table">
-        <thead>
+      <table className="w-full font-mono text-[12px] max-sm:block" data-testid="claims-table">
+        <thead className="max-sm:sr-only">
           <tr className="border-b border-line text-left text-text-3">
             <th className="p-2.5">claim</th>
             <th className="p-2.5">value</th>
@@ -96,26 +114,33 @@ export function ClaimsTable({ className }: { className?: string }) {
             <th className="p-2.5">status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="max-sm:block">
           {claims.map((claim) => {
             const stale = staleSince(claim, now)
             return (
               <tr
                 key={claim.id}
                 id={claim.id}
-                className={cn('scroll-mt-24 border-b border-line/60 align-top', claim.id === target && 'bg-surface-2')}
+                className={cn('scroll-mt-24 border-b border-line/60 align-top max-sm:block max-sm:p-2.5', claim.id === target && 'bg-surface-2')}
               >
-                <td className="p-2.5">
-                  <div className="text-text-1">{claim.label}</div>
-                  <div className="text-[10px] text-text-3">{claim.id}</div>
-                  {claim.boundary && <div className="mt-1 text-[10px] text-text-3">Holds for: {claim.boundary}</div>}
+                <td className="p-2.5 max-sm:block max-sm:p-0 max-sm:pb-1">
+                  <div className="text-text-1 break-words">{claim.label}</div>
+                  <div className="break-all text-[10px] text-text-3">{claim.id}</div>
+                  {claim.boundary && <div className="mt-1 break-words text-[10px] text-text-3">Holds for: {claim.boundary}</div>}
                   {claim.discrepancy && (
-                    <div className="mt-1 text-[10px] text-amber">Discrepancy: {claim.discrepancy}</div>
+                    <div className="mt-1 break-words text-[10px] text-amber">Discrepancy: {claim.discrepancy}</div>
                   )}
                 </td>
-                <td className="whitespace-nowrap p-2.5 text-accent">{formatClaimValue(claim)}</td>
-                <td className={cn('p-2.5', claim.kind === 'synthetic' ? 'text-amber' : 'text-text-3')}>{claim.kind}</td>
-                <td className="p-2.5">
+                <td className="whitespace-nowrap p-2.5 text-accent max-sm:block max-sm:whitespace-normal max-sm:break-words max-sm:p-0 max-sm:py-0.5">
+                  <Caption>value</Caption>
+                  {formatClaimValue(claim)}
+                </td>
+                <td className={cn('p-2.5 max-sm:block max-sm:p-0 max-sm:py-0.5', claim.kind === 'synthetic' ? 'text-amber' : 'text-text-3')}>
+                  <Caption>kind</Caption>
+                  {claim.kind}
+                </td>
+                <td className="p-2.5 max-sm:block max-sm:break-words max-sm:p-0 max-sm:py-0.5">
+                  <Caption>source</Caption>
                   {claim.source ? (
                     <a
                       href={claim.source.url}
@@ -132,8 +157,12 @@ export function ClaimsTable({ className }: { className?: string }) {
                   )}
                   {claim.source?.quote && <q className="mt-1 block text-[10px] text-text-3">{claim.source.quote}</q>}
                 </td>
-                <td className="whitespace-nowrap p-2.5 text-text-3">{claim.verifiedAt}</td>
-                <td className={cn('whitespace-nowrap p-2.5', stale ? 'text-amber' : 'text-text-3')}>
+                <td className="whitespace-nowrap p-2.5 text-text-3 max-sm:block max-sm:p-0 max-sm:py-0.5">
+                  <Caption>verified</Caption>
+                  {claim.verifiedAt}
+                </td>
+                <td className={cn('whitespace-nowrap p-2.5 max-sm:block max-sm:p-0 max-sm:py-0.5', stale ? 'text-amber' : 'text-text-3')}>
+                  <Caption>status</Caption>
                   {stale ? `stale since ${stale}` : `fresh · ${claim.ttlDays} d`}
                 </td>
               </tr>

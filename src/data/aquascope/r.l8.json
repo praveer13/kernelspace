@@ -24,10 +24,10 @@
       "uses": [
         {"line":4,"col":9,"path":"hits","needs":"R","has":"RO"},
         {"line":5,"col":9,"path":"hits","needs":"R","has":"R"},
-        {"line":6,"col":1,"path":"a","needs":"R","has":"R"},
-        {"line":6,"col":7,"path":"a","needs":"R","has":"R"},
-        {"line":7,"col":1,"path":"b","needs":"R","has":"R"},
-        {"line":7,"col":7,"path":"b","needs":"R","has":"R"},
+        {"line":6,"col":1,"path":"*a","needs":"R","has":"R"},
+        {"line":6,"col":7,"path":"*a","needs":"R","has":"R"},
+        {"line":7,"col":1,"path":"*b","needs":"R","has":"R"},
+        {"line":7,"col":7,"path":"*b","needs":"R","has":"R"},
         {"line":8,"col":19,"path":"hits","needs":"R","has":"RO"}
       ]
     },

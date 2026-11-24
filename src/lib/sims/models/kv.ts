@@ -100,7 +100,7 @@ export const BLOCK_SIZE = claimNumber('production.vllm.block-size')
  * (src/data/lessons/claims.ts) without its code marks. The simulator keeps its own copy so its chunk imports nothing from
  * the lessons; tests/content/k0-fix4.test.ts holds the two equal.
  */
-export const ENGINE_BLOCK_SCOPE_TEXT = "ROCm's paged-attention backend keeps its own size, and an explicit --block-size overrides either"
+export const ENGINE_BLOCK_SCOPE_TEXT = "a backend with a preferred block size overrides it, as ROCm's paged attention does, and an explicit --block-size overrides both"
 /** Memory lost to block rounding under PagedAttention, in percent (a scenario figure: `synthetic.kv.paged-waste`). */
 export const PAGED_WASTE_PCT = claimNumber('synthetic.kv.paged-waste')
 /**

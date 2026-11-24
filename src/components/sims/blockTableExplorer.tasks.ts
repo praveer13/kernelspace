@@ -6,7 +6,7 @@
  * The explorer reports each task's `observe` key when the learner does the step in `setup`. The keys are spelled
  * out here, not imported, because the registry loads every tasks file eagerly and the model stays in the sim's own
  * chunk; tests/sims/block-table.test.ts pins the two together. Every scenario number is synthetic (a pool of 10
- * physical blocks of 16 tokens, a 48-token prompt, a 64-token request that needs 4 blocks).
+ * physical blocks of 16 tokens, a 40-token prompt, a 64-token request that needs 4 blocks).
  */
 
 import { KC } from '@/data/kc/ids'
@@ -24,7 +24,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     predict: {
       kind: 'numeric',
       prompt:
-        'Sequences A and B share a 48-token prompt stored in 16-token blocks: 3 physical blocks, refcount 2 each, in a pool of 10. You fork beam C from B. How many blocks are free afterwards?',
+        'Sequences A and B share a 40-token prompt stored in 16-token blocks: 3 physical blocks, refcount 2 each, in a pool of 10. You fork beam C from B. How many blocks are free afterwards?',
       unit: 'blocks',
       tolerance: { abs: 0 },
     },
@@ -39,7 +39,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
         'No block leaves the free queue, so the prefix is paid for once',
       ],
     },
-    note: 'Three sequences now read the same 48 tokens from three physical blocks. A block goes back to the free queue only when its refcount reaches 0, which is why dropping a sequence that shares everything frees nothing (the preemption task shows it).',
+    note: 'Three sequences now read the same 40 tokens from three physical blocks. A block goes back to the free queue only when its refcount reaches 0, which is why dropping a sequence that shares everything frees nothing (the preemption task shows it).',
     phone: { canonical: 'blocks.share' },
     lessons: ['t5.l5'],
     legacyId: 't-blk-share',
@@ -55,7 +55,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     predict: {
       kind: 'numeric',
       prompt:
-        'Beam C has forked from B, so all three prompt blocks have refcount 3. B now writes into its last prompt block, L2, which is shared. How many tokens of KV does the manager copy?',
+        'Beam C has forked from B, so all three prompt blocks have refcount 3. B now writes into its last prompt block, L2, which is shared and holds only the prompt\'s last tokens. How many tokens of KV does the manager copy?',
       unit: 'tokens',
       tolerance: { abs: 0 },
     },
@@ -63,14 +63,14 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     explain: {
       prompt: 'In one line: why does B get a copy while A and C keep the original?',
       model:
-        'The block has three owners, so writing into it in place would change what A and C read. The manager takes one free block, copies the block\'s 16 tokens of KV into it, points B\'s table at the copy and drops B\'s reference to the original (refcount 3 to 2). Nothing else is copied.',
+        'The block has three owners, so writing into it in place would change what A and C read. The manager takes one free block, copies the partly filled block\'s 8 tokens of KV into it, points B\'s table at the copy and drops B\'s reference to the original (refcount 3 to 2). Nothing else is copied.',
       ideas: [
         'A write to a block with refcount above 1 must not change what the other owners read',
-        'The manager copies exactly one block, 16 tokens, and not the whole prefix',
+        'The manager copies exactly one block, the partly filled tail with 8 tokens, and not the whole prefix',
         'B\'s table now points at a private copy (refcount 1) and the original loses one reference',
       ],
     },
-    note: 'The copy is one block, whatever the prompt length: the 32 tokens in the other two blocks stay shared by all three sequences. The cost of divergence is bounded by the block size, which is one more reason blocks are small.',
+    note: 'The copy is one block, whatever the prompt length, and it is the partly filled tail: the 32 tokens in the other two full blocks stay shared by all three sequences. The cost of divergence is bounded by the block size, which is one more reason blocks are small.',
     phone: { canonical: 'blocks.cow' },
     lessons: ['t5.l5'],
     legacyId: 't-blk-cow',
@@ -117,7 +117,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     kcs: [KC.blockTables],
     predict: {
       kind: 'numeric',
-      prompt: 'A 48-token prompt is stored in blocks of 64 tokens. How many token slots sit unused in its last block?',
+      prompt: 'A 40-token prompt is stored in blocks of 64 tokens. How many token slots sit unused in its last block?',
       unit: 'tokens',
       tolerance: { abs: 0 },
     },
@@ -132,7 +132,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
         'Prefix sharing happens in whole blocks, so bigger blocks share less',
       ],
     },
-    note: 'Sweep the slider from 4 to 64: the waste column is zero until the block is larger than the 16 tokens that divide the prompt evenly, while the entry count falls from 12 to 1. A different prompt length moves the waste but not the shape of the trade.',
+    note: 'Sweep the slider from 4 to 64: the waste column is zero only at 4 and 8 tokens, the sizes that divide the prompt evenly, while the entry count falls from 10 to 1. A different prompt length moves the waste but not the shape of the trade.',
     phone: { canonical: 'blocks.sweep' },
     lessons: ['t5.l5'],
     legacyId: 't-blk-sweep',

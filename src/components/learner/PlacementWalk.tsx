@@ -6,7 +6,7 @@
  * answered), plays the items one at a time in the item player, and on the last answer writes
  * `completePlacement` once. Nothing is written before that: leaving earlier saves nothing.
  *
- * Nothing locks (W8). **Not sure** skips an item as a miss, the Rust questions can be skipped on
+ * Nothing locks (W8). **Not sure** skips an item as a miss (on the Rust item it reads as skipped, not missed), the Rust questions can be skipped on
  * `serving-first` (where R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons), and the result says in words where the learner
  * starts and why, never a score. The Rust items' Java analogue lives in each item's explanation, which the
  * player shows after the answer and not before.
@@ -52,9 +52,9 @@ import {
 import { makeGenPool } from '@/lib/learner/ticket'
 import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
-import { getTrack } from '@/lib/tracks'
 import { cn } from '@/lib/utils'
 import { anchorLine } from './anchor-line'
+import { resultHeading } from './result-heading'
 
 export interface PlacementWalkProps {
   /** `boot:path`: the Rust questions are optional on `serving-first`. */
@@ -259,7 +259,6 @@ function titles(kcs: readonly string[]): string {
 function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; path: LearningPath; headingRef: RefObject<HTMLHeadingElement | null>; onClose: () => void }) {
   const lessons = useProgress((s) => s.lessons)
   const { result, pattern, slips } = outcome
-  const track = getTrack(result.entryTrack)
   const plan = cachedPathPlan(path, GRAPH, result)
   const startId = currentLesson(plan, (id) => lessons[id]?.status)
   const start = startId ? ALL_LESSONS.find((l) => l.id === startId) : undefined
@@ -268,7 +267,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
   return (
     <div className="space-y-4">
       <h3 ref={headingRef} tabIndex={-1} className="font-display text-h3 text-text-1 focus-visible:outline-none">
-        {pattern ? 'Start at the beginning' : `Start at ${track?.code ?? result.entryTrack.toUpperCase()}${track ? ` · ${track.name}` : ''}`}
+        {resultHeading({ entryTrack: result.entryTrack, pattern: Boolean(pattern), startLessonId: startId, lessons: plan.lessons })}
       </h3>
 
       {pattern && (
@@ -276,7 +275,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
           {pattern === 'position'
             ? 'Your multiple-choice answers all sat in the same position, so they say little about what you know.'
             : 'Your multiple-choice answers were all the longest option, so they say little about what you know.'}{' '}
-          The ramp starts at its first lesson, and every lesson has a test-out when you want to prove a part of it.
+          The ramp starts at its first lesson, and every lesson of T0 to T7 has a test-out when you want to prove a part of it.
         </p>
       )}
 
@@ -295,7 +294,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
         </div>
       </div>
 
-      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path)}</p>
+      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path, plan, outcome.anchorShown, outcome.anchorNotSure)}</p>
 
       {slips.length > 0 && (
         <div>

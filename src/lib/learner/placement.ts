@@ -384,6 +384,10 @@ export interface WalkOutcome {
   pattern: BlindPattern | null
   /** Each misconception once, in the order the walk met it, with the sentence the lure carries. */
   slips: { id: string; message: string }[]
+  /** The walk showed the Rust anchor item (answered, or "Not sure"); false when serving-first left it out. Not stored. */
+  anchorShown: boolean
+  /** The walk showed the Rust anchor item and every answer to it was "Not sure" (no blind pattern). Not stored. */
+  anchorNotSure: boolean
 }
 
 /**
@@ -395,8 +399,20 @@ export interface WalkOutcome {
 export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now: IsoInstant): WalkOutcome {
   const pattern = blindPattern(state)
   const verdict = (kc: KcId): KcVerdict | undefined => (pattern && state.verdicts[kc] ? 'missed' : state.verdicts[kc])
+  // The Rust anchor item was offered and every answer to it was "not sure": the learner skipped it. The stored anchor
+  // reads skipped (Rust Zero leaves the plan) only after a walk in which every other KC was solid, on every path;
+  // otherwise it stays a miss, as a skipped core item does, so the paths with Rust Zero keep its lessons in the plan
+  // (no Rust Zero lesson has a test-out to stand in for them). The result is stored without its path, and a later
+  // switch from serving-first to a path with Rust Zero reads this same anchor (paths.ts pathPlan). Serving-first has
+  // no Rust Zero lessons, so there a "not sure" reads skipped after any walk: its Rust line says so (`anchorNotSure`)
+  // and the KC is not listed to work on.
+  const anchorAnswers = state.answers[RUST_ANCHOR_KC] ?? []
+  const restSolid = state.probes.every((kc) => kc === RUST_ANCHOR_KC || verdict(kc) === 'solid')
+  const anchorNotSure = !pattern && anchorAnswers.length > 0 && anchorAnswers.every((a) => a.skipped === true)
+  const anchorSkipped = anchorNotSure && restSolid
+  const anchorUnlisted = anchorNotSure && (anchorOptional(state.path) || restSolid)
   const solidKcs = state.probes.filter((kc) => verdict(kc) === 'solid')
-  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed')
+  const missedKcs = state.probes.filter((kc) => verdict(kc) === 'missed' && !(anchorUnlisted && kc === RUST_ANCHOR_KC))
 
   const firstMissed = THRESHOLD_KCS.find((kc) => verdict(kc) === 'missed')
   const entryTrack: TrackId = pattern ? 't0' : firstMissed ? trackOf(firstMissed) : 't5'
@@ -413,12 +429,27 @@ export function finishWalk(state: WalkState, trackOf: (kc: KcId) => TrackId, now
       solidKcs,
       missedKcs,
       misconceptions: [...slips.keys()],
-      rustAnchor: anchor ?? 'skipped',
+      rustAnchor: anchorSkipped ? 'skipped' : (anchor ?? 'skipped'),
       items: state.asked,
     },
     pattern,
     slips: [...slips].map(([id, message]) => ({ id, message })),
+    anchorShown: anchorAnswers.length > 0,
+    anchorNotSure,
   }
+}
+
+/**
+ * The note at the top of the Curriculum's Rust Zero layer, from the placement's Rust anchor, or null when the plan
+ * keeps Rust Zero as lessons (`testOut`: the plan leaves R out, which a solid or a skipped anchor both give). No
+ * Rust Zero lesson has a ticket, so none offers a test-out and the note promises none: the lessons leave the plan
+ * and stay open. Only a solid anchor says placement found the learner's Rust solid. It lives here, not in
+ * anchor-line.ts, so the Curriculum route reads it from a module it already loads.
+ */
+export function rLayerNote(rustAnchor: PlacementResult['rustAnchor'] | null | undefined, testOut: boolean): string | null {
+  if (!testOut) return null
+  if (rustAnchor === 'solid') return 'placement found your Rust reading solid: these lessons are not in your plan, and each stays open.'
+  return 'you skipped the Rust question in placement: these lessons are not in your plan, and each stays open.'
 }
 
 /* ------------------------------------------------------------------ */

@@ -23,7 +23,7 @@ You already know the application-level version of this decision — Redis \`maxm
 
 **OPT (Belady's algorithm)** evicts the page used *farthest in the future* — provably optimal, and provably impossible: it needs the future. Its value is as the measuring stick every real policy is graded against.
 
-**LRU (least recently used)** bets that recent past ≈ near future: evict what hasn't been touched longest. Beautiful for loops and working sets; catastrophically wrong for scans — read a 10 GiB file once through a 4 GiB cache and LRU evicts *everything useful* to hold data you'll never reread. (Databases know this: Postgres and InnoDB use scan-resistant variants — ARC, midpoint insertion — precisely so one \`SELECT *\` can't flush the buffer pool.)
+**LRU (least recently used)** bets that recent past ≈ near future: evict what hasn't been touched longest. Beautiful for loops and working sets; catastrophically wrong for scans — read a 10 GiB file once through a 4 GiB cache and LRU evicts *everything useful* to hold data you'll never reread. (Databases know this: PostgreSQL gives a big sequential scan a small private ring of buffers, and InnoDB inserts new pages at a midpoint of its LRU list rather than at the head — precisely so one \`SELECT *\` can't flush the buffer pool.)
 
 **LFU (least frequently used)** counts references instead of recency: scans can't evict hot items, but LFU has memory — yesterday's hot page clings on after the workload moves on. Real systems add aging (Redis's approx-LFU does).
 
@@ -68,7 +68,7 @@ The two defenses appear everywhere in this course: **admission control** (don't 
     {
       type: 'callout',
       variant: 'analogy',
-      md: `You have operated this exact machinery in disguise. Redis **allkeys-lru** ≈ Clock over keys; **volatile-ttl** is priority eviction; a Redis instance evicting hot keys under memory pressure *is* a thrashing OS. And your JVM heap sizing under a cgroup limit is admission control: exceed it and you meet the container world's OOM killer, which — like the kernel's — picks the fattest process and shoots it. Same physics, different addr spaces.`,
+      md: `You have operated this exact machinery in disguise. Redis **allkeys-lru** is not Clock: it samples a few keys at random and evicts the idlest, an LRU approximation by sampling; PostgreSQL's buffer manager is the database's Clock, a clock sweep over buffers with a usage count; **volatile-ttl** is priority eviction; a Redis instance evicting hot keys under memory pressure *is* a thrashing OS. And your JVM heap sizing under a cgroup limit is admission control: exceed it and you meet the container world's OOM killer, which — like the kernel's — picks the fattest process and shoots it. Same physics, different addr spaces.`,
     },
     {
       type: 'isomorphism',
@@ -168,7 +168,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
           ],
           correct: [1],
           explanation:
-            'Scans are LRU\'s blind spot: recency rises on data with zero future. That is why databases use ARC/midpoint insertion and why Redis offers LFU — frequency and scan-resistance beat pure recency on real workloads.',
+            'Scans are LRU\'s blind spot: recency rises on data with zero future. That is why PostgreSQL gives big scans a small ring of buffers, InnoDB inserts at a midpoint, and Redis offers LFU — frequency and scan-resistance beat pure recency on real workloads.',
           why: [
             'Misconception: read-only files are uncacheable. Read-only pages are the easiest to cache and evict; the harm is the scan pushing out other data, not a failure to cache it.',
             'Right: every scanned page becomes most recently used, pushing genuinely hot pages toward eviction. The scanned data is never reread, so the cache turns over and pays for nothing.',

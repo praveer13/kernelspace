@@ -1,4 +1,5 @@
 import type { Lesson } from '../types'
+import { claimCite } from '../claims'
 
 const lesson: Lesson = {
   id: 't7.l2',
@@ -13,7 +14,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **LLMPerf** (Ray's reference load generator), **GenAI-Perf** (NVIDIA's Triton analyzer), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. The methodology below is what separates them from a blog screenshot.`,
+      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **GuideLLM** (in the vLLM project, and the harness the [vLLM docs](https://docs.vllm.ai/en/latest/benchmarking/cli/) recommend for production servers; traffic profiles from synchronous and concurrent through constant and Poisson to a rate sweep), **AIPerf** (from NVIDIA: concurrency and request-rate modes, constant, Poisson and gamma arrivals, trace replay including BurstGPT, goodput against an SLO), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. Older posts still cite two tools you should skip, LLMPerf (Ray's load generator: ${claimCite('status.loadgen.llmperf')}) and GenAI-Perf (NVIDIA's earlier analyzer: ${claimCite('status.loadgen.genai-perf')}); GuideLLM and AIPerf are live (as last read: GuideLLM ${claimCite('status.loadgen.guidellm')}; AIPerf ${claimCite('status.loadgen.aiperf')}). The methodology below is what separates them from a blog screenshot.`,
     },
     {
       type: 'prose',
@@ -21,15 +22,17 @@ const lesson: Lesson = {
 
 Results are properties of the workload, not the engine. Every number must ship with: **input/output length distributions** (fixed 1k/1k is a different universe from lognormal 4k/500), **arrival process** (Poisson for open-loop truth, closed-loop concurrency for saturation curves), **prefix sharing ratio** (agentic traffic with 90% shared prefix is a different engine — T6.L8), and **temperature/sampling** (affects output length and acceptance rates). InferenceX publishes DeepSeek-R1 and Llama shapes explicitly for this reason; when a vendor number lacks the shape, assume the friendliest one.
 
+The arrival process has two families, and the difference decides what a run can show (Schroeder, Wierman and Harchol-Balter, NSDI 2006). In a **closed-loop** run each client sends its next request only after its last one finishes, so N clients keep at most N requests in flight and the load slows when the server does: the queue can never hold more than N requests, however slow the server gets, and the TTFT it reports is too low for real traffic (the effect is called coordinated omission). In an **open-loop** run requests arrive at a rate whatever the server does, as real users do, so past capacity the queue grows for as long as the run lasts. **Little's law** ties the two together: the average number of requests in the system equals the arrival rate times the average time each spends there, *L = λ × W*. Turned round for capacity, S slots each held H seconds complete at most *S ÷ H* requests a second (64 slots held 8 s each: 8 requests a second). So each sweep answers its own question: a concurrency sweep (Rule 3) finds the knee in concurrency, Little's law turns that knee into a request rate, and an open-loop run at that rate confirms it under real arrivals.
+
 ## Rule 2: Warmup and steady state, or it never happened
 
 Engines have state: prefix caches cold, CUDA graphs uncaptured, JIT uncompiled, autoscalers asleep. A benchmark that includes the first minutes measures the cold start, not the system. Protocol: warm until TTFT p50 stabilizes (cache hit rates plateau), *then* measure a steady-state window, and report the window. Cold-start is a legitimate *separate* metric (serverless GPUs live there) — label it or lose it.
 
 ## Rule 3: Percentiles need samples, and load needs steps
 
-A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 4, 8 … until SLO collapse), hold each step for hundreds of requests, and report the **goodput curve** (T7.L1), not a point. Between steps: the knee — where TTFT/TPOT violate SLO — *is* the capacity number. This is exactly the Fleet's scoreboard: your goodput % is the area under an implicit curve you now know how to draw.
+A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 4, 8 … until SLO collapse), hold each step for hundreds of requests, and report the **goodput curve** (T7.L1), not a point. Between steps: the knee, the highest step that still meets the SLO, *is* the capacity number. This is exactly the Fleet's scoreboard: your goodput % is the area under an implicit curve you now know how to draw.
 
-Reading a sweep is a lookup. In a hypothetical run with p95 TPOT of 22, 24, 31, 48, 96 and 240 ms at concurrency 1, 2, 4, 8, 16 and 32, and an SLO of TPOT < 100 ms, the knee is **16**: the highest step that still meets the bound. Step 32 may still add tokens per second, but its goodput is lower, because the requests it adds arrive outside the SLO.
+Reading a sweep is a lookup. In a hypothetical run with p95 TPOT of 22, 24, 31, 48, 96 and 240 ms at concurrency 1, 2, 4, 8, 16 and 32, and an SLO of TPOT < 100 ms, the knee is **16**: the highest step that still meets the bound. Step 32 serves fewer tokens per second than 16 here: 32 streams at 240 ms make fewer tokens than 16 at 96 ms (32 ÷ 240 is less than 16 ÷ 96), as long as the mean TPOT sits the same fraction under the p95 at both steps. Its goodput is lower too, because more of its requests miss the SLO.
 
 ## Rule 4: Compare stacks on identical everything
 
@@ -41,7 +44,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         { value: '4 rules', label: 'traffic, warmup, samples, identical stacks', hint: 'The whole methodology. Most published numbers break rule 1 or 4.' },
         { value: 'nightly', label: 'InferenceX cadence', hint: 'SemiAnalysis open benchmark: vLLM/SGLang/TRT-LLM, NVIDIA + AMD, nightly.' },
         { value: 'hundreds', label: 'requests per load step', hint: 'Below that, your p95 is a rumor.' },
-        { value: '2 harnesses', label: 'LLMPerf + GenAI-Perf', hint: 'The two load generators worth knowing by name.' },
+        { value: '2 harnesses', label: 'GuideLLM + AIPerf', hint: 'The two live load generators worth knowing by name. LLMPerf is archived and GenAI-Perf is being phased out.' },
       ],
     },
     {
@@ -67,10 +70,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
     {
       type: 'exercise',
       fleet: 'knee',
-      title: 'Find the knee',
-      note: `Each seed puts its knee at one of four loads (0.75×, 1×, 1.25× or 1.5×), so the same answer comes up on different seeds, and the scene gave you what you needed to tell which one this seed uses. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
+      title: 'Find the goodput peak',
+      note: `Each seed puts its goodput peak at one of four loads (0.75×, 1×, 1.25× or 1.5×), so the same answer comes up on different seeds, and the scene gave you what you needed to tell which one this seed uses. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
 
-That is Rule 3 on a small engine. The capacity number is where the curve bends, which a sweep of load steps finds and a single run does not: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
+That is Rule 3 on a small engine. The goodput peak is not quite the capacity number: goodput counts each request against its own bound, so at the peak a share of requests may already be late and the p95 may miss the SLO. The knee, the highest step that still meets the SLO, sits at or below the peak. A sweep of load steps finds both and a single run finds neither: one run at a load past the peak reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
     },
     {
       type: 'exercise',
@@ -78,7 +81,7 @@ That is Rule 3 on a small engine. The capacity number is where the curve bends, 
       title: 'The broken benchmark',
       note: `Every flaw here is a way a number comes out of a run that is not the traffic it is quoted for. Closed-loop clients, replies cut short and a cached prompt prefix all hide work, so the benchmark reported a TTFT that was too low (Rule 1: the traffic is the benchmark). Counting the cold start did the opposite and reported one that was too high (Rule 2: warm up, then measure).
 
-To correct the number, take the flaw out and ask whether production's load queues. Little's law gives the capacity, *slots ÷ (time a request holds one)*, from the prompt and output lengths. Under capacity almost nothing waits, and the p95 is the prefill of a 95th-percentile prompt: *⌈P95 ÷ 128⌉ − 1* ticks of 50 ms. Over capacity the queue grows for the whole window, so the request at the 95th percentile of arrivals waits about *(load − 1) × 95 % of the window* before its prefill starts. That is why a p95 taken past the knee is not a latency number: it depends on how long the run lasted, and it is Rule 3's reason to sweep load in steps rather than quote one point. The engine is a flat-tick toy (version 1) and its cold start is a stand-in, so take the method from it, not its numbers.`,
+To correct the number, take the flaw out and ask whether production's load queues. Little's law gives the capacity, *slots ÷ (time a request holds one)*, from the prompt and output lengths. Under capacity almost nothing waits, and the p95 is the prefill of a 95th-percentile prompt: *⌈P95 ÷ 128⌉ − 1* ticks of 50 ms. Over capacity the queue grows for the whole window, so the request at the 95th percentile of arrivals waits about *(load − 1) × 95 % of the window* before its prefill starts. That is why a p95 taken past capacity is not a latency number: it depends on how long the run lasted, and it is Rule 3's reason to sweep load in steps rather than quote one point. The engine is a flat-tick toy (version 1) and its cold start is a stand-in, so take the method from it, not its numbers.`,
     },
     {
       type: 'quiz',
@@ -138,7 +141,7 @@ To correct the number, take the flaw out and ask whether production's load queue
             'A single max-batch run lands past the knee and reveals nothing about where the cliff is. It reports throughput at a point where users already see SLO violations.',
             'That is a roofline upper bound. It ignores queueing, scheduling, KV capacity and the latency contract, so real capacity under SLO sits far below it.',
             'Latency stays low at light load, then queues build and it goes vertical at the knee. A linear extrapolation from one moderate point hides that cliff, and one point cannot locate a knee.',
-            'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee where the SLO first breaks is the capacity, and the curve is the deliverable.',
+            'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee, the highest step that still meets the SLO, is the capacity, and the curve is the deliverable.',
           ],
           kcs: ['t7.goodput-curve'],
           miss: ['t7.capacity-is-max-batch-run', 't7.capacity-is-roofline', 't7.capacity-is-linear-extrapolation', ''],
@@ -168,7 +171,7 @@ To correct the number, take the flaw out and ask whether production's load queue
     {
       type: 'deepdive',
       title: 'A benchmarking report you can write today',
-      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and LLMPerf adds the rest. This document is a portfolio artifact (§6 of the plan).`,
+      md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and GuideLLM or AIPerf adds the rest. This document is a portfolio artifact.`,
     },
   ],
   kcs: ['t7.goodput-curve', 't7.benchmark-hygiene'],

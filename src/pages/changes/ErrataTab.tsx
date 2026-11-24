@@ -5,6 +5,7 @@ import ChangeCards from '@/components/changes/ChangeCards'
 import { ERRATA } from '@/data/errata'
 import type { Erratum } from '@/data/errata/schema'
 import { lessonById, lessonPath } from '@/data/lessons'
+import { curlyQuotes } from '@/lib/typography'
 import { cn } from '@/lib/utils'
 
 /** Newest first, except an erratum always lands before the one it supersedes (same-day fixes would otherwise sort by id). */
@@ -71,15 +72,15 @@ function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }
         {newer &&
           (newer.lessons.includes(groupId) ? (
             <a href={`#${groupId}-${newer.id}`} className={chipClass + ' hover:text-text-1'}>
-              superseded by {newer.date} · {newer.title}
+              superseded by {newer.date} · {curlyQuotes(newer.title)}
             </a>
           ) : (
             <span className={chipClass}>
-              superseded by {newer.date} · {newer.title}
+              superseded by {newer.date} · {curlyQuotes(newer.title)}
             </span>
           ))}
       </div>
-      <h3 className="mt-3 text-lg font-semibold leading-snug text-text-1">{erratum.title}</h3>
+      <h3 className="mt-3 text-lg font-semibold leading-snug text-text-1">{curlyQuotes(erratum.title)}</h3>
       <dl className="mt-4 space-y-3 text-body leading-relaxed">
         <div>
           <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">before</dt>

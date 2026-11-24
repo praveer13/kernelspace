@@ -22,7 +22,7 @@ Async I/O is the machinery for handling many connections with few threads by nev
 
 **epoll** (Linux, 2002) inverts the question. Instead of asking "which of these 10,000 fds is ready?" on every loop (O(n) per wake — that was \`select\`/\`poll\`'s death), you *register* fds once with \`epoll_ctl\`, and \`epoll_wait\` returns only the ready ones. O(ready), not O(total). The thread does: wait for events → handle each ready fd until \`EAGAIN\` → wait again. One thread, 100k connections, no problem — this is the engine under nginx and Node (\`libuv\`).
 
-**io_uring** (Linux, 2019) goes further. epoll tells you a socket is *readable*; you then \`read()\` — a syscall per operation. io_uring instead uses two shared **ring buffers** between user and kernel: you push *submission* entries ("read fd 42 into this buffer," "send this," even "open this file") onto the SQ, and the kernel posts *completion* entries to the CQ. No syscall per I/O at all in the common path — you ring a doorbell (or the kernel polls), and completions appear. It's async for *everything*, not just sockets: files too, which epoll never handled (files are always "ready"). The design is batching + shared-memory rings: if T2.L4's batching lesson and T0's cache-line lesson had a child, it's io_uring.`,
+**io_uring** (Linux, 2019) goes further. epoll tells you a socket is *readable*; you then \`read()\` — a syscall per operation. io_uring instead uses two shared **ring buffers** between user and kernel: you push *submission* entries ("read fd 42 into this buffer," "send this," even "open this file") onto the SQ, and the kernel posts *completion* entries to the CQ. No syscall per I/O at all in the common path — you ring a doorbell (or the kernel polls), and completions appear. It's async for *everything*, not just sockets: files too, which epoll never handled (files are always "ready"). The design is batching + shared-memory rings: if T2.L4's batching lesson and T0's cache-line lesson had a child, it's io_uring. One deployment catch: Docker's default seccomp profile blocks \`io_uring_setup\`, \`io_uring_enter\` and \`io_uring_register\`, so a container started with defaults cannot use it, and tokio's own io_uring support is still unstable (it needs \`--cfg tokio_unstable\`); tokio's default driver on Linux is epoll.`,
     },
     {
       type: 'diagram',
@@ -52,7 +52,7 @@ Async I/O is the machinery for handling many connections with few threads by nev
       type: 'prose',
       md: `## The event loop you already know — and its Rust descendant
 
-An **event loop** is epoll plus a scheduler with a friendly API: \`on_readable(socket, callback)\`. JavaScript's entire concurrency model is one (that's why Node exists — and why blocking it is fatal, T2.L4). Java's Netty wraps it for the JVM. And Rust's **tokio** is the same architecture with a zero-cost twist: an \`async fn\` compiles to a **state machine** (a struct with an enum of suspension points), and the runtime polls these state machines across a small pool of OS threads, work-stealing between them. No garbage collector, no per-connection stack — a suspended task is a few hundred bytes in a slab, not 1 MiB of thread stack.
+An **event loop** is epoll plus a scheduler with a friendly API: \`on_readable(socket, callback)\`. JavaScript's entire concurrency model is one (that's why Node exists — and why blocking it is fatal, T2.L4). Java's Netty wraps it for the JVM. And Rust's **tokio** is the same architecture with a zero-cost twist: an \`async fn\` compiles to a **state machine** (a struct with an enum of suspension points), and the runtime polls these state machines across a small pool of OS threads, work-stealing between them. No garbage collector, no per-connection stack — a suspended task is its state-machine struct in the heap (about 1 KiB for the echo server below, because its read buffer lives inside it), not 1 MiB of thread stack.
 
 That last comparison is worth a table, because it decides architectures:`,    },
     {
@@ -61,9 +61,9 @@ That last comparison is worth a table, because it decides architectures:`,    },
 |---|---|---|---|
 | Thread-per-conn | OS thread | ~1 MiB stack + scheduler entry | kernel context switch |
 | Event loop (Node/nginx) | callback/closure | ~KBs of JS/C state | userspace, same thread |
-| tokio task | state-machine struct | ~hundreds of bytes | userspace poll, work-stealing |
+| tokio task | state-machine struct | ~1 KiB here: whatever lives across an await | userspace poll, work-stealing |
 
-The serving relevance is not subtle: an inference cluster's control plane is a giant I/O problem — thousands of concurrent HTTP/SSE streams, KV-transfer connections, and scheduler events. It is exactly the workload io_uring and tokio were built for, and exactly why Dynamo's data plane is Rust + tokio over NATS rather than threads and queues of the 2005 kind.`,
+The serving relevance is not subtle: an inference cluster's control plane is a giant I/O problem — thousands of concurrent HTTP/SSE streams, KV-transfer connections, and scheduler events. It is exactly the workload io_uring and tokio were built for, and exactly why Dynamo is Rust + tokio, with its request plane on plain TCP by default (the KV blocks themselves move worker to worker through NIXL), rather than threads and queues of the 2005 kind.`,
     },
     {
       type: 'code',
@@ -77,7 +77,7 @@ async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     loop {
         let (mut sock, _peer) = listener.accept().await?;
-        tokio::spawn(async move {           // a task: ~hundreds of bytes,
+        tokio::spawn(async move {           // a task: ~1 KiB, the buf lives in it,
             let mut buf = [0u8; 1024];      // not a 1 MiB thread stack
             loop {
                 match sock.read(&mut buf).await {
@@ -88,7 +88,7 @@ async fn main() -> std::io::Result<()> {
         });                                 // awaits = suspension points;
     }                                       // the OS thread never blocks
 }`,
-      chips: ['epoll underneath', 'task ≈ 300 B', 'await = state-machine edge'],
+      chips: ['epoll underneath', 'task ≈ 1 KiB', 'await = state-machine edge'],
     },
     {
       type: 'callout',
@@ -145,7 +145,7 @@ You should now be able to trace a request through a modern async server: NIC int
           miss: ['', 't2.epoll-for-files', 't2.uring-needs-no-async', 't2.uring-hardware-bound'],
         },
         {
-          q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MiB because…',
+          q: 'The echo server\'s suspended task costs about 1 KiB instead of ~1 MiB because…',
           options: [
             'Rust stacks start tiny and grow on demand, with an idle task keeping a few hundred bytes of OS stack committed',
             'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
@@ -207,9 +207,9 @@ You should now be able to trace a request through a modern async server: NIC int
         prompt:
           'Why can one thread serve 10,000 connections as tokio tasks, and what single mistake stalls all of them?',
         model:
-          'An async fn compiles to a state machine that keeps only the values live across each await, so a suspended task costs hundreds of bytes, not 1 MiB of stack. The runtime polls ready tasks on a few OS threads. A blocking call holds the thread itself, so every task scheduled on that thread waits behind it.',
+          'An async fn compiles to a state machine that keeps only the values live across each await, so a suspended task costs its live locals (about 1 KiB with a 1 KiB buffer), not 1 MiB of stack. The runtime polls ready tasks on few threads. A blocking call holds the thread, so every task on it waits.',
         ideas: [
-          'A task is a small state machine of hundreds of bytes, not a roughly 1 MiB thread stack',
+          'A task is a state machine as big as its live locals, about 1 KiB with a 1 KiB buffer, not a roughly 1 MiB thread stack',
           'The runtime polls ready tasks across a few OS threads, switching in userspace at awaits',
           'A blocking call occupies the thread, so every task on it stalls; use spawn_blocking instead',
         ],

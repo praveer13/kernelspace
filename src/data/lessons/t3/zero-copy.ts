@@ -12,7 +12,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `In T0 you learned that memory bandwidth is the scarce resource. A copy is the most expensive "simple" thing a program does: a stray \`.clone()\` on a 100 MiB buffer burns ~30 µs of pure bandwidth and pollutes half your cache — and in a serving pipeline, copies multiply: socket → parse → tokenize → transfer → kernel. **Zero-copy** is the discipline of passing *views* instead of *payloads* at every layer boundary, and Rust is unusually good at it because the borrow checker can prove a view never outlives its buffer.
+      md: `In T0 you learned that memory bandwidth is the scarce resource. A copy is the most expensive "simple" thing a program does: a stray \`.clone()\` on a 100 MiB buffer costs tens of milliseconds of allocation, page faults and DRAM-bound copying, and streams far more bytes than any cache holds, evicting what was there — and in a serving pipeline, copies multiply: socket → parse → tokenize → transfer → kernel. **Zero-copy** is the discipline of passing *views* instead of *payloads* at every layer boundary, and Rust is unusually good at it because the borrow checker can prove a view never outlives its buffer.
 
 This lesson is the two halves of high-performance Rust: slices and borrowing views (the safe 99%), and \`unsafe\` (the audited 1%) — when you need it, and how professionals fence it in.`,
     },
@@ -29,7 +29,7 @@ let payload: &[u8] = &buf[16..];        // view #2 — zero copies so far
 route(header, payload);                 // pass views, not clones
 \`\`\`
 
-The standard library is built on this: \`split\`, \`chunks\`, \`trim\`, \`str::find\` all return views. The ecosystem doubles down: the \`bytes\` crate's \`Bytes\` type is a reference-counted immutable buffer handing out zero-copy slices — the backbone of tokio, hyper, and every serious Rust network service. When Dynamo's data plane moves a KV block description from NATS message to transfer request without copying the payload, this is the machinery.`,
+The standard library is built on this: \`split\`, \`chunks\`, \`trim\`, \`str::find\` all return views. The ecosystem doubles down: the \`bytes\` crate's \`Bytes\` type is a reference-counted immutable buffer handing out zero-copy slices — the backbone of tokio, hyper, and every serious Rust network service. When Dynamo's data plane moves a KV block description from a request frame to a transfer request without copying the payload, this is the machinery.`,
     },
     {
       type: 'code',
@@ -76,31 +76,56 @@ The professional discipline around \`unsafe\` is the whole lesson:
       type: 'code',
       filename: 'unsafe_slab.rs — fenced, documented, minimal',
       lang: 'rust',
-      code: `/// A view into a shared-memory slab mapped from /dev/shm.
-/// Safe API; unsafe internals.
+      code: `use std::marker::PhantomData;
+
+/// Owns a read-only mapping of a slab in /dev/shm; its Drop is where
+/// the unmap goes.
+pub struct Mapping {
+    base: *const u8,
+    len: usize,
+}
+
+/// A view into the slab. Safe API; unsafe internals.
 pub struct SlabView<'a> {
     base: *const u8,          // raw pointer: borrow checker can't see it
     len: usize,
-    _life: std::marker::PhantomData<&'a [u8]>,  // tie view to owner lifetime
+    _owner: PhantomData<&'a Mapping>,  // the view borrows the Mapping
 }
 
-impl<'a> SlabView<'a> {
+impl Mapping {
     /// # Safety
-    /// Caller guarantees 'base..base+len' is a live, readable mapping
-    /// for the whole lifetime 'a (e.g. the mmap outlives every view).
-    pub unsafe fn new(base: *const u8, len: usize) -> Self {
-        Self { base, len, _life: std::marker::PhantomData }
+    /// \`base..base+len\` is a live, readable mapping that this value now
+    /// owns until drop, and no process writes that range while any
+    /// SlabView of it exists (a writer in another process is a data race).
+    pub unsafe fn from_raw(base: *const u8, len: usize) -> Self {
+        Self { base, len }
     }
 
+    /// Safe: the view borrows \`self\`, so the borrow checker refuses to
+    /// drop or move the Mapping while the view is live.
+    pub fn view(&self) -> SlabView<'_> {
+        SlabView { base: self.base, len: self.len, _owner: PhantomData }
+    }
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        // A real Mapping calls libc::munmap(self.base as *mut _, self.len)
+        // here; this sketch takes no libc dependency, so it leaves it out.
+        // SAFETY (of that call): from_raw's contract says this value owns
+        // the range, and no SlabView outlives it, since each borrows self.
+    }
+}
+
+impl SlabView<'_> {
     pub fn get(&self, i: usize) -> Option<u8> {
         if i >= self.len { return None; }
-        // SAFETY: bounds checked above; new()'s contract guarantees the
-        // mapping is live and readable for 'a, and &self proves no
-        // conflicting &mut exists (shared XOR mutable).
+        // SAFETY: bounds checked above; the Mapping is alive for 'a
+        // (we borrow it) and from_raw's contract says nobody writes it.
         Some(unsafe { *self.base.add(i) })
     }
 }`,
-      chips: ['SAFETY comments', 'PhantomData ties lifetimes', 'Miri-testable'],
+      chips: ['SAFETY comments', 'The view borrows its owner', 'Miri-testable'],
     },
     {
       type: 'callout',

@@ -72,10 +72,13 @@ const WORD_NUMBERS: Record<string, string> = { four: '4', eight: '8', sixteen: '
 const WORD_NUMBER = new RegExp(`\\b(?:${Object.keys(WORD_NUMBERS).join('|')})\\b`, 'gi')
 /** vLLM the engine: the name, unless it is the paper's ('the vLLM paper', 'the 2023 vLLM paper'). */
 const ENGINE = /\bvLLM\b/
-/** A default phrase, then the number: 'default 16', 'defaults to 16', 'default of 16', 'the default block in vLLM v0.34.0 is 16'. */
-const DEFAULT_BEFORE = /\bdefault(?:s|ed)?\b(?:\s+(?:to|of|is|are|at|=|:|block|size|value|a|an|the|in|for|set|vLLM|V+)\b)*\W{0,3}$/i
+/**
+ * A default phrase, then the number: 'default 16', 'defaults to 16', 'default of 16', 'the default block in vLLM v0.34.0 is 16',
+ * 'defaults the --block-size flag to 16'.
+ */
+const DEFAULT_BEFORE = /\bdefault(?:s|ed)?\b(?:\s+(?:to|of|is|are|at|=|:|--block-size|block_size|block|size|value|flag|option|a|an|the|in|for|set|vLLM|V+)\b)*\W{0,3}$/i
 /** A block-size phrase right before the number: 'block size is 16', '--block-size 16', 'block_size = 16'. */
-const SIZE_BEFORE = /(?:--block-size|\bBLOCK\s*=|\bblock[ _-]?size(?:\s+(?:of|is|are|at|=|:|set to))?)\W{0,3}$/i
+const SIZE_BEFORE = /(?:(?:--block-size|\bblock_size)(?:\s+(?:to|of|at|=))?|\bBLOCK\s*=|\bblock[ _-]?size(?:\s+(?:of|is|are|at|=|:|set to))?)\W{0,3}$/i
 /** Block sizes are powers of two, so no other integer is a candidate. */
 const POWERS = new Set([4, 8, 16, 32, 64, 128, 256, 512, 1024])
 const TOKEN_UNIT = /^[- ]?tok(?:en)?s?\b/i
@@ -156,7 +159,7 @@ export function blockNumbers(text: string): Array<{ n: number; clause: string; p
  * authors measured waste under four percent.' all present the bound as the paper's.
  */
 const FOUR = String.raw`(?:4\s?(?:%|percent\b|per cent\b)|four(?:\s|-)(?:percent|per cent)\b)`
-const FOUR_PERCENT = new RegExp(String.raw`(<\s?${FOUR}|\b(?:under|below|less than|at most|capped at)\s+${FOUR})`, 'i')
+const FOUR_PERCENT = new RegExp(String.raw`((?:<=?|\u2264)\s?${FOUR}|\b(?:under|below|less than|at most|capped at|sub)[-\s]+${FOUR})`, 'i')
 /** Words that name the paper: the word itself, its Figure 2, its first author, its authors, its venue. */
 const NAMES_PAPER = /\b(?:paper|fig(?:ure|\.)?\s*2|kwon|authors|sosp)\b/i
 /** Abbreviations whose period does not end a sentence ('Fig. 2', 'Kwon et al. report'). */
@@ -164,6 +167,34 @@ const unbreak = (s: string) => s.replace(/\b(Fig|al|e\.g|i\.e)\.\s+/g, '$1\u00a0
 /** The clauses of a sentence: split at ';', ',', ':' and dashes; a parenthesis stays with the clause it follows. */
 const clauses = (s: string) => s.split(/\s*[;,:\u2014\u2013]\s+|\s*;\s*/).filter(Boolean)
 const DISCLAIMS = /(course'?s (?:own )?estimate|course estimate|not in (?:the|its) (?:paper|text)|not in the paper.s text)/i
+/**
+ * K0-FIX-SETUP-REST: a sentence as the text outside its parentheses, then the text of each parenthesis on its own (nested
+ * ones in turn; an unclosed one runs to the sentence's end). The clauses are cut from each part, so a comma or semicolon
+ * inside a parenthesis never joins its words to the clause outside it.
+ */
+export function parenParts(s: string): string[] {
+  let outside = ''
+  let group = ''
+  let depth = 0
+  const groups: string[] = []
+  for (const ch of s) {
+    if (ch === '(') {
+      if (depth > 0) group += ch
+      else outside += ' '
+      depth++
+    } else if (ch === ')' && depth > 0) {
+      depth--
+      if (depth > 0) group += ch
+      else {
+        groups.push(group)
+        group = ''
+      }
+    } else if (depth > 0) group += ch
+    else outside += ch
+  }
+  if (depth > 0) groups.push(group)
+  return [outside, ...groups.flatMap(parenParts)]
+}
 
 const PAPER = claimNumber('serving.pagedattention.paper-block-size')
 
@@ -200,7 +231,11 @@ export function fourPercentAsPaper(text: string): string[] {
   for (const s of sentences(unbreak(text))) {
     if (!FOUR_PERCENT.test(s) || !NAMES_PAPER.test(s)) continue
     // Excused only when every clause that gives the 4% carries the disclaimer itself.
-    if (clauses(s).filter((c) => FOUR_PERCENT.test(c)).every((c) => DISCLAIMS.test(c))) continue
+    // A disclaimer inside a parenthesis does not count: '... under 4% (the course's estimate agrees)' still says it as the
+    // paper's, and so does '... under 4% (the course's estimate, not the paper's)'. A 4% inside a parenthesis is judged by
+    // that parenthesis's own clauses.
+    const parts = parenParts(s)
+    if (parts.every((p) => clauses(p).filter((c) => FOUR_PERCENT.test(c)).every((c) => DISCLAIMS.test(c)))) continue
     bad.push(s.trim())
   }
   return bad
@@ -304,6 +339,14 @@ describe('no learner-facing text types vLLM default block size', () => {
     expect(typedDefaults('vLLM uses a default of 64 tokens per block.', 64)).toEqual([])
     expect(typedDefaults('The paper used a default of 16 tokens per block.', 64)).toEqual([])
     expect(typedDefaults('At v0.10.2 the default is 16 tokens.', 64)).toEqual([])
+    // K0-E3: a default typed around the flag name.
+    expect(typedDefaults('vLLM defaults --block-size to 32.', 64)).toHaveLength(1)
+    expect(typedDefaults('vLLM defaults block_size to 32.', 64)).toHaveLength(1)
+    expect(typedDefaults('vLLM defaults --block-size to 64.', 64)).toEqual([])
+    // K0-FIX-SETUP-REST: the flag named as a flag or an option between the default word and the number.
+    expect(typedDefaults('vLLM defaults the --block-size flag to 32.', 64)).toHaveLength(1)
+    expect(typedDefaults('vLLM defaults the --block-size option to 32.', 64)).toHaveLength(1)
+    expect(typedDefaults('vLLM defaults the --block-size flag to 64.', 64)).toEqual([])
   })
 
   test("the nine sentences master typed, and the phrasings a reviewer probed, all fire at 64", () => {
@@ -438,6 +481,38 @@ describe("'<4%' is the course's estimate, never presented as the paper's figure"
     for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
     expect(fourPercentAsPaper("Under 4% KV waste is the course's estimate, not a figure from the PagedAttention paper.")).toEqual([])
     expect(fourPercentAsPaper("The course estimate is under 4 percent; the paper's words are near-zero waste.")).toEqual([])
+  })
+
+  test('K0-E3: the written forms of <4% (≤, <=, under-4%, sub-4%) and a disclaimer in a parenthesis', () => {
+    const bad = [
+      'The paper reports \u22644% waste.',
+      'The paper reports <=4% waste.',
+      "The paper's under-4% waste figure is famous.",
+      'The paper reports sub-4% waste.',
+      "The paper says waste is under 4% (the course's estimate agrees).",
+    ]
+    for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
+    expect(fourPercentAsPaper("Under 4% KV waste is the course's estimate, not a figure from the paper (which says near-zero waste).")).toEqual([])
+  })
+
+  test('K0-FIX-SETUP-REST: a comma or semicolon inside the parenthesis does not carry its disclaimer out of it', () => {
+    // The lane review's probes: the clause split cut inside the parenthesis, so the 4% clause kept an unclosed "(the
+    // course's estimate" and the disclaimer matched.
+    const bad = [
+      "The paper says waste is under 4% (the course's estimate, not the paper's).",
+      "The paper says waste is under 4% (the course's estimate; the paper says near-zero).",
+      "The paper says waste is under 4% (a course estimate).",
+      // An unclosed parenthesis runs to the end of the sentence and still sits outside the 4% clause.
+      "The paper says waste is under 4% (the course's estimate, not the paper's.",
+      // A 4% inside a parenthesis is judged by that parenthesis's own words.
+      'The paper (under 4% waste, per Figure 2) is famous.',
+    ]
+    for (const t of bad) expect(fourPercentAsPaper(t), t).toHaveLength(1)
+    const ok = [
+      "Under 4% KV waste is the course's estimate (not the paper's, which says near-zero), not a figure from the paper.",
+      "The paper says near-zero waste (under 4% is the course's estimate, not the paper's).",
+    ]
+    for (const t of ok) expect(fourPercentAsPaper(t), t).toEqual([])
   })
 
   test('K0-FIX4: the paper is named by its Figure 2, its authors or its venue, and "four percent" counts', () => {

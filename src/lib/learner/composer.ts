@@ -347,8 +347,35 @@ export function composeSession(
 }
 
 /**
+ * The KCs "Keep going" may practise: those a lesson that teaches them was passed (status "done"), plus those the
+ * placement walk found solid (the learner showed them).
+ */
+export function eligibleKcs(
+  kcs: readonly { id: KcId; lessons: readonly string[] }[],
+  lessons: Readonly<Record<string, { status?: string } | undefined>>,
+  solidKcs: readonly KcId[] = [],
+): ReadonlySet<KcId> {
+  const out = new Set<KcId>(solidKcs)
+  for (const k of kcs) if (k.lessons.some((id) => Object.hasOwn(lessons, id) && lessons[id]?.status === 'done')) out.add(k.id)
+  return out
+}
+
+/**
+ * Whether "Keep going" has anything to serve, so Today offers the button: a carded KC that is eligible (see
+ * `eligibleKcs`) and has a generator family. After Boot alone nothing is, so there is no button.
+ */
+export function canKeepGoing(
+  cards: Pick<CardSet, 'cards'>,
+  eligible: ReadonlySet<KcId>,
+  pool: { families: (kc: KcId) => readonly unknown[] },
+): boolean {
+  return Object.keys(cards.cards).some((kc) => eligible.has(kc) && pool.families(kc).length > 0)
+}
+
+/**
  * "Keep going" (spec §6.3 step 5): `count` generated items on introduced (carded) KCs, lowest recall first,
- * cycling when fewer KCs can be served. They pay XP under the daily cap and still update cards.
+ * cycling when fewer KCs can be served. They pay XP under the daily cap and still update cards. `eligible`, when
+ * given, limits the draw to KCs the learner has earned (see `eligibleKcs`); Boot's own cards alone never qualify.
  */
 export function composeExtra(
   cards: CardSet,
@@ -356,10 +383,11 @@ export function composeExtra(
   now: LocalDay,
   seed: number,
   count: number = EXTRA_SET_SIZE,
+  eligible?: (kc: KcId) => boolean,
 ): SessionSlot[] {
   const pool = content.pool
   const order = Object.values(cards.cards)
-    .filter((c) => pool.families(c.kc).length > 0)
+    .filter((c) => (eligible ? eligible(c.kc) : true) && pool.families(c.kc).length > 0)
     .map((card) => ({ kc: card.kc, r: cardRetrievability(card, now) }))
     .sort((a, b) => a.r - b.r || (a.kc < b.kc ? -1 : a.kc > b.kc ? 1 : 0))
   const out: SessionSlot[] = []

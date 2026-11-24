@@ -53,28 +53,50 @@ async function expectAxeClean(page: Page, where: string): Promise<void> {
   expect(worst.map((v) => `${v.impact} ${v.id}: ${v.nodes[0]?.target.join(' ')}`), `axe on ${where}`).toEqual([])
 }
 
-/** Store the learner's path as Boot would, then load `url`: the ledger exists after a first load, and the page reads it on the next. */
+/**
+ * Store the learner's path as Boot would, then load `url`: the ledger exists after a first load, and the page reads it on the next.
+ *
+ * The write waits for the app's own database. `indexedDB.open('kernelspace')` with no version creates an empty version-1 database
+ * when the app has not made its own yet (under load the first load is still starting): that database has no `working` store, the
+ * write threw inside a callback and the promise never settled, and the app, opening version 1 later, found nothing to upgrade. So
+ * the helper never creates: an upgrade request is aborted, a missing store is reported, and the poll tries again once the app has
+ * made the database.
+ */
 async function openWithPath(page: Page, path: 'serving-first' | 'full-ramp', url: string): Promise<void> {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
-  await page.evaluate(
-    (value) =>
-      new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('kernelspace')
-        open.onerror = () => reject(open.error)
-        open.onsuccess = () => {
-          const db = open.result
-          const tx = db.transaction('working', 'readwrite')
-          tx.objectStore('working').put({ key: 'boot:path', value, at: new Date().toISOString(), dev: 'e2e' })
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () => reject(tx.error)
-        }
-      }),
-    path,
-  )
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (value) =>
+            new Promise<'written' | 'absent'>((resolve, reject) => {
+              const open = indexedDB.open('kernelspace')
+              open.onupgradeneeded = () => open.transaction?.abort() // the app has not made it yet: leave nothing behind
+              open.onblocked = () => resolve('absent')
+              open.onerror = () => (open.error?.name === 'AbortError' ? resolve('absent') : reject(open.error))
+              open.onsuccess = () => {
+                const db = open.result
+                if (!db.objectStoreNames.contains('working')) {
+                  db.close()
+                  resolve('absent')
+                  return
+                }
+                const tx = db.transaction('working', 'readwrite')
+                tx.objectStore('working').put({ key: 'boot:path', value, at: new Date().toISOString(), dev: 'e2e' })
+                tx.oncomplete = () => {
+                  db.close()
+                  resolve('written')
+                }
+                tx.onerror = () => reject(tx.error)
+                tx.onabort = () => reject(tx.error)
+              }
+            }),
+          path,
+        ),
+      { message: "the app's own database takes the stored path" },
+    )
+    .toBe('written')
   await page.goto(url)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.waitForLoadState('networkidle')
@@ -112,6 +134,8 @@ for (const width of WIDTHS) {
     const block = page.locator(BLOCK)
     await expect(block).toHaveCount(1)
     await expect(block).toHaveAttribute('data-lesson', 't5.l5')
+    // the block leaves its loading stage (the lazy item chunk and the generator are in) before anything is read from it
+    await expect(block).toHaveAttribute('aria-busy', 'false')
     await expect(block.getByText('This block has no question to show right now.')).toHaveCount(0)
     await expect(block.getByText('Could not load these questions.')).toHaveCount(0)
 
@@ -122,6 +146,13 @@ for (const width of WIDTHS) {
     await expect(block).toContainText('Which error does rustc report for this code, if any?')
     await expect(block).toContainText('compiles with 0 errors')
     await expect(block.locator('[data-item-progress]')).toHaveText('0/3')
+    // one fixed note says what a reading item is and what "moved" means: once in the reading block, never in an item block
+    await expect(block.locator('[data-reading-note]')).toHaveCount(1)
+    await expect(block.locator('[data-reading-note]')).toContainText('You do not write Rust here')
+    await expect(block.locator('[data-reading-note]')).toContainText('is "moved" when it has been handed to a function')
+    // Rust book ch. 4.1: a Copy type is "trivially copied, making them still valid after assignment to another variable"
+    await expect(block.locator('[data-reading-note]')).toContainText('a Copy type (integers such as u32, floats, bool, char) is copied instead, so the old name still works')
+    await expect(page.locator('[data-block="item"] [data-reading-note]')).toHaveCount(0)
     expect(await noSidewaysScroll(page), 'the verdict item scrolls sideways').toBe(true)
 
     // Tab alone reaches the first option; a letter picks it and Enter sends it
@@ -170,9 +201,11 @@ for (const width of WIDTHS) {
     await atWidth(page, width)
     const block = page.locator(BLOCK)
     await expect(block).toHaveCount(1)
+    await expect(block).toHaveAttribute('aria-busy', 'false')
     await expect(block.getByText('Rust Zero covers this on your path. Practice anyway?')).toBeVisible()
     await expect(block.locator('[data-ks-option]')).toHaveCount(0)
     await expect(block.locator('[data-item-progress]')).toHaveText('')
+    await expect(block.locator('[data-reading-note]'), 'a collapsed reading block shows no note').toHaveCount(0)
     expect(await noSidewaysScroll(page), 'the collapsed block scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, collapsed`)
     expect(await compileEvents(page), 'nothing is written while the block is collapsed').toEqual([])
@@ -181,6 +214,7 @@ for (const width of WIDTHS) {
     await tabUntil(page, (a) => a.inBlock && a.name === 'Practice anyway', 400, 'the Practice anyway button')
     await page.keyboard.press('Enter')
     await expect(block.locator('[data-ks-option]').first()).toBeVisible()
+    await expect(block.locator('[data-reading-note]'), 'opened, the block shows the note once').toHaveCount(1)
     expect(await compileEvents(page), 'opening the block writes nothing').toEqual([])
     expect(await noSidewaysScroll(page), 'the opened block scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, opened from the collapsed line`)

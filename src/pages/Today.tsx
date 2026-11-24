@@ -5,7 +5,7 @@ import { selectRings } from '@/lib/economy'
 import { collect, settle } from '@/lib/items/on-demand'
 import type { ItemResult } from '@/lib/items/play'
 import { cardsContent, deriveCards, recentReviewRefs, selectFirstReviewCalibration, type CardsContent, type DerivedCards } from '@/lib/learner/cards'
-import { composeExtra, composeSession, type ComposerContent } from '@/lib/learner/composer'
+import { canKeepGoing, composeExtra, composeSession, eligibleKcs, type ComposerContent } from '@/lib/learner/composer'
 import { pendingHandoff, parseHandoffMarker } from '@/lib/learner/handoff'
 import { dayKindOf, normalizeWeekPlan, pickContinue, planLine, weekStatus } from '@/lib/learner/planner'
 import { daysBetween } from '@/lib/learner/reentry'
@@ -182,6 +182,7 @@ export function useStartSet(prepare: (kind: SetKind) => Promise<Prepared>, begin
 export default function Today() {
   const working = useProgress((s) => s.working)
   const aggregate = useProgress((s) => s.aggregate)
+  const lessonProgress = useProgress((s) => s.lessons)
   const lastExportAt = useProgress((s) => s.ledger.lastExportAt)
   const recordItems = useProgress((s) => s.recordItems)
   const setWorking = useProgress((s) => s.setWorking)
@@ -349,7 +350,12 @@ export default function Today() {
     [done, events, handoffRaw, lastExportAt],
   )
 
-  const canExtra = ready !== null && pool !== null && Object.keys(ready.cards.cards).some((kc) => pool.families(kc).length > 0)
+  // "Keep going" draws only on ideas from lessons the learner passed (or that placement found solid), never on Boot's cards alone
+  const eligible = useMemo(
+    () => (ready ? eligibleKcs(ready.content.kcs, lessonProgress, placement?.solidKcs) : null),
+    [ready, lessonProgress, placement],
+  )
+  const canExtra = ready !== null && pool !== null && eligible !== null && canKeepGoing(ready.cards, eligible, pool)
   // Up Next is recommend(), the same answer the lesson footer, Home and Progress give (spec 7.3). Today's own
   // "keep going" set stands in when everything is done and the learner has nothing left to extend.
   const recommended = useUpNext()
@@ -377,7 +383,7 @@ export default function Today() {
     })
     const seed = freshSeed()
     // composed again on the same seed once any compile bank group it asked for has landed
-    return prepareSet(() => (kind === 'extra' ? composeExtra(ready.cards, { ...ready.cc, pool: livePool }, ready.day, seed) : composePractice(ready.content.bootKcs, livePool, seed, 5)))
+    return prepareSet(() => (kind === 'extra' ? composeExtra(ready.cards, { ...ready.cc, pool: livePool }, ready.day, seed, undefined, (kc) => eligible?.has(kc) ?? false) : composePractice(ready.content.bootKcs, livePool, seed, 5)))
   }
   const begin = (kind: SetKind, slots: readonly SessionSlot[]) => {
     runKey.current += 1

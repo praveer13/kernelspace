@@ -51,7 +51,7 @@
 //! When all six checks pass in `cargo test`, build the wasm:
 //!   cargo build --release --target wasm32-unknown-unknown
 //! and drop target/wasm32-unknown-unknown/release/rust_allocator.wasm
-//! onto https://kernelspace.dev/forge/rust-allocator.
+//! onto https://kernelspace.naigap.com/forge/rust-allocator.
 
 pub struct Allocator {
     // TODO(you): your state here. Stage 1 needs only a `capacity` and a

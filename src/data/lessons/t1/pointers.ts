@@ -1,3 +1,4 @@
+import { claimNumber } from '../claims'
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
@@ -136,7 +137,7 @@ The same mechanism, mapped to different outcomes, also powers: guard pages that 
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Java and Python give you pointers with the dangerous bits filed off: a **reference** is a pointer the runtime owns. It dereferences automatically, forbids arithmetic, and guarantees non-null-or-NPE. The JVM even uses **compressed oops** — 32-bit pointers on a 64-bit heap — to save cache space, which tells you how much pointer *traffic* matters. When you got a NullPointerException, you were segfaulting politely: same null address, but the runtime checks instead of the MMU.`,
+      md: `Java and Python give you pointers with the dangerous bits filed off: a **reference** is a pointer the runtime owns. It dereferences automatically, forbids arithmetic, and guarantees non-null-or-NPE. The JVM even uses **compressed oops** — 32-bit pointers on a 64-bit heap — to save cache space, which tells you how much pointer *traffic* matters. When you got a NullPointerException, you may well have hit the same unmapped page and the same SIGSEGV: compiled HotSpot code often omits the null test, lets the load fault, and the JVM catches the signal and throws the exception (an "implicit null check"). If nulls turn out to be common at that spot, the JIT recompiles with an explicit null test.`,
     },
     {
       type: 'callout',
@@ -187,7 +188,7 @@ The same mechanism, mapped to different outcomes, also powers: guard pages that 
       type: 'prose',
       md: `## Manual memory: the ownership question
 
-Once you can address memory, someone must answer: **whose job is it to free this, and how do we know it's safe?** C's answer is "the programmer remembers" — the source of roughly 70% of serious CVEs (Microsoft and Google's own numbers, from their C/C++ codebases). The garbage collector's answer is "the runtime tracks reachability." Rust's answer — you will meet it properly at the end of this track — is "the compiler proves, at build time, that every allocation has exactly one owner and dies exactly once."
+Once you can address memory, someone must answer: **whose job is it to free this, and how do we know it's safe?** C's answer is "the programmer remembers" — the root of a large share of serious security bugs: Chromium counts around ${claimNumber('status.chromium.memory-safety-share')}% of its high-severity security bugs as memory unsafety, one big C++ codebase's number, not a share of all CVEs. The garbage collector's answer is "the runtime tracks reachability." Rust's answer — you will meet it properly at the end of this track — is "the compiler proves, at build time, that every allocation has exactly one owner and dies exactly once."
 
 Notice that all three answers address the *same* question. Manual memory management is not about \`free()\`; it is about **lifetimes**. And in LLM serving, the most expensive lifetime question of all is: *which sequence's KV cache may be reused, and when?* Keep your pointer fingers warmed up in the simulator; the allocator lesson is next.`,
     },
@@ -269,11 +270,11 @@ Notice that all three answers address the *same* question. Manual memory managem
           ],
           correct: [2],
           explanation:
-            'Java references can absolutely be null — NPE is the polite segfault, checked by the runtime instead of the MMU. What you lose vs C is arithmetic and control; what you keep is the concept: a managed address.',
+            'Java references can absolutely be null. In compiled HotSpot code an NPE can be the same page fault a C program gets: the JVM catches the SIGSEGV and throws the exception, until nulls there turn out common and the JIT recompiles with an explicit test. What you lose vs C is arithmetic and control; what you keep is the concept: a managed address.',
           why: [
             'True only for C. Java forbids arithmetic on references, which is part of what makes them safe and lets the runtime track every object.',
             'True only for Java. C needs an explicit * or -> to dereference a pointer; Java applies the dereference automatically on field access.',
-            'Right: both can hold null, and using one fails loudly. Java throws NullPointerException from a runtime check; C faults in the MMU and raises SIGSEGV.',
+            'Right: both can hold null, and using one fails loudly. Java throws NullPointerException, sometimes by catching the same SIGSEGV that C leaves fatal; C faults in the MMU and the process dies.',
             'True only for C. A compacting JVM collector may move objects and rewrite references, which it can do because references are managed addresses.',
           ],
           kcs: ['t1.pointers', 't1.memory-errors'],

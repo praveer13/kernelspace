@@ -85,7 +85,7 @@ In the diagram `hits` drops to R while `a` and `b` are alive and gets O back aft
 | Checked by | When it shows | A conflicting pair |
 |---|---|---|
 | The compiler, per path and line | before the program runs | E0502: `&` then a write |
-| A guard counter inside RefCell | on that line, at run time | panic: BorrowMutError |
+| A guard counter inside RefCell | on that line, at run time | panic: RefCell already borrowed |
 | A lock inside Mutex | on that line, across threads | the second thread waits |
 
 Here is the same shape as the Vec above, with the Vec inside a RefCell.
@@ -113,7 +113,7 @@ for (String entry : log) {
 **Align 1. In Java, adding to a list while iterating over it throws ConcurrentModificationException when the loop runs. In this Rust version, which keeps the Vec inside a RefCell, what happens and when?**
 
 - (o1) The compiler rejects line 5 with E0502, because seen still holds a Ref guard on the log cell
-- (o2) It compiles, then panics on line 5 with BorrowMutError because a Ref guard is still alive
+- (o2) It compiles, then panics on line 5 with "RefCell already borrowed" for the live guard
 - (o3) It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still in use
 - (o4) It compiles, then panics on line 4 because borrow() needs the cell to be empty first
 
@@ -126,9 +126,9 @@ In the diagram no line is marked rejected. Every use of `log` finds the R it nee
 | After line | Live guards | What the cell counts | What happens next |
 |---|---|---|---|
 | 4 | `seen` | 1 reader | `borrow_mut` needs 0 readers |
-| 5 | none new | 1 reader | panic: BorrowMutError |
+| 5 | none new | 1 reader | panic: RefCell already borrowed |
 
-The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors#BorrowMutError) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
+The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The panic message is "RefCell already borrowed". `BorrowMutError` is a real type: it is the error `try_borrow_mut` returns instead of panicking. The [Error Museum](/errors#BorrowMutError) keeps this one beside the compile-time codes, with the wrong fix that tempts people and the right one.
 
 ## Make the guard shorter
 
@@ -155,9 +155,9 @@ println!("{count} {}", log.borrow().len());
 
 ---
 
-## Mutex: the same rule across threads
+## Mutex and RwLock: the rule across threads
 
-**Mutex<T>** applies the rule between threads. `lock` also takes `&self`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The `MutexGuard` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.
+**Mutex<T>** is the thread-safe cousin of RefCell, with one simplification: it never shares. `lock` also takes `&self`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The exact cross-thread counterpart of RefCell is **RwLock<T>**: `read` admits many readers and `write` admits one writer and no readers. Mutex is the simpler case, exclusive for readers too. The `MutexGuard` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.
 
 ---
 
@@ -191,7 +191,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 **Q2. A Ref guard from log.borrow() is still alive when log.borrow_mut() runs. Which statement is true?**
 
 - (o1) borrow_mut returns an Err value and the program carries on without the write
-- (o2) The cell counts one live reader at run time, so it panics with BorrowMutError
+- (o2) The cell counts a live reader, so it panics with "RefCell already borrowed"
 - (o3) borrow_mut waits until the guard is dropped, the way a Mutex lock would behave
 - (o4) The compiler reports E0502 on that line, since the guard took W and O away from log
 

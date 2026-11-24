@@ -221,17 +221,26 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `This is the T2 spiral checkpoint (the track's exam), and it is not a test of memory — it is a test of *translation*. You are going to read the paper that kicked off modern LLM serving, **"Efficient Memory Management for Large Language Model Serving with PagedAttention"** (Kwon et al., SOSP 2023), the way a systems engineer reads it: every section mapped to an OS primitive you learned in this track. You will not need any ML background beyond one idea (the KV cache), which the paper itself introduces and which T5 will dissect fully.
+      md: `This is the T2 spiral checkpoint (the track's exam), and it is not a test of memory — it is a test of *translation*. You are going to read the paper that kicked off modern LLM serving, ["Efficient Memory Management for Large Language Model Serving with PagedAttention"](https://arxiv.org/abs/2309.06180) (Kwon et al., SOSP 2023), the way a systems engineer reads it: every section mapped to an OS primitive you learned in this track. You will not need any ML background beyond one idea (the KV cache), which the paper itself introduces and which T5 will dissect fully.
 
 The checkpoint rule: eight items, **six right**, with at least one written or computed answer among them. Four items are about this lesson; four come back to earlier T0–T2 ideas, because a translation only works if the original is still in your head. Nothing locks: a miss offers fresh numbers, or you can carry on and return. Take the guided read seriously and the items will feel like a formality.`,
+    },
+    {
+      type: 'field-note',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention',
+      source: 'Kwon et al.',
+      href: 'https://arxiv.org/abs/2309.06180',
+      published: "SOSP '23",
+      verified: '2026-11',
+      md: `The guided read below follows the paper in its own order: §1–3 (the problem and the allocator autopsy), §4 (PagedAttention and the block table), §4.5 (scheduling), and §5–6 (the kernel and the measured numbers). Read each section alongside the mapping in this lesson, and leave the attention equations for a second pass.`,
     },
     {
       type: 'prose',
       md: `## §1–3: The problem, in OS vocabulary
 
-The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, pre-allocated for the maximum possible length**.
+The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, reserved up front**: for the maximum possible length, or, in the paper's best-case Orca variant, for each request's true output length.
 
-You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). The paper measures **60–80% of KV memory wasted** in these systems. Their phrase is different, but the diagnosis is a T1.L4 fragmentation report.`,
+You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). In the paper's Figure 2, only **${USED_LOW}% to ${USED_HIGH}% of KV memory held token states** in the Orca runs it measures (Orca (Max) at the low end, Orca (Oracle) at the high end), so the rest was reserved or stranded (§1). Their phrase is different, but the diagnosis is a T1.L4 fragmentation report.`,
     },
     {
       type: 'callout',
@@ -316,7 +325,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
 
 Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — T5.L7 goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
 
-On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. (That is the 2023 paper's menu: vLLM V1 later kept only recomputation.) Admission is FCFS; preemption is last-in-first-out among the running set. It is a timesharing system: the GPU is the CPU, the iteration is the quantum, and HBM is the RAM.`,
+On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. (That is the 2023 paper's menu: vLLM V1 later kept only recomputation.) Admission is FCFS; preemption is last-in-first-out among the running set. It is a scheduler at step granularity: the GPU is the CPU, the decode step is the scheduling boundary (not a quantum: nothing is time-sliced), and HBM is the RAM.`,
     },
     {
       type: 'callout',
@@ -340,7 +349,7 @@ Also note §4.6's distributed bits: for models spanning GPUs, one KV cache manag
       type: 'prose',
       md: `## Checkpoint briefing
 
-You are ready for the checkpoint when you can answer, without notes: Which wastes do §1 and §3.1 find in earlier systems, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
+You are ready for the checkpoint when you can answer, without notes: Which wastes do §1 and §3.1 find in earlier systems, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why is the block-table indirection worth its cost? The checkpoint draws on the questions below, a written answer, and four items from earlier lessons, and it needs six of eight with a written or computed answer among them. Then T3: Rust — the language the next generation of this stack is written in.`,
     },
     {
       type: 'quiz',
@@ -357,7 +366,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           explanation:
             'Section 1: earlier systems "suffer from internal and external memory fragmentation" and "cannot exploit the opportunities for memory sharing". Slots over-provisioned for the maximum length are internal fragmentation; gaps between variable-size chunks are external; prompts re-copied for parallel samples are the duplication that block sharing removes. §3.1 takes the allocator apart and also counts slots reserved for tokens not generated yet.',
           why: [
-            'Misconception: the waste is leaked memory. The 60–80% is memory that is reserved or stranded, not lost: sequences free their KV on completion, and nothing here is a race or deadlock.',
+            'Misconception: the waste is leaked memory. The memory that held no token states was reserved or stranded, not lost: sequences free their KV on completion, and nothing here is a race or deadlock.',
             'Right: slots reserved for worst-case length but unused are internal fragmentation, gaps between variable-size segments are external, and re-copied shared prompts are duplication.',
             'Misconception: the waste is runtime pathology. Thrashing, false sharing and TLB misses are performance effects of access patterns; the paper measures allocation waste in how KV cache is laid out.',
             'Misconception: memory-safety bugs. Overflows and double frees are correctness defects; the paper diagnoses well-behaved allocators that simply waste space through reservation and layout.',
@@ -395,7 +404,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           ],
           correct: [1],
           explanation:
-            'Shared blocks are read-only across branches; when one branch generates into a shared block, the manager copies it (COW) and decrements the source refcount. The paper\'s Figure 4 is the fork() diagram.',
+            'Shared blocks are read-only across branches; when one branch generates into a shared block, the manager copies it (COW) and decrements the source refcount. The paper\'s Figure 8 ("Parallel sampling example") is the fork() diagram; Figure 4 is the system overview.',
           why: [
             'Misconception: mirroring. RAID duplicates everything for fault tolerance, which is the duplication waste PagedAttention removes; branches share blocks until they diverge.',
             'Right: branches reference the same physical prompt blocks with a refcount. When one generates into a shared block, the manager copies just that block, as fork() COW copies a page.',
@@ -406,7 +415,7 @@ You are ready for the checkpoint when you can answer, without notes: Which waste
           miss: ['t2.sharing-is-mirroring', '', 't2.sharing-is-readonly', 't2.sharing-is-serialised-appends'],
         },
         {
-          q: 'The swap-vs-recompute preemption debate in §4 mirrors the OS choice between…',
+          q: 'The swap-vs-recompute preemption debate in §4.5 mirrors the OS choice between…',
           options: [
             'Eager versus lazy page allocation, reserving the frames at process start against faulting each page in on its first touch',
             'Swapping anonymous pages to disk versus dropping clean file-backed pages for a later re-read, trading bandwidth against recompute',

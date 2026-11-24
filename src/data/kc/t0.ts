@@ -122,7 +122,7 @@ export const T0_KCS: readonly Kc[] = [
   {
     id: 't0.wait-bars',
     title: 'Wait bars and stragglers',
-    can: 'You can tell a wide wait bar from slow work, and find the thread or rank everyone else is waiting on.',
+    can: 'You can read wait bars in a wall-clock profile (CPU profiles hide parked threads) and find the straggler.',
     track: 't0',
     kind: 'skill',
     lessons: ['t0.l6'],
