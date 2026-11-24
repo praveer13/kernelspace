@@ -28,17 +28,17 @@ A point is **dominated** if some other point has more of both axes, so it can ne
       md: `## The dial that moves you along the curve (and the ones that move the curve)
 
 **Along the frontier** (efficiency unchanged, tradeoff chosen):
-- **Batch size / concurrency** — the master dial (T7.L1's seesaw).
+- **Batch size / concurrency** — the master dial ([[l:t7.l1]]'s seesaw).
 
 **Changing the workload** is not a move along one curve: InferenceX publishes a separate frontier for each input/output length, so long prompts versus chat streams means reading a different curve, not sliding further along this one.
 
 **Moving the frontier itself** (genuine progress — more of both):
-- **Quantization** (T6.L5): FP8→NVFP4 moves ~1.8× fewer bytes (4.5 bits per weight with block scales), not 2× — the whole curve shifts out.
-- **Speculative decoding** (T6.L6): shifts the *interactivity end* (up to 2–3× on DeepSeek-R1 in SemiAnalysis's InferenceX runs), barely touches the throughput end.
-- **Disaggregation** (T6.L3): shifts the middle — better ITL at given throughput via phase isolation.
-- **Better kernels and hardware** (T4, T6.L5): the boring, reliable shifter.
+- **Quantization** ([[l:t6.l5]]): FP8→NVFP4 moves ~1.8× fewer bytes (4.5 bits per weight with block scales), not 2× — the whole curve shifts out.
+- **Speculative decoding** ([[l:t6.l6]]): shifts the *interactivity end* (up to 2–3× on DeepSeek-R1 in SemiAnalysis's InferenceX runs), barely touches the throughput end.
+- **Disaggregation** ([[l:t6.l3]]): shifts the middle — better ITL at given throughput via phase isolation.
+- **Better kernels and hardware** (T4, [[l:t6.l5]]): the boring, reliable shifter.
 
-When a vendor shows you a point, ask: which dial did they turn? If the answer is batch size, the frontier didn't move. If it's MTP/FP4/disaggregation, it did — for that region. Frontier literacy is how you read InferenceX (T7.L2) in ten seconds: their dashboard plots exactly these two axes, per engine, per GPU.`,
+When a vendor shows you a point, ask: which dial did they turn? If the answer is batch size, the frontier didn't move. If it's MTP/FP4/disaggregation, it did — for that region. Frontier literacy is how you read InferenceX ([[l:t7.l2]]) in ten seconds: their dashboard plots exactly these two axes, per engine, per GPU.`,
     },
     {
       type: 'diagram',
@@ -65,7 +65,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
     {
       type: 'callout',
       variant: 'analogy',
-      md: `This is your **thread-pool sizing chart drawn honestly for once**: throughput vs latency, one curve, pick a point. The difference from your web service: the curve's *shape* is physics (bandwidth vs compute, T4.L3), so it shifts only when bytes or bandwidth change — which is why the "move the frontier" list is exactly four items long and every T6 lesson is on it.`,
+      md: `This is your **thread-pool sizing chart drawn honestly for once**: throughput vs latency, one curve, pick a point. The difference from your web service: the curve's *shape* is physics (bandwidth vs compute, [[l:t4.l3]]), so it shifts only when bytes or bandwidth change — which is why the "move the frontier" list is exactly four items long and every T6 lesson is on it.`,
     },
     {
       type: 'item',

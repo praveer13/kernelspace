@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "literal": "T2.L4",
+    "reason": "a heading line: its text becomes the anchor and the command palette row, so it stays literal until the structure release decides whether anchors move"
+  }
+]

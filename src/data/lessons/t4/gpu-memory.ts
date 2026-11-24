@@ -77,7 +77,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `T0 gave you the CPU ladder: registers → L1 → L2 → L3 → DRAM, with ~0.5 ns at the top and ~100 ns at the bottom. The GPU has the same ladder — **steeper at every step**. More compute to feed, more bandwidth needed, more explicit programmer control. The deep difference from CPUs: the fastest tier you actually *manage* — **shared memory** — is a programmer-addressable scratchpad, not a hardware-managed cache. GPU performance work is, in large part, the art of staging data through that scratchpad by hand.
 
-This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it.`,
+This lesson is the map. [[l:t4.l3]] (roofline) prices it; [[l:t4.l6]] (tiling) weaponizes it.`,
     },
     {
       type: 'statline',
@@ -96,7 +96,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
 
 **Shared memory / SRAM** (~228 KiB per SM on H100, configurable split with L1): the signature GPU feature. A block of threads (up to 1024) shares this scratchpad *explicitly*: the kernel loads a tile from HBM into shared memory, synchronizes the block, then computes from SRAM at several times HBM's bandwidth. The FlashAttention paper puts an A100's SRAM at about 19 TB/s against 1.5–2.0 TB/s of HBM, an order of magnitude. NVIDIA publishes no per-SM figure for the H100, so this course's simulator assumes 20 TB/s, about 6× the H100's HBM: a teaching constant, not a measurement. Every fast kernel you've heard of — tiled matmul, FlashAttention — is a choreography of this staging.
 
-**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM. At ~50 MiB it holds none of a 16 GB weight stream between decode steps and little of a serving KV cache, so it earns its keep inside one kernel, where tiles that neighbouring blocks share (T4.L6's launch order) are read from HBM once.
+**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM. At ~50 MiB it holds none of a 16 GB weight stream between decode steps and little of a serving KV cache, so it earns its keep inside one kernel, where tiles that neighbouring blocks share ([[l:t4.l6]]'s launch order) are read from HBM once.
 
 **HBM** (80 GB at 3.35 TB/s on H100): stacked DRAM sitting on the same package as the die — 5× the bandwidth of server DDR, at datacenter prices. This is where a 70B model's weights (140 GB in FP16 → 2 GPUs) and every sequence's KV cache live. When T5 says "the KV cache dominates HBM," this is the number being dominated.`,
     },
@@ -153,7 +153,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       type: 'prose',
       md: `## Why capacity is the serving bottleneck
 
-One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × kv_width × bytes\` per token. Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.5 MiB per token in FP16** — a 4k-token conversation eats ~10 GiB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KiB per token** (T5.L4); the bottleneck is the same, only the headcount of conversations moves. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
+One arithmetic preview of T5 (full math in [[l:t5.l4]]). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × kv_width × bytes\` per token. Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.5 MiB per token in FP16** — a 4k-token conversation eats ~10 GiB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KiB per token** ([[l:t5.l4]]); the bottleneck is the same, only the headcount of conversations moves. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
     },
     {
       type: 'exercise',

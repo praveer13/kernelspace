@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { ContentBlock, LessonHeading } from '@/data/lessons/types'
+import { LESSON_TOKEN_SOURCE, lessonCodeIn, lessonTokensIn, type LabelledLesson } from '@/lib/lesson-label'
 
 export function slugify(text: string): string {
   return text
@@ -33,18 +34,34 @@ export function extractHeadings(blocks: ContentBlock[]): LessonHeading[] {
   return out
 }
 
-const INLINE_RE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\n]+\*)|(\[[^\]]+\]\([^)\s]+\))/g
+const INLINE_RE = new RegExp(`(${LESSON_TOKEN_SOURCE})|(\`[^\`]+\`)|(\\*\\*[^*]+\\*\\*)|(\\*[^*\\n]+\\*)|(\\[[^\\]]+\\]\\([^)\\s]+\\))`, 'g')
 
-export function renderInline(text: string): ReactNode[] {
+/** Bold or emphasis text: recurse only when it holds a token, so today's plain runs render exactly as before. */
+const inlineInner = (text: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): ReactNode =>
+  lessonTokensIn(text).length > 0 ? renderInline(text, order) : text
+
+export function renderInline(text: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): ReactNode[] {
   const out: ReactNode[] = []
   let last = 0
   let key = 0
   let m: RegExpExecArray | null
-  INLINE_RE.lastIndex = 0
-  while ((m = INLINE_RE.exec(text)) !== null) {
+  // a local copy, so a bold or emphasis run can renderInline its own text without clobbering this loop
+  const re = new RegExp(INLINE_RE.source, 'g')
+  while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index))
-    const [tok, code, bold, em, link] = m
-    if (code) {
+    const [tok, token, code, bold, em, link] = m
+    if (token) {
+      const id = token.slice('[[l:'.length, -']]'.length)
+      out.push(
+        <Link
+          key={key++}
+          to={`/lesson/${id}`}
+          className="text-info underline decoration-info/40 underline-offset-2 transition-colors duration-150 hover:decoration-info"
+        >
+          {lessonCodeIn(id, order)}
+        </Link>,
+      )
+    } else if (code) {
       out.push(
         <code
           key={key++}
@@ -56,13 +73,13 @@ export function renderInline(text: string): ReactNode[] {
     } else if (bold) {
       out.push(
         <strong key={key++} className="font-semibold text-text-1">
-          {bold.slice(2, -2)}
+          {inlineInner(bold.slice(2, -2), order)}
         </strong>,
       )
     } else if (em) {
       out.push(
         <em key={key++} className="text-text-1">
-          {em.slice(1, -1)}
+          {inlineInner(em.slice(1, -1), order)}
         </em>,
       )
     } else if (link) {

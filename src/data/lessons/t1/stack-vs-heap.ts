@@ -205,7 +205,7 @@ The stack/heap split also explains three errors every C programmer meets:
       type: 'callout',
       variant: 'segfault',
       title: 'COMMON MISCONCEPTION',
-      md: `"Stack allocation is fast because the stack is special hardware." No — it's the same DRAM. It's fast because the allocator is one instruction and the top of stack is already in L1 cache. The speed comes from the *discipline* (LIFO), not the silicon. Any allocator that can guarantee LIFO gets the same speed — see arena allocators, T1.L3.`,
+      md: `"Stack allocation is fast because the stack is special hardware." No — it's the same DRAM. It's fast because the allocator is one instruction and the top of stack is already in L1 cache. The speed comes from the *discipline* (LIFO), not the silicon. Any allocator that can guarantee LIFO gets the same speed — see arena allocators, [[l:t1.l3]].`,
     },
     {
       type: 'prose',

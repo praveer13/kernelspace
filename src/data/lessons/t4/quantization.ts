@@ -222,7 +222,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `T4.L3 proved decode is bandwidth-bound: tokens/s is gated by *bytes moved per token*. If each weight is 2 bytes instead of 4, you double the rate — no algorithm changes, no approximations to the *architecture*, just fewer bytes per number. That is why **quantization** is not an exotic compression hobby but the single most deployed optimization in production inference: it multiplies effective bandwidth *and* doubles (quadruples) how much model fits in HBM at once.
+      md: `[[l:t4.l3]] proved decode is bandwidth-bound: tokens/s is gated by *bytes moved per token*. If each weight is 2 bytes instead of 4, you double the rate — no algorithm changes, no approximations to the *architecture*, just fewer bytes per number. That is why **quantization** is not an exotic compression hobby but the single most deployed optimization in production inference: it multiplies effective bandwidth *and* doubles (quadruples) how much model fits in HBM at once.
 
 This lesson is the numbers themselves: how floating point encodes values, what each format keeps and sacrifices, how weight quantization actually works (scales, groups, calibration), and where the quality cliffs are. In the exercise you will type floats and watch their bits bend.`,
     },
@@ -283,7 +283,7 @@ Three schemes dominate, and you should know them by their trade-offs:
 
 - **Weight-only, per-group (GPTQ / AWQ, INT4/INT8)**: weights stored at 4 bits with a scale per group of ~128; activations stay FP16/BF16. At inference, weights are *dequantized on the fly* inside the kernel. Result: **4× fewer HBM bytes for weights** — nearly 4× the decode rate and 4× the model capacity — at ~1% quality cost with good calibration. This is the default way open models ship (the "-GPTQ" / "-AWQ" tags on model hubs).
 - **Full FP8 (weights + activations)**: H100's transformer engine does FP8 matmuls at 2× FP16 tensor-core throughput *and* half the bytes — the rare case where quantization speeds up the *compute-bound* side too. Needs careful per-tensor scaling to avoid overflow, hence "FP8 with scaling factors" in every serious stack.
-- **KV-cache quantization (FP8/INT8 KV)**: quantize the *cache*, not the model. Decode reads the entire KV cache per token (T5.L4), so FP8 KV halves those bytes too — and doubles how many tokens fit in HBM. vLLM/SGLang/TRT-LLM all ship it; quality cost is small at 8 bits, noticeable at 4.`,
+- **KV-cache quantization (FP8/INT8 KV)**: quantize the *cache*, not the model. Decode reads the entire KV cache per token ([[l:t5.l4]]), so FP8 KV halves those bytes too — and doubles how many tokens fit in HBM. vLLM/SGLang/TRT-LLM all ship it; quality cost is small at 8 bits, noticeable at 4.`,
     },
     {
       type: 'statline',

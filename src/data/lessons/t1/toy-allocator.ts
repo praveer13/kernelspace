@@ -244,7 +244,7 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
     {
       type: 'callout',
       variant: 'analogy',
-      md: `You have met these policies before, disguised. A **JVM's** copying GC sidesteps the free list entirely by compacting (lesson T0.L5) — allocation stays a pointer bump because reclamation re-creates one huge free range. A **database buffer pool** is segregated fit taken to the extreme: every "block" is exactly one page (8 KiB), so fit-search is O(1) and external fragmentation is *impossible*. Hold that thought — it is the entire PagedAttention trick.`,
+      md: `You have met these policies before, disguised. A **JVM's** copying GC sidesteps the free list entirely by compacting (lesson [[l:t0.l5]]) — allocation stays a pointer bump because reclamation re-creates one huge free range. A **database buffer pool** is segregated fit taken to the extreme: every "block" is exactly one page (8 KiB), so fit-search is O(1) and external fragmentation is *impossible*. Hold that thought — it is the entire PagedAttention trick.`,
     },
     {
       type: 'isomorphism',

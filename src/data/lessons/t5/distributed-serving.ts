@@ -74,7 +74,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `One GPU is never enough — for capacity (T5.L4's 70B arithmetic), for throughput, or for latency isolation. The moment serving spans devices, you inherit a full distributed-systems problem: how to split the model, how to move the bytes, and how to keep tail latency alive across a network. This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the idea that became the default architecture of 2025–26), and Mooncake-style distributed KV caches. T3.L6's Dynamo case study slots in as the production implementation. (The 2026 state of the art on this exact topic — EPD, NIXL, llm-d, and the deprecation of Dynamo's KVBM — is T6.L3.)`,
+      md: `One GPU is never enough — for capacity ([[l:t5.l4]]'s 70B arithmetic), for throughput, or for latency isolation. The moment serving spans devices, you inherit a full distributed-systems problem: how to split the model, how to move the bytes, and how to keep tail latency alive across a network. This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the idea that became the default architecture of 2025–26), and Mooncake-style distributed KV caches. [[l:t3.l6]]'s Dynamo case study slots in as the production implementation. (The 2026 state of the art on this exact topic — EPD, NIXL, llm-d, and the deprecation of Dynamo's KVBM — is [[l:t6.l3]].)`,
     },
     {
       type: 'prose',
@@ -99,9 +99,9 @@ Production serving mixes all three: TP within the node, PP across a few nodes fo
       type: 'prose',
       md: `## Disaggregation: prefill and decode break up
 
-The clean idea from Splitwise/DistServe/Mooncake (2024): prefill and decode have *opposite* roofline regimes (T4.L3) and *opposite* hardware and batching preferences — so why force them onto the same GPUs? **Disaggregate**: dedicated **prefill workers** (big batches of prompts, compute-saturated) and dedicated **decode workers** (huge KV-resident batches, bandwidth-saturated). When prefill finishes a prompt, its KV cache is **transferred** to a decode worker over RDMA (NVLink within a node), and the decode worker admits it into its continuous batch.
+The clean idea from Splitwise/DistServe/Mooncake (2024): prefill and decode have *opposite* roofline regimes ([[l:t4.l3]]) and *opposite* hardware and batching preferences — so why force them onto the same GPUs? **Disaggregate**: dedicated **prefill workers** (big batches of prompts, compute-saturated) and dedicated **decode workers** (huge KV-resident batches, bandwidth-saturated). When prefill finishes a prompt, its KV cache is **transferred** to a decode worker over RDMA (NVLink within a node), and the decode worker admits it into its continuous batch.
 
-The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SKUs), its own batching policy, and its own scaling curve — and ITL is finally isolated from prompt-length spikes (no more 100k-token prefill convoying everyone's decode, even with chunking). The cost: the **KV transfer** — a 4k-context KV for our 70B (T5.L4's 320 KiB per token × 4,096 tokens = 1.34 GB) moved over a 50 GB/s RDMA link adds 26.8 ms to TTFT. The entire engineering game of Dynamo/Mooncake is hiding that transfer: schedule it early, overlap it with prefill of later chunks, route around it with prefix-cache-aware placement.`,
+The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SKUs), its own batching policy, and its own scaling curve — and ITL is finally isolated from prompt-length spikes (no more 100k-token prefill convoying everyone's decode, even with chunking). The cost: the **KV transfer** — a 4k-context KV for our 70B ([[l:t5.l4]]'s 320 KiB per token × 4,096 tokens = 1.34 GB) moved over a 50 GB/s RDMA link adds 26.8 ms to TTFT. The entire engineering game of Dynamo/Mooncake is hiding that transfer: schedule it early, overlap it with prefill of later chunks, route around it with prefix-cache-aware placement.`,
     },
     {
       type: 'isomorphism',
@@ -146,9 +146,9 @@ The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SK
       type: 'prose',
       md: `## Mooncake: the KV cache becomes a distributed store
 
-Moonshot AI's Mooncake (2024, production at Kimi scale) pushes the idea one level further: the KV cache is not per-worker state — it's a **distributed object store** spanning the cluster's GPU HBM *and* CPU DRAM. A central scheduler places requests to maximize **prefix-cache reuse across the whole cluster** (route to whoever holds the most of your prefix — KV-aware routing, T3.L6), prefill fills blocks into the shared pool, decode workers *pull* blocks over RDMA as needed. The design is explicitly a storage system: cache tiers (HBM hot, DRAM warm), transfer scheduling, eviction — T2's memory hierarchy running across a datacenter.
+Moonshot AI's Mooncake (2024, production at Kimi scale) pushes the idea one level further: the KV cache is not per-worker state — it's a **distributed object store** spanning the cluster's GPU HBM *and* CPU DRAM. A central scheduler places requests to maximize **prefix-cache reuse across the whole cluster** (route to whoever holds the most of your prefix — KV-aware routing, [[l:t3.l6]]), prefill fills blocks into the shared pool, decode workers *pull* blocks over RDMA as needed. The design is explicitly a storage system: cache tiers (HBM hot, DRAM warm), transfer scheduling, eviction — T2's memory hierarchy running across a datacenter.
 
-This is the end-state of the course's thesis: the KV cache is the payload (T5.L4), so the mature architecture is a **database cluster for KV blocks** — placement, replication, eviction, transfer scheduling — with GPU workers as its query engines. The 50-year-old ideas, reincarnated one final time: page tables (T5.L5), swap (T2.L3), schedulers (T5.L7), now distributed storage and caching. T5.L10 reads the four production stacks that run it; T6 adds mixture-of-experts and expert parallelism, and T7 prices it.`,
+This is the end-state of the course's thesis: the KV cache is the payload ([[l:t5.l4]]), so the mature architecture is a **database cluster for KV blocks** — placement, replication, eviction, transfer scheduling — with GPU workers as its query engines. The 50-year-old ideas, reincarnated one final time: page tables ([[l:t5.l5]]), swap ([[l:t2.l3]]), schedulers ([[l:t5.l7]]), now distributed storage and caching. [[l:t5.l10]] reads the four production stacks that run it; T6 adds mixture-of-experts and expert parallelism, and T7 prices it.`,
     },
     {
       type: 'callout',
@@ -164,7 +164,7 @@ This is the end-state of the course's thesis: the KV cache is the payload (T5.L4
       type: 'prose',
       md: `## Checkpoint
 
-You should now be able to whiteboard a full deployment: model size → TP/PP split (priced by NVLink vs RDMA), traffic shape → disaggregation decision, KV pool sizing (T5.L4) → fleet count, transfer budget → TTFT impact. The final lesson of T5 puts it all together: the four production stacks, compared.`,
+You should now be able to whiteboard a full deployment: model size → TP/PP split (priced by NVLink vs RDMA), traffic shape → disaggregation decision, KV pool sizing ([[l:t5.l4]]) → fleet count, transfer budget → TTFT impact. The final lesson of T5 puts it all together: the four production stacks, compared.`,
     },
     {
       type: 'quiz',

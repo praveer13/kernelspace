@@ -240,7 +240,7 @@ The checkpoint rule: eight items, **six right**, with at least one written or co
 
 The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly with sequence length and is *enormous*: for a 13B model, a single 2k-token sequence's cache is ~1.6 GiB. Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, reserved up front**: for the maximum possible length, or, in the paper's best-case Orca variant, for each request's true output length.
 
-You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). In the paper's Figure 2, only **${USED_LOW}% to ${USED_HIGH}% of KV memory held token states** in the Orca runs it measures (Orca (Max) at the low end, Orca (Oracle) at the high end), so the rest was reserved or stranded (§1). Their phrase is different, but the diagnosis is a T1.L4 fragmentation report.`,
+You already know this bug — you built it in T1. Contiguous, worst-case, per-client reservation produces: **internal fragmentation** (a 300-token generation reserving space for 4096 tokens wastes 93% of the reservation), **external fragmentation** (variable-size segments that can't be reused across sequences), and **duplication** (parallel samples / beam search re-copying the shared prompt). In the paper's Figure 2, only **${USED_LOW}% to ${USED_HIGH}% of KV memory held token states** in the Orca runs it measures (Orca (Max) at the low end, Orca (Oracle) at the high end), so the rest was reserved or stranded (§1). Their phrase is different, but the diagnosis is a [[l:t1.l4]] fragmentation report.`,
     },
     {
       type: 'callout',
@@ -253,12 +253,12 @@ You already know this bug — you built it in T1. Contiguous, worst-case, per-cl
 
 The fix, §4.1: partition each sequence's KV cache into **blocks** of a fixed number of tokens (${PAPER_BLOCK} in the paper). Blocks live anywhere in GPU memory; each sequence keeps a **block table** mapping its logical blocks to physical blocks; the attention kernel reads keys/values *through* the block table.
 
-Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; the block table is a **page table** (one level, since sequences are small); the attention kernel walking it is the **MMU** doing translation. Every property follows for free, exactly as in 1962:
+Now translate with [[l:t2.l2]]: blocks are **pages**; physical blocks are **frames**; the block table is a **page table** (one level, since sequences are small); the attention kernel walking it is the **MMU** doing translation. Every property follows for free, exactly as in 1962:
 
-- **Fixed-size blocks ⇒ no external fragmentation.** Any free block fits any sequence (T1.L4's fixed-block maneuver).
+- **Fixed-size blocks ⇒ no external fragmentation.** Any free block fits any sequence ([[l:t1.l4]]'s fixed-block maneuver).
 - **Waste is bounded to the tail block**: at most block_size − 1 tokens per sequence (${PAPER_BLOCK - 1} at the paper's ${PAPER_BLOCK}). The paper's own words are **near-zero waste**, against only ${USED_LOW}% to ${USED_HIGH}% of KV memory holding token states in earlier systems — bounded internal fragmentation by construction.
 - **Growth is lazy**: blocks are allocated on demand as tokens generate, like demand paging — no more worst-case reservation.
-- **Sharing is block-granular**: two sequences with a common prefix (the system prompt, parallel samples, beam branches) *share physical blocks*, reference-counted. When one branch writes to a shared block, it is copied — **copy-on-write**, the fork() trick from T2.L2, with the same refcounts.`,
+- **Sharing is block-granular**: two sequences with a common prefix (the system prompt, parallel samples, beam branches) *share physical blocks*, reference-counted. When one branch writes to a shared block, it is copied — **copy-on-write**, the fork() trick from [[l:t2.l2]], with the same refcounts.`,
     },
     {
       type: 'isomorphism',
@@ -323,7 +323,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
       type: 'prose',
       md: `## §4.5: Scheduling — the T2.L4 layer
 
-Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — T5.L7 goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
+Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — [[l:t5.l7]] goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
 
 On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. (That is the 2023 paper's menu: vLLM V1 later kept only recomputation.) Admission is FCFS; preemption is last-in-first-out among the running set. It is a scheduler at step granularity: the GPU is the CPU, the decode step is the scheduling boundary (not a quantum: nothing is time-sliced), and HBM is the RAM.`,
     },
@@ -343,7 +343,7 @@ Also note §4.6's distributed bits: for models spanning GPUs, one KV cache manag
     {
       type: 'deepdive',
       title: 'Why one level of block table, not four?',
-      md: `T2.L2's 4-level radix tree exists because a 48-bit address space is astronomically sparse. A sequence is small (≤ ~1M tokens → ≤ 65k blocks), so a **flat array** block table is tiny (65k × 8 B = 512 KiB worst case) and translation is a single indexed load. Design rule from both worlds: match the table depth to the sparsity of the space. Later systems (e.g. some TGI/TRT-LLM modes) use the same flat scheme; the radix tree returns when the "address space" is a whole cluster's KV pool — see T5.L9 on Mooncake's distributed KV.`,
+      md: `[[l:t2.l2]]'s 4-level radix tree exists because a 48-bit address space is astronomically sparse. A sequence is small (≤ ~1M tokens → ≤ 65k blocks), so a **flat array** block table is tiny (65k × 8 B = 512 KiB worst case) and translation is a single indexed load. Design rule from both worlds: match the table depth to the sparsity of the space. Later systems (e.g. some TGI/TRT-LLM modes) use the same flat scheme; the radix tree returns when the "address space" is a whole cluster's KV pool — see [[l:t5.l9]] on Mooncake's distributed KV.`,
     },
     {
       type: 'prose',

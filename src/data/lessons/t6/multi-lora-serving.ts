@@ -250,7 +250,7 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
     {
       type: 'deepdive',
       title: 'Build the memory half, then secure the control plane',
-      md: `Return to **Forge lab 02** after the original six checks are green. The optional \`adapter_unified_paging\` check asks your manager to place adapter pages and sequence KV in the same finite pool, fail atomically under pressure, and reclaim each lifetime independently. Then read S-LoRA §5 beside Punica §3: paging fixes *where adapter state lives*; SGMV fixes *how different resident adapters execute in one batch*. Continue to T6.L10 for the trust boundaries around adapter loading, tool execution, confidential inference, and shared prefix caches.`,
+      md: `Return to **Forge lab 02** after the original six checks are green. The optional \`adapter_unified_paging\` check asks your manager to place adapter pages and sequence KV in the same finite pool, fail atomically under pressure, and reclaim each lifetime independently. Then read S-LoRA §5 beside Punica §3: paging fixes *where adapter state lives*; SGMV fixes *how different resident adapters execute in one batch*. Continue to [[l:t6.l10]] for the trust boundaries around adapter loading, tool execution, confidential inference, and shared prefix caches.`,
     },
   ],
   kcs: ['t6.lora-adapter-bytes', 't6.multi-lora-batching'],

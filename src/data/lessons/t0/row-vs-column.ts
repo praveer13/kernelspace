@@ -167,13 +167,13 @@ double col_sum(const double *A) {
     {
       type: 'callout',
       variant: 'warning',
-      md: `The transpose trap: "just store it column-major then" is not a free fix. Whatever order you choose, *someone's* access pattern becomes the bad one — a column-major matrix penalizes row walks by the same factor. Pick the layout for your hottest traversal, or **tile** (T4.L6) so both are tolerable. There is no layout that makes every access pattern happy; there are only layouts matched to workloads.`,
+      md: `The transpose trap: "just store it column-major then" is not a free fix. Whatever order you choose, *someone's* access pattern becomes the bad one — a column-major matrix penalizes row walks by the same factor. Pick the layout for your hottest traversal, or **tile** ([[l:t4.l6]]) so both are tolerable. There is no layout that makes every access pattern happy; there are only layouts matched to workloads.`,
     },
     {
       type: 'prose',
       md: `## Why this matters for LLM serving
 
-Hold the thought until T4–T5 and watch it pay off. A transformer's weight matrices are multiplied by activations as **tiled** matrix multiplies precisely because naive walks over GB-scale matrices would be memory-bound suicide. FlashAttention is, at its core, a *loop-reordering* to keep attention tiles resident in SRAM instead of re-reading the N×N score matrix from HBM. And the KV cache in vLLM is built from fixed-size blocks of tokens for another reason: same-sized blocks end external fragmentation (T1.L4). The layout question lives inside each block, whose tokens sit next to each other, so the decode kernel (T5.L5) streams a block as one run and pays a table lookup only from one block to the next; that is one reason blocks are not made tiny. Row vs column looks like a small T0 lesson; its question, which bytes sit next to each other, comes back in T5 inside every KV block.`,
+Hold the thought until T4–T5 and watch it pay off. A transformer's weight matrices are multiplied by activations as **tiled** matrix multiplies precisely because naive walks over GB-scale matrices would be memory-bound suicide. FlashAttention is, at its core, a *loop-reordering* to keep attention tiles resident in SRAM instead of re-reading the N×N score matrix from HBM. And the KV cache in vLLM is built from fixed-size blocks of tokens for another reason: same-sized blocks end external fragmentation ([[l:t1.l4]]). The layout question lives inside each block, whose tokens sit next to each other, so the decode kernel ([[l:t5.l5]]) streams a block as one run and pays a table lookup only from one block to the next; that is one reason blocks are not made tiny. Row vs column looks like a small T0 lesson; its question, which bytes sit next to each other, comes back in T5 inside every KV block.`,
     },
     {
       type: 'exercise',

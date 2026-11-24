@@ -23,11 +23,11 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## Cache locality is the agentic throughput multiplier
 
-RadixAttention (T5.L10's SGLang lesson) was built for exactly this traffic: the KV cache as a radix tree over token prefixes, so turn N inherits turn N−1's cached prefix automatically, with LRU eviction on the tree. On agent loops the **cache-hit rate IS the throughput multiplier** — a 90% hit rate is ~10× less prefill work per turn. Design consequences:
+RadixAttention ([[l:t5.l10]]'s SGLang lesson) was built for exactly this traffic: the KV cache as a radix tree over token prefixes, so turn N inherits turn N−1's cached prefix automatically, with LRU eviction on the tree. On agent loops the **cache-hit rate IS the throughput multiplier** — a 90% hit rate is ~10× less prefill work per turn. Design consequences:
 
 - **Deterministic prompt construction is a feature.** If your framework inserts timestamps into the system prompt, the radix tree misses on turn 2 and the whole economy collapses. Agent frameworks now treat "prefix-stable prompts" as a hard requirement.
-- **Cache-aware routing pays double.** Route the session to the worker holding its tree (T5.L9's KV-aware routing, T6.L3's llm-d/Dynamo implementations) — locality at engine level AND cluster level.
-- **Long agent sessions = the capacity math of T5.L4 with a growing shared prefix.** One session's tree is compact; ten thousand concurrent agents' trees are a real HBM budget. Tree eviction policy is a product decision (evict = recompute cost next turn).`,
+- **Cache-aware routing pays double.** Route the session to the worker holding its tree ([[l:t5.l9]]'s KV-aware routing, [[l:t6.l3]]'s llm-d/Dynamo implementations) — locality at engine level AND cluster level.
+- **Long agent sessions = the capacity math of [[l:t5.l4]] with a growing shared prefix.** One session's tree is compact; ten thousand concurrent agents' trees are a real HBM budget. Tree eviction policy is a product decision (evict = recompute cost next turn).`,
     },
     {
       type: 'item',
@@ -156,7 +156,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
     {
       type: 'deepdive',
       title: 'Make the parser executable',
-      md: `Forge lab 08, **xgrammar-lite**, turns this lesson into a machine: compile a canonical JSON Schema subset, reject invalid output at the first impossible byte, and construct a mask over lab-03-style BPE tokens. Then continue to T6.L9: the next agent-era workload is not a new grammar but many tenant-specific LoRA adapters sharing one base-model batch.`,
+      md: `Forge lab 08, **xgrammar-lite**, turns this lesson into a machine: compile a canonical JSON Schema subset, reject invalid output at the first impossible byte, and construct a mask over lab-03-style BPE tokens. Then continue to [[l:t6.l9]]: the next agent-era workload is not a new grammar but many tenant-specific LoRA adapters sharing one base-model batch.`,
     },
   ],
   kcs: ['t6.agent-prefix-locality', 't6.grammar-masks'],

@@ -49,3 +49,46 @@ export function lessonLabelIn(lesson: LabelledLesson, order: readonly Pick<Label
   const at = inTrack.findIndex((l) => l.id === lesson.id)
   return `${trackCode(entry.trackId)}.L${at + 1}`
 }
+
+/**
+ * A lesson citation in prose: `[[l:t6.l12]]`. The codemod that converts the `T#.L#` literals writes this form; the
+ * renderer prints the label above and links to `/lesson/<id>`, and the markdown export passes the site's base.
+ * The token carries the id, which never changes, so the structure release re-renders every citation from the new order.
+ *
+ * The source pattern has no capture group, for a renderer that adds its own; the two patterns cannot drift.
+ */
+export const LESSON_TOKEN_SOURCE = '\\[\\[l:[a-z0-9]+(?:\\.[a-z0-9]+)+\\]\\]'
+
+/** The token pattern, whose one capture group is the lesson id. */
+export const LESSON_TOKEN_RE = /\[\[l:([a-z0-9]+(?:\.[a-z0-9]+)+)\]\]/g
+
+/** The token form of one lesson citation. */
+export const lessonToken = (id: string): string => `[[l:${id}]]`
+
+/** The label for an id, under an optional explicit order. Track membership is parsed from the id. */
+export function lessonCodeIn(id: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): string {
+  if (!order || !order.some((l) => l.id === id)) return lessonCode(id)
+  const trackId = id.split('.')[0] as TrackId
+  return lessonLabelIn({ id, trackId, index: 0 }, order)
+}
+
+/** Every lesson token in a text, as ids. */
+export function lessonTokensIn(text: string): string[] {
+  const ids: string[] = []
+  for (const m of text.matchAll(new RegExp(LESSON_TOKEN_RE.source, 'g'))) ids.push(m[1])
+  return ids
+}
+
+/** The text with every token replaced by its label (the search index and any plain-text reader). */
+export function replaceLessonTokens(text: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): string {
+  return text.replace(LESSON_TOKEN_RE, (_, id: string) => lessonCodeIn(id, order))
+}
+
+/** The markdown export's form: the label, linked to the lesson. `base` is the link prefix (the site's for an export). */
+export function replaceLessonTokensWithLinks(
+  text: string,
+  order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[],
+  base = '/lesson',
+): string {
+  return text.replace(LESSON_TOKEN_RE, (_, id: string) => `[${lessonCodeIn(id, order)}](${base}/${id})`)
+}

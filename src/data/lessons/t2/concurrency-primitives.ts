@@ -23,7 +23,7 @@ The stakes in serving land are concrete: inference engines are pipeline machines
 
 A mutex guarantees that at most one thread executes the critical section at a time; everyone else **blocks**. The important detail is *how* it blocks. A **spinlock** burns CPU re-checking the flag — perfect when the wait is ~50 ns and preemption would cost microseconds; catastrophic otherwise. An **OS mutex** (futex-based on Linux) does a fast userspace atomic check, and only on contention does it **syscall into the kernel to sleep** — the waiter leaves the runqueue entirely, and the unlocker wakes it. That two-level design (fast path userspace, slow path kernel) is why "mutexes are slow" is usually wrong: uncontended acquisition is a single atomic op, ~20 ns.
 
-The classic failure modes are yours from code review: **deadlock** (circular lock order — the fix is a global lock ordering, always), **lock convoying**, and **priority inversion** (T2.L4). The scalability ceiling has a name too: Amdahl — 5% serialized caps you at 20× no matter how many cores.`,
+The classic failure modes are yours from code review: **deadlock** (circular lock order — the fix is a global lock ordering, always), **lock convoying**, and **priority inversion** ([[l:t2.l4]]). The scalability ceiling has a name too: Amdahl — 5% serialized caps you at 20× no matter how many cores.`,
     },
     {
       type: 'code',
@@ -103,7 +103,7 @@ The fix vocabulary: **Relaxed** (atomic value, no ordering — fine for counters
       type: 'prose',
       md: `## Lock-free queues and the ABA problem
 
-The workhorse of high-performance systems is the lock-free MPMC queue (Vyukov/LMAX Disruptor-style): a ring buffer where producers CAS-claim slots and consumers CAS-advance. No sleeping, no kernel, no convoy — just cache lines (padded! T0.L4) and CAS loops. This is the shape of the queues inside LMAX's exchange, io_uring's submission/completion rings, and the schedulers of inference engines.
+The workhorse of high-performance systems is the lock-free MPMC queue (Vyukov/LMAX Disruptor-style): a ring buffer where producers CAS-claim slots and consumers CAS-advance. No sleeping, no kernel, no convoy — just cache lines (padded! [[l:t0.l4]]) and CAS loops. This is the shape of the queues inside LMAX's exchange, io_uring's submission/completion rings, and the schedulers of inference engines.
 
 Lock-free has its own trap, and it is beautiful: **ABA**. Thread 1 reads pointer \`A\`, prepares a CAS; gets preempted. Thread 2 pops \`A\`, pops \`B\`, pushes \`A\` back (same address — allocators recycle!). Thread 1 resumes: CAS succeeds because the pointer "still" equals \`A\` — but the node's *meaning* changed; the queue is corrupted. The pointer matched; the history didn't.`,
     },

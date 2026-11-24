@@ -90,7 +90,7 @@ One token flowing through one layer (hidden size \`d = 4096\`):
 - **Output projection**: another \`2d²\` ≈ 33.5 MFLOPs.
 - **MLP** (SwiGLU, intermediate ≈ 3.5d): three matmuls ≈ \`3 × 2 × d × 3.5d = 21d²\` ≈ 352 MFLOPs — **the MLP is about 70-80% of the layer's parameters and FLOPs (72% with full MHA, 81% for Llama-3-8B with GQA)**. Attention gets the papers; the MLP eats the budget.
 
-Sum across 32 layers and you land at the famous rule of thumb: **~2 FLOPs per parameter per token** (2 × 8e9 = 16 GFLOPs/token for our 8B model, plus the attention term that grows with t). And the bytes: every weight is read once per token (per sequence, at batch 1) — \`2 × params\` bytes in FP16, 16 GB. You already know from T4.L3 what that means: decode at batch 1 moves 16 GB for 16 GFLOPs — arithmetic intensity ≈ 1, hard against the bandwidth wall.`,
+Sum across 32 layers and you land at the famous rule of thumb: **~2 FLOPs per parameter per token** (2 × 8e9 = 16 GFLOPs/token for our 8B model, plus the attention term that grows with t). And the bytes: every weight is read once per token (per sequence, at batch 1) — \`2 × params\` bytes in FP16, 16 GB. You already know from [[l:t4.l3]] what that means: decode at batch 1 moves 16 GB for 16 GFLOPs — arithmetic intensity ≈ 1, hard against the bandwidth wall.`,
     },
     {
       type: 'statline',
@@ -114,7 +114,7 @@ KV bytes per token = 2 (K and V) × L (layers) × d (hidden) × bytes/elem
                    = 2 × 32 × 4096 × 2 B  =  512 KiB per token   (32 KV heads, no GQA)
 \`\`\`
 
-This worked example is an 8B-class model with full multi-head attention (32 KV heads). A 128k-token context on it: \`512 KiB × 131,072 = 64 GiB\` — *about 4× the 16 GB (≈15 GiB) of weights*. Real Llama-3-8B uses GQA with 8 KV heads and needs 128 KiB per token (T5.L4); GQA is exactly the lever that closes that gap. That single formula is the reason T5 exists. T5.L4 is entirely about it; vLLM exists because of it.`,
+This worked example is an 8B-class model with full multi-head attention (32 KV heads). A 128k-token context on it: \`512 KiB × 131,072 = 64 GiB\` — *about 4× the 16 GB (≈15 GiB) of weights*. Real Llama-3-8B uses GQA with 8 KV heads and needs 128 KiB per token ([[l:t5.l4]]); GQA is exactly the lever that closes that gap. That single formula is the reason T5 exists. [[l:t5.l4]] is entirely about it; vLLM exists because of it.`,
     },
     {
       type: 'diagram',
@@ -169,7 +169,7 @@ This worked example is an 8B-class model with full multi-head attention (32 KV h
       type: 'prose',
       md: `## The terms that will recur, locked in
 
-- **Prefill**: the parallel pass over the prompt that fills the cache initially — compute-bound (T4.L3). Metric: **TTFT** (time to first token).
+- **Prefill**: the parallel pass over the prompt that fills the cache initially — compute-bound ([[l:t4.l3]]). Metric: **TTFT** (time to first token).
 - **Decode**: the autoregressive loop above — bandwidth-bound. Metric: **ITL/TPOT** (inter-token latency) and throughput in tok/s.
 - **Context window**: max \`t\`; every "128k context" claim is a KV-cache capacity claim — 64 GiB for our 8B, before batching.
 - **GQA/MQA**: grouped/multi-query attention shares K/V across query heads (8 KV heads instead of 32), cutting the cache 4× — a *capacity* optimization dressed as an architecture tweak. When a model card says GQA, read: "KV cache ÷ 4."

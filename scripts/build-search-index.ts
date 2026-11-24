@@ -19,6 +19,7 @@ import { PAIRS } from '../src/data/glossary'
 import { KCS } from '../src/data/kc'
 import { PLAYS } from '../src/data/plays'
 import { ALL_LESSONS, lessonById } from '../src/data/lessons'
+import { replaceLessonTokens } from '../src/lib/lesson-label'
 import type { Lesson } from '../src/data/lessons/types'
 import { extractHeadings, slugify } from '../src/pages/lesson/markdown'
 import type { EncodedClaimRow, EncodedKcRow, EncodedSearchIndex, SearchIndex } from '../src/lib/search'
@@ -100,7 +101,12 @@ export function kcAnchor(kcId: string, title: string, can: string, lesson: Lesso
 export function buildSearchIndex(hookMax = HOOK_MAX, canMax = CAN_MAX): SearchIndex {
   return {
     version: 1,
-    lessons: ALL_LESSONS.map((l) => [l.id, l.title, clip(l.hook, hookMax), h2Of(l).map((h) => h.text)]),
+    lessons: ALL_LESSONS.map((l) => [
+      l.id,
+      replaceLessonTokens(l.title),
+      clip(replaceLessonTokens(l.hook), hookMax),
+      h2Of(l).map((h) => replaceLessonTokens(h.text)),
+    ]),
     // A lab-only KC (no lesson) has no page to open, so it is not indexed.
     kcs: KCS.flatMap((k) => {
       const lesson = lessonById(k.lessons[0])

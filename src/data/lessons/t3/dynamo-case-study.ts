@@ -19,17 +19,17 @@ const lesson: Lesson = {
       type: 'prose',
       md: `In March 2025 NVIDIA open-sourced **Dynamo**, its distributed inference serving stack — the layer meant to sit beneath/around engines like TensorRT-LLM, vLLM, and SGLang and coordinate fleets of prefill and decode workers. Buried in the architecture docs is a decision that made systems people sit up: the performance-critical **data plane is written in Rust**, while the orchestration plane stays in Python. Not C++. Not Go. Rust.
 
-This lesson is a case study in *why* — using everything you've learned in T0–T3. By the end you should be able to make (and defend) the same call for your own infrastructure. T5.L10 returns to Dynamo's full architecture; today is about the language decision and the machinery it enables.`,
+This lesson is a case study in *why* — using everything you've learned in T0–T3. By the end you should be able to make (and defend) the same call for your own infrastructure. [[l:t5.l10]] returns to Dynamo's full architecture; today is about the language decision and the machinery it enables.`,
     },
     {
       type: 'prose',
       md: `## What the data plane actually does
 
-Disaggregated serving (T5.L9 gives the full treatment) splits the cluster: **prefill workers** compute the prompt's KV cache; **decode workers** generate tokens. The data plane is the connective tissue between them, and its job description reads like a greatest-hits of this course:
+Disaggregated serving ([[l:t5.l9]] gives the full treatment) splits the cluster: **prefill workers** compute the prompt's KV cache; **decode workers** generate tokens. The data plane is the connective tissue between them, and its job description reads like a greatest-hits of this course:
 
 - **Move KV blocks** between workers — gigabytes per request, over RDMA/NVLink, with tail-latency budgets measured in single-digit milliseconds (a decode worker stalls without its KV).
-- **Route requests KV-aware-ly**: send each new request to the worker that already holds the most of its prefix cache (locality-aware scheduling — T2.L4 with cache state as the priority).
-- **Apply backpressure** when decode workers saturate: queue, shed, or reroute instead of letting latency explode (admission control, T2.L3–L4).
+- **Route requests KV-aware-ly**: send each new request to the worker that already holds the most of its prefix cache (locality-aware scheduling — [[l:t2.l4]] with cache state as the priority).
+- **Apply backpressure** when decode workers saturate: queue, shed, or reroute instead of letting latency explode (admission control, [[l:t2.l3]]–L4).
 - **Stream events** — token streams, worker health, cache announcements — at high fan-out. Requests between components ride plain TCP by default; a message broker such as NATS is an optional backend for event-backed modes, and KV-aware routing does not require it.
 
 Every bullet is a memory-management and concurrency problem where a 10 ms GC pause or a use-after-free is an incident. The planner and the extension points are Python, the Kubernetes operator is written in Go, and the KV bytes move through NIXL, a C++ library that Dynamo's Rust code drives; the request path and the routing logic are Rust.`,
@@ -47,13 +47,13 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
       type: 'prose',
       md: `## Why Rust and not the alternatives — argued properly
 
-**Why not Python for the data plane?** T0.L5 answered: the GIL serializes bytecode, objects are pointer soup, and pauses are unbudgetable. Python remains excellent for the *planner* — decisions per second: hundreds. The data plane needs decisions per second: millions, while moving GB/s. Different physics, different language. (Notice the honest engineering: they didn't rewrite everything — they drew the boundary at the hot path.)
+**Why not Python for the data plane?** [[l:t0.l5]] answered: the GIL serializes bytecode, objects are pointer soup, and pauses are unbudgetable. Python remains excellent for the *planner* — decisions per second: hundreds. The data plane needs decisions per second: millions, while moving GB/s. Different physics, different language. (Notice the honest engineering: they didn't rewrite everything — they drew the boundary at the hot path.)
 
 **Why not C++?** C++ has the speed and the control — it's what the CUDA kernels are written in. What it doesn't have is a safety net for a codebase moving this fast, maintained by a large team, handling untrusted network input. The business case is a measured figure from one large C++ codebase: the Chromium project finds that around ${CHROMIUM_SHARE}% of its high-severity security bugs are memory-unsafety problems (an analysis of ${CHROMIUM_SAMPLE} high or critical bugs since 2015). It is Chromium's count, not a share of all C/C++ CVEs, and it shows how large the class can be in a big, network-facing C++ program. Google's Android team then reports what happens when new code moves to Rust: memory-safety vulnerabilities fell ${ANDROID_SHARE}% of the total for the first time (2025 data). Rust offers the same zero-cost abstractions, RAII, and layout control with the borrow checker as a full-time reviewer.
 
-**Why not Go?** Go was the other serious candidate for systems like this (and plenty of control planes use it). The blockers for *this* path: the GC (sub-millisecond pauses usually — but "usually" under GB/s pressure is a tail-latency gamble), less control over layout (T0.L4's cache-line games matter on this path), and cgo's cost at the CUDA/RDMA boundary. Rust's C ABI interop (T1.L5) is free: call libcuda, libibverbs, NIXL/UCX directly.
+**Why not Go?** Go was the other serious candidate for systems like this (and plenty of control planes use it). The blockers for *this* path: the GC (sub-millisecond pauses usually — but "usually" under GB/s pressure is a tail-latency gamble), less control over layout ([[l:t0.l4]]'s cache-line games matter on this path), and cgo's cost at the CUDA/RDMA boundary. Rust's C ABI interop ([[l:t1.l5]]) is free: call libcuda, libibverbs, NIXL/UCX directly.
 
-**What Rust uniquely enabled:** tokio's async executor for 100k-connection fan-out (T3.L4), zero-copy buffer handling end-to-end (T3.L2's \`Bytes\` discipline), Send/Sync making the concurrency auditable (T3.L3), and fearless refactoring — the underrated one. Infrastructure this young changes weekly; a compiler that catches your invariants lets you move fast *and* sleep.`,
+**What Rust uniquely enabled:** tokio's async executor for 100k-connection fan-out ([[l:t3.l4]]), zero-copy buffer handling end-to-end ([[l:t3.l2]]'s \`Bytes\` discipline), Send/Sync making the concurrency auditable ([[l:t3.l3]]), and fearless refactoring — the underrated one. Infrastructure this young changes weekly; a compiler that catches your invariants lets you move fast *and* sleep.`,
     },
     {
       type: 'isomorphism',
@@ -104,7 +104,7 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
     {
       type: 'callout',
       variant: 'analogy',
-      md: `This architecture should look familiar: it's the **Netty/JVM split** (Java API over a native epoll transport), the **CPython split** (Python over C extension hot loops — numpy, torch), and the **Postgres split** (SQL planner over C executor) — every mature system eventually draws the line at "ergonomics above, bytes below." Dynamo just drew it with Rust for the first time at this scale in AI infra. T5.L10 will show the same pattern in SGLang (Python scheduler + RadixAttention core) and TensorRT-LLM (Python API over C++ runtime).`,
+      md: `This architecture should look familiar: it's the **Netty/JVM split** (Java API over a native epoll transport), the **CPython split** (Python over C extension hot loops — numpy, torch), and the **Postgres split** (SQL planner over C executor) — every mature system eventually draws the line at "ergonomics above, bytes below." Dynamo just drew it with Rust for the first time at this scale in AI infra. [[l:t5.l10]] will show the same pattern in SGLang (Python scheduler + RadixAttention core) and TensorRT-LLM (Python API over C++ runtime).`,
     },
     {
       type: 'prose',
