@@ -492,7 +492,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_allocator.wasm',
     editFile: 'src/allocator.rs',
     readiness: {
-      label: 'readiness · R1–R5',
+      label: 'readiness · R.L1–R.L5',
       lessonIds: ['r.l1', 'r.l2', 'r.l3', 'r.l4', 'r.l5'],
     },
     completion: {
@@ -537,7 +537,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/kv_block_manager.wasm',
     editFile: 'src/manager.rs',
     readiness: {
-      label: 'readiness · R5–R7',
+      label: 'readiness · R.L5–R.L7',
       lessonIds: ['r.l5', 'r.l6', 'r.l7'],
     },
     completion: {
@@ -620,7 +620,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/bpe_tokenizer.wasm',
     editFile: 'src/tokenizer.rs',
     readiness: {
-      label: 'readiness · R5–R6',
+      label: 'readiness · R.L5–R.L6',
       lessonIds: ['r.l5', 'r.l6'],
     },
     completion: {
@@ -695,7 +695,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/mpmc_queue.wasm',
     editFile: 'src/queue.rs',
     readiness: {
-      label: 'required · R10',
+      label: 'required · R.L10',
       lessonIds: ['r.l10'],
       required: true,
     },
@@ -771,7 +771,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/toy_executor.wasm',
     editFile: 'src/executor.rs',
     readiness: {
-      label: 'readiness · R7–R8',
+      label: 'readiness · R.L7–R.L8',
       lessonIds: ['r.l7', 'r.l8'],
     },
     completion: {
@@ -846,7 +846,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/batching_scheduler.wasm',
     editFile: 'src/scheduler.rs',
     readiness: {
-      label: 'readiness · R5–R6',
+      label: 'readiness · R.L5–R.L6',
       lessonIds: ['r.l5', 'r.l6'],
     },
     completion: {
@@ -929,7 +929,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/radix_cache.wasm',
     editFile: 'src/cache.rs',
     readiness: {
-      label: 'readiness · R5–R7 + lab 02',
+      label: 'readiness · R.L5–R.L7 + lab 02',
       lessonIds: ['r.l5', 'r.l6', 'r.l7'],
     },
     completion: {
@@ -1004,7 +1004,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/xgrammar_lite.wasm',
     editFile: 'src/grammar.rs',
     readiness: {
-      label: 'readiness · R5–R6 + lab 03',
+      label: 'readiness · R.L5–R.L6 + lab 03',
       lessonIds: ['r.l5', 'r.l6'],
     },
     completion: {

@@ -25,6 +25,7 @@ import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
 import { LESSON_TITLES, type MuseumEntry, type MuseumFix } from '@/lib/rust/museum'
 import { cn } from '@/lib/utils'
+import { lessonCode } from '@/lib/lesson-label'
 
 const ItemCard = lazy(() => import('@/components/items/ItemCard'))
 
@@ -313,7 +314,7 @@ export default function ErrorEntry({ entry, practice, seed: seedProp }: ErrorEnt
           {entry.lessons.map((id) => (
             <li key={id}>
               <Link to={`/lesson/${id}`} className="inline-flex min-h-11 items-center text-body-sm text-info underline underline-offset-2">
-                {id.toUpperCase().replace('.L', '')} {LESSON_TITLES[id] ?? id}
+                {lessonCode(id)} {LESSON_TITLES[id] ?? id}
               </Link>
             </li>
           ))}

@@ -22,6 +22,7 @@ import { FORGE_LABS, type ForgeLab as ForgeLabDef } from '@/data/labs'
 import { findForgeBundle, hasForgeBundle } from '@/data/forge'
 import type { ForgeBundle } from '@/data/forge/types'
 import { lessonById } from '@/data/lessons'
+import { lessonLabel } from '@/lib/lesson-label'
 import { getTrack } from '@/lib/tracks'
 import { labXp } from '@/lib/economy'
 import { useProgress } from '@/lib/progress'
@@ -534,7 +535,7 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
                 <span key={item.id}>
                   {index > 0 && (index === readinessLessons.length - 1 ? ' and ' : ', ')}
                   <Link to={`/lesson/${item.id}`} className="text-accent underline">
-                    {item.id.replace('.l', '').toUpperCase()} · {item.title}
+                    {lessonLabel(item)} · {item.title}
                   </Link>
                 </span>
               ))}
@@ -577,7 +578,7 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
                   <span className="mr-2 font-mono text-accent">1.</span>
                   Read{' '}
                   <Link to={`/lesson/${lesson.id}`} className="text-accent underline">
-                    {lesson.id.toUpperCase()} · {lesson.title}
+                    {lessonLabel(lesson)} · {lesson.title}
                   </Link>
                   .{' '}
                   {lab.trackId === 'r'

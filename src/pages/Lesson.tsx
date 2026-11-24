@@ -60,6 +60,7 @@ import { resolveAnchor } from '@/pages/lesson/anchor-aliases'
 import { alsoNext } from '@/pages/lesson/also-next'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
+import { lessonPosition } from '@/lib/lesson-label'
 import { FINISH_BAR_SCROLL_PADDING, gradedSurfaceInView, scrollBehavior } from '@/lib/lesson-scroll'
 
 // the ticket, the test-out and the discussion load on demand: a lesson that is read first never pays for them
@@ -1006,7 +1007,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
                 {track.code}
               </Link>
               <ChevronRight size={11} />
-              <span className="text-text-2">L{lesson.index}</span>
+              <span className="text-text-2">{lessonPosition(lesson)}</span>
             </nav>
 
             <h1 className="mt-4 break-words font-display text-h1 text-text-1">{lesson.title}</h1>

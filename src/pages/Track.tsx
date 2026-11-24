@@ -23,6 +23,7 @@ import { selectTrackPct, useProgress } from '@/lib/progress'
 import { getTrack, TRACKS, CAPSTONE } from '@/lib/tracks'
 import { TRACK_EXTRAS, lessonsForTrack, simsForTrack, lessonPath } from '@/data/lessons'
 import type { TrackId } from '@/data/lessons/types'
+import { lessonPosition } from '@/lib/lesson-label'
 import LessonRow from '@/pages/lesson/LessonRow'
 import { NOTIONAL_MACHINES } from '@/data/kc/notional'
 import type { NotionalMachine } from '@/lib/kc/types'
@@ -231,7 +232,7 @@ function TrackView({ trackId }: { trackId: TrackId }) {
                   className="flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97]"
                 >
                   <Play size={15} />
-                  {started ? `Resume · L${resume.index} ${resume.title}` : 'Start track'}
+                  {started ? `Resume · ${lessonPosition(resume)} ${resume.title}` : 'Start track'}
                 </Link>
                 {trackId !== 'r' && (
                   <Link
@@ -348,7 +349,7 @@ function TrackView({ trackId }: { trackId: TrackId }) {
                           to={lessonPath(lesson)}
                           className="text-text-2 underline-offset-2 transition-colors hover:text-accent hover:underline"
                         >
-                          L{lesson.index} · {lesson.slug}
+                          {lessonPosition(lesson)} · {lesson.slug}
                         </Link>
                       </p>
                     </div>

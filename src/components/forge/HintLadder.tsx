@@ -44,6 +44,7 @@ import {
 } from '@/lib/forge/ladder'
 import type { Ctx, LadderAction, LadderState, RungId } from '@/lib/forge/ladder'
 import type { CheckLadder, ForgeBundle, Walkthrough } from '@/data/forge/types'
+import { lessonCode } from '@/lib/lesson-label'
 
 type States = Record<string, LadderState>
 type Act = { check: string; ctx: Ctx; action: LadderAction }
@@ -302,7 +303,7 @@ function CheckCard({ bundle, check, state, ctx, arm, acks, clock, onAck, dispatc
                   <p className="text-body-sm text-text-2">{ladder.r1.text}</p>
                   <p className="mt-1.5 text-body-sm">
                     <Link className="text-accent underline underline-offset-2" to={`/lesson/${ladder.r1.link.lessonId}#${ladder.r1.link.anchor}`}>
-                      Lesson {ladder.r1.link.lessonId.toUpperCase()}: {ladder.r1.link.h2}
+                      Lesson {lessonCode(ladder.r1.link.lessonId)}: {ladder.r1.link.h2}
                     </Link>
                   </p>
                 </>

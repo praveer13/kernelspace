@@ -13,6 +13,7 @@ import { lessonPath } from '@/data/lessons'
 import type { Lesson } from '@/data/lessons/types'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
+import { lessonPosition } from '@/lib/lesson-label'
 
 interface LessonRowProps {
   lesson: Lesson
@@ -115,7 +116,7 @@ export default function LessonRow({
               done ? 'text-text-2 group-hover:text-text-1' : 'text-text-1',
             )}
           >
-            <span className="mr-2 font-mono text-[11px] text-text-3">L{lesson.index}</span>
+            <span className="mr-2 font-mono text-[11px] text-text-3">{lessonPosition(lesson)}</span>
             {lesson.title}
             {lesson.exam && (
               <span className="ml-2 rounded-sm border border-amber/40 bg-amber/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-amber">

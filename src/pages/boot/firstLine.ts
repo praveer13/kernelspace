@@ -4,6 +4,7 @@
  * first lesson, the Rust lessons before it, or when Rust starts on the braided full ramp ("full course" never reads
  * as "no Rust"), and says so when a placement leaves the path with nothing to teach.
  */
+import { lessonCode } from '@/lib/lesson-label'
 
 export interface NamedLesson {
   code: string
@@ -43,7 +44,7 @@ export function bootLine(
   const byId = new Map(lessons.map((l) => [l.id, l]))
   const after = first.t && first.r.length === 0 ? plan.lessons.slice(plan.lessons.indexOf(first.t.id) + 1) : []
   const gap = after.findIndex((id) => byId.get(id)?.trackId === 'r')
-  const rNext = gap < 0 ? null : { code: after[gap].toUpperCase(), title: byId.get(after[gap])?.title ?? after[gap], gap }
+  const rNext = gap < 0 ? null : { code: lessonCode(after[gap]), title: byId.get(after[gap])?.title ?? after[gap], gap }
   return { line: firstLessonLine({ t: first.t, r: first.r, rNext }), skips: plan.skipped.length > 0 || plan.testOut.length > 0 }
 }
 

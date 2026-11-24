@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { localDateKey } from '@/lib/economy'
+import { lessonCode } from '@/lib/lesson-label'
 import type { Json, LocalDay } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
 import type { RecommendContent, RecommendState } from './recommend'
@@ -129,7 +130,7 @@ export function firstLessonsNow(
   const plan = loaded.cachedPathPlan(loaded.pathOf(path), loaded.content, loaded.readPlacement(placement))
   const first = loaded.firstLessons(plan, loaded.content.lessons)
   const titles = new Map(loaded.content.lessons.map((l) => [l.id, l.title]))
-  const named = (id: string): NamedLesson => ({ id, code: id.toUpperCase(), title: titles.get(id) ?? id })
+  const named = (id: string): NamedLesson => ({ id, code: lessonCode(id), title: titles.get(id) ?? id })
   return { t: first.t ? named(first.t) : null, r: first.r.map(named) }
 }
 

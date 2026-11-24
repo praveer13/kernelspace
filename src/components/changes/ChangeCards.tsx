@@ -6,6 +6,7 @@ import type { Erratum } from '@/data/errata/schema'
 import type { QuizQuestion } from '@/components/QuizBlock'
 import ConfidencePicker from '@/components/learner/ConfidencePicker'
 import { lessonById, lessonPath } from '@/data/lessons'
+import { lessonCode, lessonLabel as lessonLabelOf } from '@/lib/lesson-label'
 import { rev32 } from '@/lib/ledger/stable'
 import type { ChangeCard, Confidence } from '@/lib/ledger/types'
 import { changeCardsFor } from '@/lib/learner/change-cards'
@@ -16,7 +17,10 @@ import { cn } from '@/lib/utils'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E']
 
-const lessonLabel = (id: string) => id.toUpperCase()
+const lessonLabel = (id: string): string => {
+  const lesson = lessonById(id)
+  return lesson ? lessonLabelOf(lesson) : lessonCode(id)
+}
 
 function Badge({ kind }: { kind: Erratum['kind'] }) {
   return (

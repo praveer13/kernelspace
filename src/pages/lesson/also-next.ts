@@ -1,4 +1,5 @@
 import type { Recommendation } from '@/lib/learner/types'
+import { lessonCode } from '@/lib/lesson-label'
 
 type LessonRef = { id: string; title: string; trackId: string }
 
@@ -13,5 +14,5 @@ export function alsoNext<L extends LessonRef>(
 ): { lesson: L; lead: string; label: string } | null {
   if (!rec || rec.kind !== 'lesson' || !next || rec.ref === next.id) return null
   const lead = next.trackId === here.trackId ? 'Or continue the track' : 'Or go on to the next track'
-  return { lesson: next, lead, label: `${next.id.toUpperCase()} · ${next.title}` }
+  return { lesson: next, lead, label: `${lessonCode(next.id)} · ${next.title}` }
 }
