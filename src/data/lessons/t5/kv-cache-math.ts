@@ -109,7 +109,7 @@ weights    = 70B × 2 B           = 140 GB    (2×80 GB GPUs, nothing left for K
 8 GPUs     = 640 GB − 140 GB     ≈ 500 GB KV ≈ 1.6 M tokens
 \`\`\`
 
-Read those numbers again: to serve 70B with serious context, you need **8 GPUs — of which the weights use barely 2, and the other ~500 GB is KV cache.** This is the sentence the course has been building toward: **at long context, the cache — not the model — is the payload.** It's why PagedAttention's waste reduction (T2.L7) was worth a famous paper, why prefix caching is a product feature, and why FP8 KV is a line item in every engine's release notes.`,
+Read those numbers again: to serve 70B with serious context, you need **8 GPUs — of which the weights use barely 2, and the other ~500 GB is KV cache.** This is the sentence the course has been building toward: **at long context, the cache — not the model — is the payload.** It's why PagedAttention's waste reduction ([[l:t2.l7]]) was worth a famous paper, why prefix caching is a product feature, and why FP8 KV is a line item in every engine's release notes.`,
     },
     {
       type: 'statline',
@@ -127,10 +127,10 @@ Read those numbers again: to serve 70B with serious context, you need **8 GPUs �
 Every KV optimization is a multiplier on that formula. Price them:
 
 - **GQA/MQA** — fewer KV heads: ÷4 (8 vs 32) to ÷8. Free-ish (baked into the model, small quality cost paid at training time). Already counted above; *without* GQA our 70B would need 2.5 MiB/token.
-- **KV quantization (FP8/INT4)** — b: 2 B → 1 B → 0.5 B: ×2 to ×4 tokens, tiny quality cost (T4.L7). Decode reads the whole cache per token, so this *also* multiplies decode bandwidth.
+- **KV quantization (FP8/INT4)** — b: 2 B → 1 B → 0.5 B: ×2 to ×4 tokens, tiny quality cost ([[l:t4.l7]]). Decode reads the whole cache per token, so this *also* multiplies decode bandwidth.
 - **Sliding-window attention** — cap the effective context (Mistral-style): cache stops growing at the window. Changes the model, not just the system.
-- **Prefix sharing** — share the system prompt's blocks across all requests (T5.L5): one copy of your 2k-token system prompt instead of one per request. At 100 concurrent requests: ~100× on the shared part.
-- **Eviction/offload** — drop or swap cold KV (H2O, SnapKV, vLLM preemption): trade quality or latency for capacity (T2.L3 in disguise).
+- **Prefix sharing** — share the system prompt's blocks across all requests ([[l:t5.l5]]): one copy of your 2k-token system prompt instead of one per request. At 100 concurrent requests: ~100× on the shared part.
+- **Eviction/offload** — drop or swap cold KV (H2O, SnapKV, vLLM preemption): trade quality or latency for capacity ([[l:t2.l3]] in disguise).
 
 And the formula's blind spot: it prices *residency*. The per-step **bandwidth** cost is the same bytes — decode re-reads the cache every token — so cache size simultaneously sets *how many* you serve and *how fast*. One number, two SLOs.`,
     },

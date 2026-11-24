@@ -48,7 +48,8 @@ describe('Dynamo\'s first major release is a claim, and t5.l10 reads it', () => 
   })
   test('the Dynamo sentence names the release through the claim and types no release or date', () => {
     const s = src(PRODUCTION_STACK)
-    const sentence = s.slice(s.indexOf('Since T3.L6 was written'), s.indexOf('is the newest release we have read'))
+    // the citation is a token in the source (K1-3): the id, not the label, is what the sentence holds
+    const sentence = s.slice(s.indexOf('Since [[l:t3.l6]] was written'), s.indexOf('is the newest release we have read'))
     expect(sentence).toContain("claimRelease('status.dynamo.release-first-major')")
     expect(sentence).not.toMatch(/\d{4}-\d{2}-\d{2}/)
     expect(sentence).not.toMatch(/\bv\d+\.\d+/)
@@ -86,7 +87,7 @@ describe('t6.l3: KVBM is deprecated, not gone', () => {
 
 describe('t6.l3: llm-d\'s founders come from the claim t5.l10 reads', () => {
   test('the opening names them through status.llm-d.founders', () => {
-    const md = prose('t6.l3', 'T5.L9\'s rule still holds')
+    const md = prose('t6.l3', '[[l:t5.l9]]\'s rule still holds')
     expect(md).toContain(`**llm-d** (${claimCite('status.llm-d.founders')})`)
     expect(md).not.toContain('Red Hat/Google/CoreWeave')
   })

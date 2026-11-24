@@ -84,7 +84,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `T4.L1 gave you the two big GPU ideas — warps and latency-hiding. This lesson turns them into the two **measurable** quantities that dominate kernel performance in practice: **occupancy** (do you have enough warps resident to hide HBM latency?) and **coalescing** (does each warp memory instruction touch memory efficiently?). Most "my kernel is 10× slow" mysteries reduce to one of these two.
+      md: `[[l:t4.l1]] gave you the two big GPU ideas — warps and latency-hiding. This lesson turns them into the two **measurable** quantities that dominate kernel performance in practice: **occupancy** (do you have enough warps resident to hide HBM latency?) and **coalescing** (does each warp memory instruction touch memory efficiently?). Most "my kernel is 10× slow" mysteries reduce to one of these two.
 
 Both are, at heart, T0 ideas reincarnated on the GPU: occupancy is your I/O-bound thread-pool sizing rule, and coalescing is the 64-byte cache-line discipline at warp scale. If T0 made sense, this lesson is two small translations.`,
     },
@@ -100,9 +100,9 @@ The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats
       type: 'prose',
       md: `## Coalescing: the warp-wide memory contract
 
-When a warp issues a load, the hardware examines all 32 lane addresses and merges them into the fewest possible memory transactions, each one a 32-byte sector (compute capability 6.0 and later; the H100 is 9.0). Ideal case — **lane i reads address base + i×4 bytes**: four 32-byte transactions, one 128-byte line, serve the whole warp. Worst case — 32 scattered addresses: **32 separate transactions**. That moves 1,024 bytes to use 128 of them, so about 1/8 of peak bandwidth for that instruction. This is the coalescing rule, and it's T0.L3 (row vs column) with a warp jury: consecutive lanes should touch consecutive addresses.
+When a warp issues a load, the hardware examines all 32 lane addresses and merges them into the fewest possible memory transactions, each one a 32-byte sector (compute capability 6.0 and later; the H100 is 9.0). Ideal case — **lane i reads address base + i×4 bytes**: four 32-byte transactions, one 128-byte line, serve the whole warp. Worst case — 32 scattered addresses: **32 separate transactions**. That moves 1,024 bytes to use 128 of them, so about 1/8 of peak bandwidth for that instruction. This is the coalescing rule, and it's [[l:t0.l3]] (row vs column) with a warp jury: consecutive lanes should touch consecutive addresses.
 
-The classic violation is the "column walk" reincarnate: a kernel where \`threadIdx.x\` indexes the *slow* dimension of a row-major matrix (stride = row pitch). Every lane lands in a different 32-byte sector; the warp issues 32 transactions per load, each carrying 4 useful bytes; about 8× fewer useful bytes per byte moved. The fixes are layout (transpose / structure-of-arrays — T0.L4 again), staging through **shared memory** (load coalesced, compute strided from SRAM — SRAM has no coalescing penalty, only bank conflicts), and padding.`,
+The classic violation is the "column walk" reincarnate: a kernel where \`threadIdx.x\` indexes the *slow* dimension of a row-major matrix (stride = row pitch). Every lane lands in a different 32-byte sector; the warp issues 32 transactions per load, each carrying 4 useful bytes; about 8× fewer useful bytes per byte moved. The fixes are layout (transpose / structure-of-arrays — [[l:t0.l4]] again), staging through **shared memory** (load coalesced, compute strided from SRAM — SRAM has no coalescing penalty, only bank conflicts), and padding.`,
     },
     {
       type: 'diagram',
@@ -153,7 +153,7 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
     {
       type: 'callout',
       variant: 'warning',
-      md: `Shared memory has its own fragmentation-like gotcha: **bank conflicts**. SRAM is striped across 32 banks (4 B each); a warp hitting 32 distinct banks gets full speed, but N lanes hitting addresses in the *same* bank serialize N-fold. Classic trigger: striding a column through a tile stored in shared memory. Classic fix: **pad the tile row by one element** so column strides land on different banks. If this smells like T0.L4's false sharing — same family: the hardware's parallel banks are only parallel if you address them politely.`,
+      md: `Shared memory has its own fragmentation-like gotcha: **bank conflicts**. SRAM is striped across 32 banks (4 B each); a warp hitting 32 distinct banks gets full speed, but N lanes hitting addresses in the *same* bank serialize N-fold. Classic trigger: striding a column through a tile stored in shared memory. Classic fix: **pad the tile row by one element** so column strides land on different banks. If this smells like [[l:t0.l4]]'s false sharing — same family: the hardware's parallel banks are only parallel if you address them politely.`,
     },
     {
       type: 'prose',

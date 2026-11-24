@@ -143,7 +143,7 @@ fn race_free() {
       type: 'prose',
       md: `## What it costs, honestly
 
-Ownership is not free; it is prepaid. The costs are: **compile-time friction** (the borrow checker rejects some safe programs — you will fight it for two weeks, then it starts feeling like pair programming), **design pressure** (ownership shapes APIs; cyclic structures need \`Rc\`/\`Arc\` reference counting or arenas with indices — the arena trick, by the way, is your T1.L3 allocator with integer "pointers"), and occasionally **explicit escape hatches** — \`unsafe\` blocks where you pinky-swear the invariants the compiler can't see. The point is that \`unsafe\` is *marked, auditable, and tiny*: typically <1% of a codebase, wrapped in safe APIs.
+Ownership is not free; it is prepaid. The costs are: **compile-time friction** (the borrow checker rejects some safe programs — you will fight it for two weeks, then it starts feeling like pair programming), **design pressure** (ownership shapes APIs; cyclic structures need \`Rc\`/\`Arc\` reference counting or arenas with indices — the arena trick, by the way, is your [[l:t1.l3]] allocator with integer "pointers"), and occasionally **explicit escape hatches** — \`unsafe\` blocks where you pinky-swear the invariants the compiler can't see. The point is that \`unsafe\` is *marked, auditable, and tiny*: typically <1% of a codebase, wrapped in safe APIs.
 
 The payoff profile is why systems teams keep choosing it: C-level control of layout and allocation, zero GC pauses, fearless concurrency (the same rules that stop use-after-free stop data races — \`Send\`/\`Sync\` in T3), and security posture that changes what auditors say about your code.`,
     },

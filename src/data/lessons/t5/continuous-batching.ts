@@ -79,7 +79,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `T2.L4 ended with a promise: continuous batching is a 1960s scheduler wearing a GPU. This lesson pays it off. The problem it solves is the **convoy effect** you met in the scheduling lab: with *static* batching, a batch of sequences runs together until the **longest** finishes — a 500-token generation convoying 20-token generations, the GPU idling on padding and finished slots. Utilization numbers for naive static serving were dreadful (often <30%), and every finished request sat in the batch, burning KV space and compute, until the slowest sibling completed.
+      md: `[[l:t2.l4]] ended with a promise: continuous batching is a 1960s scheduler wearing a GPU. This lesson pays it off. The problem it solves is the **convoy effect** you met in the scheduling lab: with *static* batching, a batch of sequences runs together until the **longest** finishes — a 500-token generation convoying 20-token generations, the GPU idling on padding and finished slots. Utilization numbers for naive static serving were dreadful (often <30%), and every finished request sat in the batch, burning KV space and compute, until the slowest sibling completed.
 
 The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones are evicted and later resumed by recomputation. No one waits for anyone. The decode step is the scheduling boundary, not a quantum, and nothing is time-sliced; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
     },
@@ -139,10 +139,10 @@ Each iteration, the engine runs the same loop — annotate it with T2 names:
 
 1. **Pick the running set** for this step: the running queue (already admitted) plus admissions from the waiting queue — FCFS by default, priorities possible. *Scheduling decision.*
 2. **Check capacity:** free blocks must cover every running sequence's potential next block (one per sequence, worst case). If not, **preempt** the lowest-priority/youngest sequences — free their KV blocks and recompute their prefill when they resume (vLLM V1; the older V0 engine could also swap KV to CPU RAM, trading PCIe bandwidth for compute). *Eviction under pressure.*
-3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The boundary between scheduling decisions, not a quantum: no timer cuts it short.*
+3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the [[l:t4.l3]] batching win — arithmetic intensity × N). *The boundary between scheduling decisions, not a quantum: no timer cuts it short.*
 4. **Sample, append tokens, free the finished:** sequences hitting EOS/length limits exit immediately; their blocks' refcounts drop and return to the free queue in O(1). *Reclamation.*
 
-Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L8) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.
+Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as [[l:t2.l4]], with TTFT as the metric). And **prefill chunking** ([[l:t5.l8]]) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.
 
 Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: FCFS is fair but lets one huge prompt hold up the line, while shortest-prompt-first cuts the average wait and can starve a long request while short ones keep arriving, so it needs a **starvation guard** that moves any request that has waited past a set age to the front. **Headroom** decides whether to admit at all: decode grows every sequence by a token per iteration, so admit a request only when free blocks cover its prompt *plus* some tokens of room to decode, or a cache that is full at admission starts preempting mid-flight. Lab 06's reference policy sets exactly these dials: shortest prompt first, a guard at 2,000 iterations, 48 tokens of headroom and no preemption.`,
     },
@@ -170,7 +170,7 @@ Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: 
     {
       type: 'callout',
       variant: 'warning',
-      md: `Continuous batching doesn't delete the trade-offs — it moves them into policy. **Bigger running set** → better throughput, worse ITL (more KV read per step) and worse preemption risk; **smaller** → the reverse. **Preemption policy** shapes fairness: under first-come-first-served, ${VLLM_RELEASE} preempts the most recently admitted request, which protects long-running requests and makes recent arrivals pay, recomputing their prefill again if the pressure lasts; preempting the oldest instead throws away the most finished work per eviction. There is no free schedule — only visible ones. Tune with goodput (T5.L3), not throughput.`,
+      md: `Continuous batching doesn't delete the trade-offs — it moves them into policy. **Bigger running set** → better throughput, worse ITL (more KV read per step) and worse preemption risk; **smaller** → the reverse. **Preemption policy** shapes fairness: under first-come-first-served, ${VLLM_RELEASE} preempts the most recently admitted request, which protects long-running requests and makes recent arrivals pay, recomputing their prefill again if the pressure lasts; preempting the oldest instead throws away the most finished work per eviction. There is no free schedule — only visible ones. Tune with goodput ([[l:t5.l3]]), not throughput.`,
     },
     {
       type: 'prose',

@@ -1,0 +1,1247 @@
+[
+  {
+    "file": "src/data/lessons/r/practical-lifetimes.ts",
+    "id": "t3.l1",
+    "literal": "T3.L1"
+  },
+  {
+    "file": "src/data/lessons/t0/flame-graphs.ts",
+    "id": "t0.l1",
+    "literal": "T0.L1"
+  },
+  {
+    "file": "src/data/lessons/t0/flame-graphs.ts",
+    "id": "t2.l5",
+    "literal": "T2.L5"
+  },
+  {
+    "file": "src/data/lessons/t0/flame-graphs.ts",
+    "id": "t3.l2",
+    "literal": "T3.L2"
+  },
+  {
+    "file": "src/data/lessons/t0/flame-graphs.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t0/row-vs-column.ts",
+    "id": "t4.l6",
+    "literal": "T4.L6"
+  },
+  {
+    "file": "src/data/lessons/t0/row-vs-column.ts",
+    "id": "t1.l4",
+    "literal": "T1.L4"
+  },
+  {
+    "file": "src/data/lessons/t0/row-vs-column.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t1/compile-link-abi.ts",
+    "id": "t1.l1",
+    "literal": "T1.L1"
+  },
+  {
+    "file": "src/data/lessons/t1/rust-ownership-intro.ts",
+    "id": "t1.l3",
+    "literal": "T1.L3"
+  },
+  {
+    "file": "src/data/lessons/t1/stack-vs-heap.ts",
+    "id": "t1.l3",
+    "literal": "T1.L3"
+  },
+  {
+    "file": "src/data/lessons/t1/toy-allocator.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t2/async-io.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/async-io.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/concurrency-primitives.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/concurrency-primitives.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t1.l4",
+    "literal": "T1.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t2.l2",
+    "literal": "T2.L2"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t1.l4",
+    "literal": "T1.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t2.l2",
+    "literal": "T2.L2"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t2.l2",
+    "literal": "T2.L2"
+  },
+  {
+    "file": "src/data/lessons/t2/exam-pagedattention.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t2/processes-threads.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t2/processes-threads.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t2/processes-threads.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t2/processes-threads.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t2/scheduling.ts",
+    "id": "t2.l1",
+    "literal": "T2.L1"
+  },
+  {
+    "file": "src/data/lessons/t2/scheduling.ts",
+    "id": "t2.l1",
+    "literal": "T2.L1"
+  },
+  {
+    "file": "src/data/lessons/t2/scheduling.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t2/virtual-memory.ts",
+    "id": "t0.l3",
+    "literal": "T0.L3"
+  },
+  {
+    "file": "src/data/lessons/t2/virtual-memory.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t2/virtual-memory.ts",
+    "id": "t2.l7",
+    "literal": "T2.L7"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t5.l10",
+    "literal": "T5.L10"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t1.l5",
+    "literal": "T1.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t3.l4",
+    "literal": "T3.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t3.l2",
+    "literal": "T3.L2"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t3.l3",
+    "literal": "T3.L3"
+  },
+  {
+    "file": "src/data/lessons/t3/dynamo-case-study.ts",
+    "id": "t5.l10",
+    "literal": "T5.L10"
+  },
+  {
+    "file": "src/data/lessons/t3/ownership.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/ownership.ts",
+    "id": "t2.l5",
+    "literal": "T2.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/ownership.ts",
+    "id": "t3.l3",
+    "literal": "T3.L3"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-concurrency.ts",
+    "id": "t3.l1",
+    "literal": "T3.L1"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-concurrency.ts",
+    "id": "t2.l5",
+    "literal": "T2.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-concurrency.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-concurrency.ts",
+    "id": "t2.l5",
+    "literal": "T2.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-wasm.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-zig-c-decision.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-zig-c-decision.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-zig-c-decision.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-zig-c-decision.ts",
+    "id": "t1.l5",
+    "literal": "T1.L5"
+  },
+  {
+    "file": "src/data/lessons/t3/rust-zig-c-decision.ts",
+    "id": "t3.l4",
+    "literal": "T3.L4"
+  },
+  {
+    "file": "src/data/lessons/t3/toy-executor.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t3/toy-executor.ts",
+    "id": "t3.l3",
+    "literal": "T3.L3"
+  },
+  {
+    "file": "src/data/lessons/t3/toy-executor.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t3/toy-executor.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t3/toy-executor.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/cpu-vs-gpu.ts",
+    "id": "t4.l4",
+    "literal": "T4.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/cpu-vs-gpu.ts",
+    "id": "t0.l3",
+    "literal": "T0.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/cpu-vs-gpu.ts",
+    "id": "t0.l1",
+    "literal": "T0.L1"
+  },
+  {
+    "file": "src/data/lessons/t4/gpu-memory.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/gpu-memory.ts",
+    "id": "t4.l6",
+    "literal": "T4.L6"
+  },
+  {
+    "file": "src/data/lessons/t4/gpu-memory.ts",
+    "id": "t4.l6",
+    "literal": "T4.L6"
+  },
+  {
+    "file": "src/data/lessons/t4/gpu-memory.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/gpu-memory.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t0.l3",
+    "literal": "T0.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l4",
+    "literal": "T4.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l2",
+    "literal": "T4.L2"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l4",
+    "literal": "T4.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l2",
+    "literal": "T4.L2"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l5",
+    "literal": "T4.L5"
+  },
+  {
+    "file": "src/data/lessons/t4/matmul-tiling.ts",
+    "id": "t4.l4",
+    "literal": "T4.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/occupancy-coalescing.ts",
+    "id": "t4.l1",
+    "literal": "T4.L1"
+  },
+  {
+    "file": "src/data/lessons/t4/occupancy-coalescing.ts",
+    "id": "t0.l3",
+    "literal": "T0.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/occupancy-coalescing.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/occupancy-coalescing.ts",
+    "id": "t0.l4",
+    "literal": "T0.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/quantization.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t4/quantization.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/roofline.ts",
+    "id": "t0.l1",
+    "literal": "T0.L1"
+  },
+  {
+    "file": "src/data/lessons/t4/roofline.ts",
+    "id": "t4.l6",
+    "literal": "T4.L6"
+  },
+  {
+    "file": "src/data/lessons/t4/roofline.ts",
+    "id": "t4.l7",
+    "literal": "T4.L7"
+  },
+  {
+    "file": "src/data/lessons/t4/roofline.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t4/roofline.ts",
+    "id": "t4.l4",
+    "literal": "T4.L4"
+  },
+  {
+    "file": "src/data/lessons/t4/wgsl-playground.ts",
+    "id": "t4.l1",
+    "literal": "T4.L1"
+  },
+  {
+    "file": "src/data/lessons/t4/wgsl-playground.ts",
+    "id": "t4.l1",
+    "literal": "T4.L1"
+  },
+  {
+    "file": "src/data/lessons/t4/wgsl-playground.ts",
+    "id": "t4.l6",
+    "literal": "T4.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/continuous-batching.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/continuous-batching.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/continuous-batching.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/continuous-batching.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t5/continuous-batching.ts",
+    "id": "t5.l3",
+    "literal": "T5.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l10",
+    "literal": "T5.L10"
+  },
+  {
+    "file": "src/data/lessons/t5/distributed-serving.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/kv-cache-math.ts",
+    "id": "t2.l7",
+    "literal": "T2.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/kv-cache-math.ts",
+    "id": "t4.l7",
+    "literal": "T4.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/kv-cache-math.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/kv-cache-math.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t2.l7",
+    "literal": "T2.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t2.l2",
+    "literal": "T2.L2"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t1.l3",
+    "literal": "T1.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t5.l6",
+    "literal": "T5.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/pagedattention-deep-dive.ts",
+    "id": "t5.l2",
+    "literal": "T5.L2"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t2.l4",
+    "literal": "T2.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/prefill-vs-decode.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/prefix-caching.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/prefix-caching.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/prefix-caching.ts",
+    "id": "t6.l10",
+    "literal": "T6.L10"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t5/production-stack.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t5.l3",
+    "literal": "T5.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t4.l1",
+    "literal": "T4.L1"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t5/speculative-chunked.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t5/tokenization.ts",
+    "id": "t5.l10",
+    "literal": "T5.L10"
+  },
+  {
+    "file": "src/data/lessons/t5/transformer-internals.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t5/transformer-internals.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/transformer-internals.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t5/transformer-internals.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/agents-structured.ts",
+    "id": "t5.l10",
+    "literal": "T5.L10"
+  },
+  {
+    "file": "src/data/lessons/t6/agents-structured.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/agents-structured.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/agents-structured.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/agents-structured.ts",
+    "id": "t6.l9",
+    "literal": "T6.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/attention-ffn.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/attention-ffn.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/attention-ffn.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/attention-ffn.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t3.l2",
+    "literal": "T3.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t2.l3",
+    "literal": "T2.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l6",
+    "literal": "T5.L6"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/epd-disaggregation.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t6.l4",
+    "literal": "T6.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t4.l7",
+    "literal": "T4.L7"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t6.l1",
+    "literal": "T6.L1"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t7.l4",
+    "literal": "T7.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t4.l7",
+    "literal": "T4.L7"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t6.l4",
+    "literal": "T6.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/fp4-blackwell.ts",
+    "id": "t7.l2",
+    "literal": "T7.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t0.l6",
+    "literal": "T0.L6"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/moe-anatomy.ts",
+    "id": "t7.l4",
+    "literal": "T7.L4"
+  },
+  {
+    "file": "src/data/lessons/t6/multi-lora-serving.ts",
+    "id": "t6.l10",
+    "literal": "T6.L10"
+  },
+  {
+    "file": "src/data/lessons/t6/parallelism-zoo.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/parallelism-zoo.ts",
+    "id": "t6.l1",
+    "literal": "T6.L1"
+  },
+  {
+    "file": "src/data/lessons/t6/parallelism-zoo.ts",
+    "id": "t6.l1",
+    "literal": "T6.L1"
+  },
+  {
+    "file": "src/data/lessons/t6/parallelism-zoo.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/parallelism-zoo.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/rl-rollout.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t6/rl-rollout.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t6/security-boundaries.ts",
+    "id": "t6.l8",
+    "literal": "T6.L8"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t5.l8",
+    "literal": "T5.L8"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/speculative-production.ts",
+    "id": "t0.l5",
+    "literal": "T0.L5"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t6.l1",
+    "literal": "T6.L1"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t5.l3",
+    "literal": "T5.L3"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t3.l6",
+    "literal": "T3.L6"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t5.l9",
+    "literal": "T5.L9"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t6/wide-ep.ts",
+    "id": "t2.l6",
+    "literal": "T2.L6"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l2",
+    "literal": "T7.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t5.l3",
+    "literal": "T5.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l4",
+    "literal": "T7.L4"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l2",
+    "literal": "T7.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t5.l7",
+    "literal": "T5.L7"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t5.l5",
+    "literal": "T5.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t2.l5",
+    "literal": "T2.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/autoscaling-planner.ts",
+    "id": "t7.l4",
+    "literal": "T7.L4"
+  },
+  {
+    "file": "src/data/lessons/t7/benchmarking.ts",
+    "id": "t7.l1",
+    "literal": "T7.L1"
+  },
+  {
+    "file": "src/data/lessons/t7/benchmarking.ts",
+    "id": "t6.l8",
+    "literal": "T6.L8"
+  },
+  {
+    "file": "src/data/lessons/t7/benchmarking.ts",
+    "id": "t7.l1",
+    "literal": "T7.L1"
+  },
+  {
+    "file": "src/data/lessons/t7/objective-function.ts",
+    "id": "t5.l3",
+    "literal": "T5.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/objective-function.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/objective-function.ts",
+    "id": "t7.l2",
+    "literal": "T7.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/objective-function.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/objective-function.ts",
+    "id": "t7.l4",
+    "literal": "T7.L4"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t7.l1",
+    "literal": "T7.L1"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t6.l5",
+    "literal": "T6.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t6.l6",
+    "literal": "T6.L6"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t6.l5",
+    "literal": "T6.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t7.l2",
+    "literal": "T7.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/pareto.ts",
+    "id": "t4.l3",
+    "literal": "T4.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t7.l1",
+    "literal": "T7.L1"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l5",
+    "literal": "T6.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l2",
+    "literal": "T6.L2"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l6",
+    "literal": "T6.L6"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l3",
+    "literal": "T6.L3"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t5.l4",
+    "literal": "T5.L4"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l1",
+    "literal": "T6.L1"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t6.l5",
+    "literal": "T6.L5"
+  },
+  {
+    "file": "src/data/lessons/t7/unit-economics.ts",
+    "id": "t7.l3",
+    "literal": "T7.L3"
+  }
+]

@@ -72,7 +72,7 @@ Everything from T4 so far becomes concrete: workgroups (CUDA blocks), invocation
       type: 'prose',
       md: `## The programming model in one paragraph
 
-You write a **kernel**; the host **dispatches** a grid of **workgroups**; each workgroup is a bundle of **invocations** that share a fast scratchpad (\`var<workgroup>\` = CUDA shared memory) and can synchronize with barriers. Your kernel code runs identically on every invocation; each one discovers *which* copy it is from built-ins like \`global_invocation_id\`, and indexes data accordingly. That's the whole model — T4.L1's SIMT machine with the training wheels off. The host-side story (create device, upload buffers, bind, dispatch, read back) is plumbing you'll see in the playground.`,
+You write a **kernel**; the host **dispatches** a grid of **workgroups**; each workgroup is a bundle of **invocations** that share a fast scratchpad (\`var<workgroup>\` = CUDA shared memory) and can synchronize with barriers. Your kernel code runs identically on every invocation; each one discovers *which* copy it is from built-ins like \`global_invocation_id\`, and indexes data accordingly. That's the whole model — [[l:t4.l1]]'s SIMT machine with the training wheels off. The host-side story (create device, upload buffers, bind, dispatch, read back) is plumbing you'll see in the playground.`,
     },
     {
       type: 'code',
@@ -116,13 +116,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
       type: 'prose',
       md: `## Reduction: the kernel that teaches cooperation
 
-Sum 16 million floats. One invocation can't do it (serial = T4.L1's cautionary tale); workgroups must combine their values with coordination. The GPU answer is the **tree reduction**, in two levels:
+Sum 16 million floats. One invocation can't do it (serial = [[l:t4.l1]]'s cautionary tale); workgroups must combine their values with coordination. The GPU answer is the **tree reduction**, in two levels:
 
 1. **Inside the workgroup**: each of 256 invocations loads one value into shared memory; then a loop halves the active set each round — 128 add pairs, 64, 32… — with \`workgroupBarrier()\` between rounds so every lane sees the previous round's writes. After \`log2(256) = 8\` rounds, invocation 0 holds the workgroup total and writes ONE value out.
 2. **Across workgroups**: 65,536 partials remain, one per workgroup of the first pass (the first pass's 65,536 workgroups launch as 256 x 256 in two dimensions, because one dimension holds at most 65,535 by default). Redispatch the same reduction over those partials: 16,777,216 → 65,536 → 256 → 1. The playground reports that exact logical topology and returns one scalar while bounding physical storage to a representative 65,536-float sample. Available WebGPU executes the bounded passes; the explicitly labeled CPU/model fallback preserves the same logical topology.
 
 This shape — **parallel work, tree combine, multi-pass** — is everywhere: softmax denominators, layer-norm statistics, top-k, histograms. And it's why ` +
-        `attention's online-softmax trick (T4.L6 deepdive) exists: reductions over long sequences are the annoying serial-ish part of otherwise-parallel kernels.`,
+        `attention's online-softmax trick ([[l:t4.l6]] deepdive) exists: reductions over long sequences are the annoying serial-ish part of otherwise-parallel kernels.`,
     },
     {
       type: 'code',

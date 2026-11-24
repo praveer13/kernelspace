@@ -27,7 +27,7 @@ Think it through with three types:
 - \`Rc<T>\` (single-threaded refcount): its count is a plain integer, updated non-atomically. Two threads bumping it concurrently = a torn counter = a use-after-free. So \`Rc\` is deliberately **!Send** — the compiler simply won't let it cross a thread boundary. Its thread-safe sibling \`Arc<T>\` pays for atomic counts, so **\`Arc<T>\` is Send + Sync** (when T is).
 - \`&mut T\` and \`Mutex<T>\`: exclusive borrows are Send (the exclusivity travels); \`Mutex<T>\` is Sync because the lock *provides* the exclusion the type system demands.
 
-The whole design is T3.L1's law — shared XOR mutable — applied across threads: shared references to \`T\` may cross threads only if \`T: Sync\`; unique things may move. \`unsafe\` can opt out (raw pointers are !Send/!Sync by default, forcing a human to vouch for them) — and that's where concurrency bugs in Rust actually live.`,
+The whole design is [[l:t3.l1]]'s law — shared XOR mutable — applied across threads: shared references to \`T\` may cross threads only if \`T: Sync\`; unique things may move. \`unsafe\` can opt out (raw pointers are !Send/!Sync by default, forcing a human to vouch for them) — and that's where concurrency bugs in Rust actually live.`,
     },
     {
       type: 'code',
@@ -71,11 +71,11 @@ fn release() { SLOTS.fetch_add(1, Ordering::Release); }`,
       type: 'prose',
       md: `## Choosing the architecture, with T2 physics
 
-The three styles in the code are not interchangeable fashion — they map to the T2.L5 decision procedure:
+The three styles in the code are not interchangeable fashion — they map to the [[l:t2.l5]] decision procedure:
 
 - **Channels** when the handoff is the point (pipeline stages, producer/consumer): ownership moves, so there's *nothing to synchronize* after the send. Contention lives in the queue itself, which std implements as a lock-free-ish structure. In serving terms: the scheduler pushing admitted requests to GPU workers.
 - **Arc<Mutex<T>>** when the critical section is long or the state is compound (a whole map): simple, correct, and the lock's sleep-on-contention is a feature. Beware the classics: lock ordering (deadlock), holding across \`.await\` (an async footgun — the guard is not Send-safe to hold across suspension in most runtimes; use \`tokio::sync::Mutex\` or drop first).
-- **Atomics** for counters and flags: cheapest, but remember T2's ordering rules — \`Relaxed\` for counters, \`AcqRel\`/\`Acquire\` when publishing. And remember T0.L4: a hot atomic is a ping-ponging cache line; shard it (the LongAdder move: per-thread counters, each padded to its own cache line with \`crossbeam_utils::CachePadded\`, or per-thread slots).`,
+- **Atomics** for counters and flags: cheapest, but remember T2's ordering rules — \`Relaxed\` for counters, \`AcqRel\`/\`Acquire\` when publishing. And remember [[l:t0.l4]]: a hot atomic is a ping-ponging cache line; shard it (the LongAdder move: per-thread counters, each padded to its own cache line with \`crossbeam_utils::CachePadded\`, or per-thread slots).`,
     },
     {
       type: 'callout',
@@ -92,7 +92,7 @@ The three styles in the code are not interchangeable fashion — they map to the
       type: 'prose',
       md: `## In the simulator
 
-The exercise wires the three architectures against the same workload and shows you where each wins: channel throughput as stages are added, mutex collapse under lock-hold-time growth, atomic counter plateauing on one cache line until sharded. The graphs are T2.L5's decision procedure as a model: three closed-form curves, not a measurement.`,
+The exercise wires the three architectures against the same workload and shows you where each wins: channel throughput as stages are added, mutex collapse under lock-hold-time growth, atomic counter plateauing on one cache line until sharded. The graphs are [[l:t2.l5]]'s decision procedure as a model: three closed-form curves, not a measurement.`,
     },
     {
       type: 'exercise',

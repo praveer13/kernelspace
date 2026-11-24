@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9 gave you three axes (TP, PP, DP) and T6.L1–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and Meta's CP hosts also sit inside TP groups; DeepSeek's decode units do not, because their attention is data-parallel (DP144) with the same weights on every GPU. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
+      md: `[[l:t5.l9]] gave you three axes (TP, PP, DP) and [[l:t6.l1]]–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and Meta's CP hosts also sit inside TP groups; DeepSeek's decode units do not, because their attention is data-parallel (DP144) with the same weights on every GPU. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
     },
     {
       type: 'prose',
@@ -22,7 +22,7 @@ const lesson: Lesson = {
 - **TP (tensor)** — split each matmul across GPUs. Cost: all-reduce *every layer*. Needs the fattest pipe: NVLink domain only (NVL72 rack, ~1.8 TB/s bidirectional). Never over RDMA.
 - **PP (pipeline)** — split layers into stages. Cost: boundary activations per micro-batch + pipeline bubbles. Tolerates slow links; pays with latency and bubble overhead.
 - **DP (data)** — replicate the model, split the batch. Cost: nothing per token (independent replicas). The default axis whenever capacity allows.
-- **EP (expert)** — split experts across GPUs. Cost: dispatch/combine all-to-all twice per layer (T6.L1). Runs over RDMA between nodes when DeepEP-class software overlaps it with compute (T6.L2); NVLink makes it cheaper.
+- **EP (expert)** — split experts across GPUs. Cost: dispatch/combine all-to-all twice per layer ([[l:t6.l1]]). Runs over RDMA between nodes when DeepEP-class software overlaps it with compute ([[l:t6.l2]]); NVLink makes it cheaper.
 - **CP (context)** — split the SEQUENCE across GPUs for one request. Cost: ring-attention passes of K/V chunks around the group, each layer. The axis that makes 1M-token prompts feasible without 1M-token KV on one GPU.`,
     },
     {
@@ -63,7 +63,7 @@ Context parallelism is the newest axis and the least intuitive. A 1M-token promp
 Production configs read like (DP × EP × CP × TP per phase), and the design process is mechanical:
 
 1. **Fit the model** — weights (+ per-GPU expert share for MoE) must fit: pick minimum TP/EP width for capacity. DeepSeek decode: 37B active params spread trivially; the constraint was experts-per-GPU.
-2. **Price the hot path** — per-layer traffic (TP all-reduce, EP all-to-all, CP ring) must fit the latency budget. TP's all-reduce must stay inside the NVLink domain; EP's and CP's can cross RDMA when overlapped with compute. If it doesn't fit, drop the axis or move phases apart (EPD, T6.L3).
+2. **Price the hot path** — per-layer traffic (TP all-reduce, EP all-to-all, CP ring) must fit the latency budget. TP's all-reduce must stay inside the NVLink domain; EP's and CP's can cross RDMA when overlapped with compute. If it doesn't fit, drop the axis or move phases apart (EPD, [[l:t6.l3]]).
 3. **Fill with DP** — whatever capacity remains replicates the unit; DP is free.
 4. **Route long context to CP groups** — CP is per-request, so route by prompt length: short requests to dense/DP workers, long ones to CP-capable groups. Your length-based routing instinct from sharding by tenant size — same move.`,
     },

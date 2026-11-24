@@ -20,7 +20,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9 split prefill from decode, and T6.L3 added an encode fleet in front. Both cut a request into phases that run one after another. **Attention–FFN disaggregation (AFD)** cuts somewhere new: inside each decode layer. Attention runs on one pool of GPUs, the FFN (for an MoE model, the experts) on another, and every layer of every decode step hands the hidden states across and back.
+      md: `[[l:t5.l9]] split prefill from decode, and [[l:t6.l3]] added an encode fleet in front. Both cut a request into phases that run one after another. **Attention–FFN disaggregation (AFD)** cuts somewhere new: inside each decode layer. Attention runs on one pool of GPUs, the FFN (for an MoE model, the experts) on another, and every layer of every decode step hands the hidden states across and back.
 
 The reason is that the two halves of a decode layer want different machines:
 
@@ -61,7 +61,7 @@ Two papers report what the split bought, each on its own hardware and each again
       type: 'prose',
       md: `## The ping-pong pipeline
 
-A token cannot skip ahead: it needs layer *n*'s attention, then layer *n*'s experts, then layer *n + 1*'s attention. With one batch, the FFN pool idles while attention runs, attention idles while the experts run, and both idle while the hidden states cross the network. The fix is T6.L2's dual-batch overlap, stretched across two pools: split the batch into **micro-batches** and keep them in flight, so one computes on each side while another is on the wire.
+A token cannot skip ahead: it needs layer *n*'s attention, then layer *n*'s experts, then layer *n + 1*'s attention. With one batch, the FFN pool idles while attention runs, attention idles while the experts run, and both idle while the hidden states cross the network. The fix is [[l:t6.l2]]'s dual-batch overlap, stretched across two pools: split the batch into **micro-batches** and keep them in flight, so one computes on each side while another is on the wire.
 
 How many are enough? MegaScale-Infer derives it. Let T_f be one micro-batch's compute time on the slower side and T_c one crossing. Both sides stay busy when m × T_f ≥ 2 × (T_f + T_c), so m ≥ 2 × (1 + T_c ÷ T_f). A fast fabric (T_c under half of T_f) needs 3 micro-batches; a slower one needs 4. Two never suffice, since every micro-batch spends time on the wire in both directions.
 
@@ -75,7 +75,7 @@ Step-3 serves a 4K average context with **2A2F**: two attention instances and tw
 
 Longer context changes one side only. At 8K each sequence's attention reads twice the KV, so Step-3 doubles the attention instances and leaves the FFN alone: **4A2F**, 48 GPUs, the same 6,144 sequences, the same per-step work for the experts and the same network traffic. Total throughput stays put, so per-GPU throughput falls to about 4,039 × 4 ÷ 6 ≈ 2,690 (the paper measured 2,643). At 32K the same rule gives 16A2F and about 4,039 × 4 ÷ 18 ≈ 900.
 
-That is T6.L3's sizing rule again: give each pool workers in proportion to the work it does. There it sized prefill against decode, and the items below practise it on fresh numbers before you size attention against the FFN.`,
+That is [[l:t6.l3]]'s sizing rule again: give each pool workers in proportion to the work it does. There it sized prefill against decode, and the items below practise it on fresh numbers before you size attention against the FFN.`,
     },
     {
       type: 'item',

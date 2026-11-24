@@ -116,7 +116,7 @@ Together they prove that no reachable path can observe a dead value or a conflic
       type: 'prose',
       md: `## Graphs without leaks: the arena first
 
-The first exit keeps single ownership and removes the pointers. One \`Vec\` owns every node, and a "link" is a \`usize\` index into it. Indices are not borrows, so there is nothing for the checker to fight, and a cycle is just two numbers that name each other. Your T1 allocator hands out offsets into a slab in the same way, and the layout is the one T0.L4 rewards: nodes sit densely in one array.`,
+The first exit keeps single ownership and removes the pointers. One \`Vec\` owns every node, and a "link" is a \`usize\` index into it. Indices are not borrows, so there is nothing for the checker to fight, and a cycle is just two numbers that name each other. Your T1 allocator hands out offsets into a slab in the same way, and the layout is the one [[l:t0.l4]] rewards: nodes sit densely in one array.`,
     },
     {
       type: 'code',
@@ -155,7 +155,7 @@ g.link(b, a);        // a cycle: compiles, and cannot leak
     },
     {
       type: 'prose',
-      md: `The arena's price is paid at run time and in discipline. An index is only a number, so if you remove a node and reuse its slot, an old \`NodeId\` quietly names the new occupant: a dangling pointer by another name, and the same shape as the ABA problem in T2.L5. The fix is a **generation counter** stored beside each slot and inside each handle, which crates such as \`slotmap\` package up. Until you need deletion, a plain \`Vec\` is enough.`,
+      md: `The arena's price is paid at run time and in discipline. An index is only a number, so if you remove a node and reuse its slot, an old \`NodeId\` quietly names the new occupant: a dangling pointer by another name, and the same shape as the ABA problem in [[l:t2.l5]]. The fix is a **generation counter** stored beside each slot and inside each handle, which crates such as \`slotmap\` package up. Until you need deletion, a plain \`Vec\` is enough.`,
     },
     {
       type: 'diagram',
@@ -209,7 +209,7 @@ let root = Rc::new(Node { label: "root", children: RefCell::new(vec![Rc::clone(&
     },
     {
       type: 'prose',
-      md: `The price: every clone and drop of an \`Rc\` updates a plain integer count, and every \`borrow_mut()\` checks a flag. A conflicting borrow is no longer a compile error. It is a **panic** at the moment two borrows overlap, which means the bug moves from your build to your test suite, or to production. And \`Rc\` is neither \`Send\` nor \`Sync\`, so this shape cannot leave its thread (T3.L3).`,
+      md: `The price: every clone and drop of an \`Rc\` updates a plain integer count, and every \`borrow_mut()\` checks a flag. A conflicting borrow is no longer a compile error. It is a **panic** at the moment two borrows overlap, which means the bug moves from your build to your test suite, or to production. And \`Rc\` is neither \`Send\` nor \`Sync\`, so this shape cannot leave its thread ([[l:t3.l3]]).`,
     },
     {
       type: 'prose',

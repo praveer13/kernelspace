@@ -85,13 +85,13 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Training is a throughput problem: giant batches, backprop, days of saturated compute, no humans waiting. Inference is a **latency** business wrapped around a **throughput** business: a user is staring at a spinner (latency) while the provider counts tokens per GPU-hour (margin). Every design decision in serving is a negotiation between those two masters.
 
-Within inference there are exactly two phases, and T4.L3 already classified them physically: **prefill** — process the prompt in one parallel pass, fill the KV cache, emit the first token — and **decode** — the autoregressive loop, one token per step. Two phases, two roofline regimes, two metrics, two SLAs. This lesson makes the economics precise.`,
+Within inference there are exactly two phases, and [[l:t4.l3]] already classified them physically: **prefill** — process the prompt in one parallel pass, fill the KV cache, emit the first token — and **decode** — the autoregressive loop, one token per step. Two phases, two roofline regimes, two metrics, two SLAs. This lesson makes the economics precise.`,
     },
     {
       type: 'prose',
       md: `## The metrics, defined properly
 
-- **TTFT (time to first token):** from request arrival to the first generated token. Driven by queue time + prefill compute (∝ prompt tokens, compute-bound) + any KV transfers (disaggregated setups, T5.L9). The user's "is it alive?" signal.
+- **TTFT (time to first token):** from request arrival to the first generated token. Driven by queue time + prefill compute (∝ prompt tokens, compute-bound) + any KV transfers (disaggregated setups, [[l:t5.l9]]). The user's "is it alive?" signal.
 - **ITL / TPOT (inter-token latency / time per output token):** the decode loop's period per token — bandwidth-bound (at least the weight + KV bytes read per step ÷ bandwidth, and every user in the batch waits the whole step). The user's "is it fast?" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms (the course's rule of thumb, not a measured reading speed).
 - **Throughput:** tokens/s aggregate (the provider's margin) and its normalized form, **tok/s/GPU** or **tok/s/$**.
 - **Goodput:** throughput *subject to SLOs* — e.g., requests/s with TTFT < 2 s and ITL < 100 ms. **The only honest capacity metric**: raw throughput numbers hide the latency collapse that produced them.
@@ -111,9 +111,9 @@ The phase split explains the product shape of every serving API you've used: why
       type: 'prose',
       md: `## The tension: batching buys throughput, costs latency
 
-The provider's lever is batching (T4.L3: amortize weight reads across N sequences). But batching couples TTFT and ITL into a seesaw. Bigger decode batches: better utilization, cheaper tokens — and slower per-token time, because more KV cache is read per step and queues deepen. Every engine therefore runs an explicit trade: how much latency do we sell for throughput? The answers have names you'll meet in T5.L7–L8: **continuous batching** (fill the batch opportunistically, every iteration), **chunked prefill** (slice long prefills into decode-sized chunks so a 100k-token prompt doesn't stall everyone's ITL), and **disaggregation** (put prefill and decode on *different GPUs* entirely, because they want different batching and hardware).
+The provider's lever is batching ([[l:t4.l3]]: amortize weight reads across N sequences). But batching couples TTFT and ITL into a seesaw. Bigger decode batches: better utilization, cheaper tokens — and slower per-token time, because more KV cache is read per step and queues deepen. Every engine therefore runs an explicit trade: how much latency do we sell for throughput? The answers have names you'll meet in [[l:t5.l7]]–L8: **continuous batching** (fill the batch opportunistically, every iteration), **chunked prefill** (slice long prefills into decode-sized chunks so a 100k-token prompt doesn't stall everyone's ITL), and **disaggregation** (put prefill and decode on *different GPUs* entirely, because they want different batching and hardware).
 
-Notice what just happened: a *systems scheduling* question (T2.L4) fell out of a physics classification (T4.L3) and became the product's SLA. That pipeline — physics → scheduler → SLA — is the whole field in one sentence.`,
+Notice what just happened: a *systems scheduling* question ([[l:t2.l4]]) fell out of a physics classification ([[l:t4.l3]]) and became the product's SLA. That pipeline — physics → scheduler → SLA — is the whole field in one sentence.`,
     },
     {
       type: 'callout',
@@ -129,7 +129,7 @@ Notice what just happened: a *systems scheduling* question (T2.L4) fell out of a
       type: 'prose',
       md: `## Why inference is *not* "training, but smaller"
 
-Three structural differences worth stating once. **(1) No backward pass:** inference is ~1/3 the FLOPs per token of training and needs no optimizer state or activations stored for backprop — but it *does* need the KV cache, which training never keeps. **(2) Latency binds:** training has no per-request SLO; inference's economics are SLO-shaped, which is why scheduling (T5.L7) is a first-class research area. **(3) Autoregression:** training sees all tokens at once (fully parallel); decode is inherently serial per sequence — the loop cannot be parallelized away, only made cheaper per step (quantization), amortized (batching), or shortened (speculative decoding). Keep these three and you'll never be confused by "just throw more GPUs at it" arguments again.`,
+Three structural differences worth stating once. **(1) No backward pass:** inference is ~1/3 the FLOPs per token of training and needs no optimizer state or activations stored for backprop — but it *does* need the KV cache, which training never keeps. **(2) Latency binds:** training has no per-request SLO; inference's economics are SLO-shaped, which is why scheduling ([[l:t5.l7]]) is a first-class research area. **(3) Autoregression:** training sees all tokens at once (fully parallel); decode is inherently serial per sequence — the loop cannot be parallelized away, only made cheaper per step (quantization), amortized (batching), or shortened (speculative decoding). Keep these three and you'll never be confused by "just throw more GPUs at it" arguments again.`,
     },
     {
       type: 'quiz',

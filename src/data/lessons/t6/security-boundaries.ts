@@ -323,7 +323,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
       type: 'callout',
       variant: 'warning',
       title: 'Valid JSON is not authorization',
-      md: `T6.L8's grammar mask can guarantee that \`{"tool":"transfer","amount":1000}\` parses. It cannot prove that the user owns the account, that the destination is allowed, or that the model was not prompt-injected. Resolve identity and policy in ordinary deterministic code, bind the decision to a narrow capability, and make the sandbox the final containment layer — never the first approval layer.`,
+      md: `[[l:t6.l8]]'s grammar mask can guarantee that \`{"tool":"transfer","amount":1000}\` parses. It cannot prove that the user owns the account, that the destination is allowed, or that the model was not prompt-injected. Resolve identity and policy in ordinary deterministic code, bind the decision to a narrow capability, and make the sandbox the final containment layer — never the first approval layer.`,
     },
     {
       type: 'isomorphism',
