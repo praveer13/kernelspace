@@ -1,0 +1,12 @@
+Wave 1 exit report over 1 export
+
+G1  loop completion   0 of 5 needed → SHORT
+      reached: prequestion 0 → play 0 → stage 0 → unseen 0 → today 0
+G2  first-review recall   n = 0 (needs 100), predicted n/a, observed n/a
+      gap n/a (bar 10) → INSUFFICIENT
+G3  7-day cold check   n = 0 (needs 50), accuracy n/a → INSUFFICIENT (reported, no bar yet)
+G7  Today duration   median 8.0 min over all 1 sessions, finished or not (bar 12 min) → PASS
+      completed only: median 8.0 min over 1 sessions
+
+exports (week-level dates only)
+  #1  week of 2026-08-31  9 events  loop 0/5  1 Today sessions
