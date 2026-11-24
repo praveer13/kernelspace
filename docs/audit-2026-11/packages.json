@@ -153,7 +153,7 @@
   ],
   "owner_question": "Roadmap Q14.",
   "default_if_silent": "(a) keep the name and the sign; nothing is renamed.",
-  "risk": "A ratchet that agents loosen. The script must refuse baseline growth itself, and the merge check must refuse a commit that edits the baseline upward, as the memory note on raised gates records.",
+  "risk": "A ratchet that agents loosen. The script must refuse baseline growth itself, and the merge check must refuse a commit that edits the baseline upward, as the build's note on raised gates (not in the repository) records.",
   "done_when": "bun scripts/verify-lesson-shape.ts prints a per-lesson table whose counts match the audit's: 39 lessons with no predict block, 12 whose first activity is the end quiz, 17 over 900 words, 10 ungated diagrams, 53 analogy callouts without breaks, 16 legacy task files; CI and deploy run it; a test proves an added violation fails and a baseline with an added row is refused; an analogy with `breaks` renders the line in the lesson and in public/lessons-md; build, verify:* and bun run test green.",
   "planned_in": "w5",
   "roadmap_changes": [
