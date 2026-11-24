@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowRight, BookOpenText, CalendarCheck2, ExternalLink, RefreshCw } from 'lucide-react'
 import { lessonById, lessonPath } from '@/data/lessons'
+import { lessonLabel } from '@/lib/lesson-label'
 import { loadFieldNotes, type FieldNotesDocument } from '@/lib/field-notes'
 
 export default function FieldNotesTab() {
@@ -120,7 +121,7 @@ export default function FieldNotesTab() {
                         to={lessonPath(lesson)}
                         className="inline-flex items-center gap-1 font-mono text-[11px] text-text-2 transition-colors hover:text-text-1"
                       >
-                        {id.toUpperCase()} <ArrowRight className="h-3 w-3" />
+                        {lessonLabel(lesson)} <ArrowRight className="h-3 w-3" />
                       </Link>
                     ) : null
                   })}

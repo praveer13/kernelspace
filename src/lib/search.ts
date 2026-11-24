@@ -7,6 +7,7 @@
  */
 
 import Fuse from 'fuse.js'
+import { lessonCode } from '@/lib/lesson-label'
 
 export type SearchGroup = 'Lessons' | 'Concepts' | 'Plays' | 'Numbers' | 'Glossary' | 'Pages' | 'Tracks' | 'Simulators'
 
@@ -98,7 +99,7 @@ export interface SearchItem {
   keywords: string[]
 }
 
-const label = (lessonId: string) => lessonId.toUpperCase()
+const label = (lessonId: string) => lessonCode(lessonId)
 
 const claimValue = (value: number | string, unit: string) => {
   const v = typeof value === 'number' ? value.toLocaleString('en-US') : value

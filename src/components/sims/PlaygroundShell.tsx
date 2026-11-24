@@ -39,6 +39,7 @@ import {
 import { getProgress, useProgress } from '@/lib/progress'
 import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
+import { lessonLabel } from '@/lib/lesson-label'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { encodeCfg, isWidgetKeyTarget, pickInitialCfg, pickMachineSource, routeConfigWrite, useSimHost } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
@@ -314,7 +315,7 @@ export default function PlaygroundShell({
                 title={fromLesson.title}
                 className="hidden items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 py-1 font-mono text-[10px] text-text-2 transition-colors duration-150 hover:border-line-bright hover:text-accent sm:flex"
               >
-                used in {fromLesson.id.toUpperCase()}
+                used in {lessonLabel(fromLesson)}
                 <ExternalLink size={10} strokeWidth={1.75} />
               </Link>
             )}

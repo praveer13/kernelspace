@@ -5,6 +5,7 @@ import ChangeCards from '@/components/changes/ChangeCards'
 import { ERRATA } from '@/data/errata'
 import type { Erratum } from '@/data/errata/schema'
 import { lessonById, lessonPath } from '@/data/lessons'
+import { lessonCode, lessonLabel } from '@/lib/lesson-label'
 import { curlyQuotes } from '@/lib/typography'
 import { cn } from '@/lib/utils'
 
@@ -138,10 +139,10 @@ export default function ErrataTab() {
                 <h2 id={`errata-${lessonId}`} className="font-mono text-body-sm text-text-2">
                   {lesson ? (
                     <Link to={lessonPath(lesson)} className="text-accent hover:underline">
-                      {lessonId.toUpperCase()} · {lesson.title}
+                      {lessonLabel(lesson)} · {lesson.title}
                     </Link>
                   ) : (
-                    lessonId.toUpperCase()
+                    lessonCode(lessonId)
                   )}
                 </h2>
                 <div className="mt-4 grid gap-5 lg:grid-cols-2">

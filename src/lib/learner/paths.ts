@@ -341,8 +341,11 @@ export function firstLessons(plan: Pick<PathPlan, 'lessons'>, lessons: readonly 
   return at < 0 ? { t: null, r: [...plan.lessons] } : { t: plan.lessons[at], r: plan.lessons.slice(0, at) }
 }
 
-/** `R.L4`, `T1.L4`: how lessons are named in why lines. */
-export const lessonCode = (lessonId: string): string => lessonId.toUpperCase()
+/**
+ * `R.L4`, `T1.L4`: how lessons are named in why lines. One helper, in `src/lib/lesson-label.ts`, so every surface
+ * prints the same code from track membership and position (audit O14).
+ */
+export { lessonCode } from '@/lib/lesson-label'
 
 /** A readable path name from the `boot:path` working value; anything else is the full ramp. */
 export function pathOf(value: unknown): LearningPath {
