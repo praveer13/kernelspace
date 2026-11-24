@@ -3,11 +3,16 @@ import { isLocalDay } from './time'
 import type { EventKind, FaultId, FleetRunMode } from './types'
 
 /**
- * Read-time ref migration (spec §4.3). Empty in Wave 0b. When V1 adds stable item ids,
- * old `quiz:<lesson>#<qi>` refs map to `item:<id>` here, so stored events are never
- * rewritten. Keys and values are full refs.
+ * Read-time ref migration (spec §4.3). Empty, and pinned empty by `tests/kc/ref-stability.test.ts`. When V1 adds
+ * stable item ids, old `quiz:<lesson>#<qi>` refs map to `item:<id>` here, so stored events are never rewritten.
+ * Keys and values are full refs.
+ *
+ * A row is not a one-line change: `canonicalRef` is applied only in `src/lib/ledger/fold.ts:117`, while
+ * `src/lib/kc/resolve.ts` reads `e.ref` raw (`resolve.ts:160`), and the card and item readers take the ref as
+ * written (`src/lib/learner/cards.ts:375`, `:382`; `src/lib/learner/item-block.ts:97`). A migration would therefore
+ * credit the aggregate and not the cards, so it must first make those readers go through `canonicalRef`.
  */
-const REF_MIGRATIONS: Readonly<Record<string, string>> = {}
+export const REF_MIGRATIONS: Readonly<Record<string, string>> = {}
 
 export function canonicalRef(ref: string): string {
   return REF_MIGRATIONS[ref] ?? ref
