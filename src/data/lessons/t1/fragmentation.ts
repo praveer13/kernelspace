@@ -1,11 +1,11 @@
 import type { Lesson } from '../types'
-import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
+import { ENGINE_BLOCK_SCOPE, claimNumber } from '../claims'
 import { mixWastePct, wasteStory } from '../pagedMix'
 
 // The 2023 paper's block size and vLLM's default at the pinned release are two claims; prose reads each from the snapshot.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
-const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_CITE = '[[c:production.vllm.block-size|pin]]'
 // The paper's Figure 2 bar for vLLM, and the course's own waste estimate (the chip): two claims, never typed.
 const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-states')
 const WASTE_ESTIMATE = claimNumber('synthetic.kv.paged-waste')
