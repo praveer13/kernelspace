@@ -1,12 +1,12 @@
 import type { Lesson } from '../types'
-import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
+import { ENGINE_BLOCK_SCOPE, claimNumber } from '../claims'
 
 // The worked setup uses the paper's block, read from its claim; vLLM's default block is its own claim. Both sentences below compute from them.
 const PROMPT = 130
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const PAPER_FULL = Math.floor(PROMPT / PAPER_BLOCK)
 const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
-const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_CITE = '[[c:production.vllm.block-size|pin]]'
 const ENGINE_FULL = Math.floor(PROMPT / ENGINE_BLOCK)
 
 const lesson: Lesson = {

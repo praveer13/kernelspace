@@ -44,8 +44,9 @@ const ENGINE = claimNumber('production.vllm.block-size')
 const CITE = registryCite('production.vllm.block-size')
 const BOUND = claimNumber('synthetic.kv.paged-waste')
 const BLOCK_TOKEN = '[[c:production.vllm.block-size|pin]]'
-const inLesson = (id: string) => (id === 't5.l5' ? BLOCK_TOKEN : CITE)
-const inExport = (id: string) => (id === 't5.l5' ? `${CITE} (claim production.vllm.block-size)` : CITE)
+const TOKEN_LESSONS = new Set(['t1.l4', 't5.l5', 't5.l6'])
+const inLesson = (id: string) => (TOKEN_LESSONS.has(id) ? BLOCK_TOKEN : CITE)
+const inExport = (id: string) => (TOKEN_LESSONS.has(id) ? `${CITE} (claim production.vllm.block-size)` : CITE)
 const scope = () => (lessonClaims as Record<string, unknown>).ENGINE_BLOCK_SCOPE as string | undefined
 
 describe("B1/R1: vLLM's default is stated once per lesson, on CUDA, with the same scope words and no ROCm number", () => {

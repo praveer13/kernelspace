@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 // The lessons' own claim reader (the generated snapshot), as t5.l6 reads them: the paper's block is a lazy kvpool
 // claim, which the eager registry knows only after some other file has loaded that group.
-import { claimCite, claimNumber } from '@/data/lessons/claims'
+import { claimNumber } from '@/data/lessons/claims'
 import { ALL_LESSONS } from '@/data/lessons'
 
 const lesson = ALL_LESSONS.find((l) => l.id === 't5.l6')
@@ -23,7 +23,7 @@ describe('t5.l6 block boundary at vLLM default (K0-D13)', () => {
   test('the text holds floor(130/n) blocks, their tokens and the n - 1 unshared tail for the claim value', () => {
     expect(text).toContain(`At ${n} tokens per block the same 130 tokens give ${blocks} blocks (${blocks * n} tokens)`)
     expect(text).toContain(`up to ${n - 1} matching tokens`)
-    expect(text).toContain(`vLLM's default on CUDA is ${claimCite('production.vllm.block-size')}`)
+    expect(text).toContain("vLLM's default on CUDA is [[c:production.vllm.block-size|pin]]")
   })
 
   test("the paper's block stays as the worked case", () => {
