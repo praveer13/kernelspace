@@ -37,6 +37,7 @@ import type { Background } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
 import { cn } from '@/lib/utils'
+import { ClaimText } from '@/components/ClaimText'
 
 const ItemCard = lazy(() => import('@/components/items/ItemCard'))
 
@@ -70,13 +71,13 @@ function PairList({ pairs, background = null }: { pairs: readonly IsomorphismPai
               <div className="mt-1 text-body-sm text-text-2">{p.llmLine}</div>
             </div>
           </div>
-          {p.breaks && <BreakLine>{p.breaks}</BreakLine>}
+          {p.breaks && <BreakLine><ClaimText text={p.breaks} /></BreakLine>}
           {workApplies(p, background) && p.work && (
             <div data-work-pair className={cn('mt-2 min-w-0 break-words rounded-md p-3.5', OS_CARD)}>
               <div className="font-mono text-label uppercase text-text-3">at work</div>
               <div className="mt-1 font-mono text-body-sm font-medium text-[#22D3EE]">{p.work.os}</div>
               <div className="mt-1 text-body-sm text-text-2">{p.work.osLine}</div>
-              <BreakLine>{p.work.breaks}</BreakLine>
+              <BreakLine><ClaimText text={p.work.breaks} /></BreakLine>
             </div>
           )}
         </div>

@@ -12,6 +12,8 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from '
 import { fileURLToPath } from 'node:url'
 import { claimNumber, formatClaimValue, getClaim } from '../src/data/claims'
 import { claimTokensIn } from '../src/lib/claim-token-syntax'
+import { ALL_LESSONS } from '../src/data/lessons'
+import type { ClaimUse } from '../src/data/claims/uses'
 import '../src/data/claims/all'
 import { claimCite, claimRelease } from '../src/data/claims/cite'
 
@@ -142,6 +144,51 @@ export function renderTokens(): string {
 
 export const OUT_TOKENS = new URL('../src/data/lessons/claims.tokens.generated.ts', import.meta.url)
 
+/** The uses index: every place that renders a claim token or names a claim on a chip (K3-6 and K3-9 read it). */
+export const OUT_USES = new URL('../src/data/claims/uses.generated.json', import.meta.url)
+
+const stringsIn = (value: unknown, field: string, out: { id: string; field: string }[]): void => {
+  if (typeof value === 'string') {
+    for (const t of claimTokensIn(value)) out.push({ id: t.id, field })
+  } else if (Array.isArray(value)) {
+    for (const x of value) stringsIn(x, field, out)
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) stringsIn(v, k, out)
+  }
+}
+
+export function uses(): Record<string, ClaimUse[]> {
+  const map = new Map<string, Map<string, ClaimUse>>()
+  const put = (id: string, use: ClaimUse) => {
+    const key = `${use.lesson}|${use.block}|${use.field}`
+    const inner = map.get(id) ?? new Map<string, ClaimUse>()
+    if (!inner.has(key)) inner.set(key, use)
+    map.set(id, inner)
+  }
+  for (const lesson of ALL_LESSONS) {
+    lesson.blocks.forEach((block) => {
+      const found: { id: string; field: string }[] = []
+      stringsIn(block, '', found)
+      for (const f of found) put(f.id, { lesson: lesson.id, block: block.type, field: f.field })
+      if (block.type === 'statline') {
+        for (const chip of block.stats) if (chip.claim) put(chip.claim, { lesson: lesson.id, block: 'statline', field: 'chip' })
+      }
+    })
+    const ticket: { id: string; field: string }[] = []
+    stringsIn(lesson.ticket, '', ticket)
+    for (const f of ticket) put(f.id, { lesson: lesson.id, block: 'ticket', field: f.field })
+  }
+  const out: Record<string, ClaimUse[]> = {}
+  for (const [id, inner] of [...map].sort(([a], [b]) => a.localeCompare(b))) {
+    out[id] = [...inner.values()].sort((a, b) => a.lesson.localeCompare(b.lesson) || a.block.localeCompare(b.block) || a.field.localeCompare(b.field))
+  }
+  return out
+}
+
+export function renderUses(): string {
+  return `${JSON.stringify(uses(), null, 2)}\n`
+}
+
 function claimCite_(id: string): string {
   return getClaim(id).pin ? claimCite(id) : String(getClaim(id).value)
 }
@@ -168,6 +215,6 @@ if (import.meta.main) {
   if (out) {
     process.exit(put(out, render()) ? 0 : 1)
   }
-  const ok = put(OUT.pathname, render()) && put(OUT_TOKENS.pathname, renderTokens())
+  const ok = put(OUT.pathname, render()) && put(OUT_TOKENS.pathname, renderTokens()) && put(OUT_USES.pathname, renderUses())
   process.exit(ok ? 0 : 1)
 }

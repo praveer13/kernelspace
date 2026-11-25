@@ -1,0 +1,29 @@
+{
+  "production.vllm.block-size": [
+    {
+      "lesson": "t1.l4",
+      "block": "callout",
+      "field": "md"
+    },
+    {
+      "lesson": "t1.l4",
+      "block": "prose",
+      "field": "md"
+    },
+    {
+      "lesson": "t2.l7",
+      "block": "isomorphism",
+      "field": "breaks"
+    },
+    {
+      "lesson": "t5.l5",
+      "block": "prose",
+      "field": "md"
+    },
+    {
+      "lesson": "t5.l6",
+      "block": "prose",
+      "field": "md"
+    }
+  ]
+}

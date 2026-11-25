@@ -1,11 +1,11 @@
 import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
-import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber } from '../claims'
+import { ENGINE_BLOCK_SCOPE, claimNumber } from '../claims'
 import { fig2Rest, kernelCostStory, throughputStory } from '../pagedMix'
 
 // The paper's block size and vLLM's default at the pinned release are two claims; this lesson reads each from the snapshot.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
-const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_CITE = '[[c:production.vllm.block-size|pin]]'
 // Figure 2 of the paper: the share of vLLM's KV cache memory holding token states, a claim.
 const FIG2_TOKEN_STATES = claimNumber('serving.pagedattention.fig2-vllm-token-states')
 // Section 1 of the paper: the share of KV memory holding token states in earlier systems, two claims.
