@@ -43,6 +43,9 @@ const PAPER = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE = claimNumber('production.vllm.block-size')
 const CITE = registryCite('production.vllm.block-size')
 const BOUND = claimNumber('synthetic.kv.paged-waste')
+const BLOCK_TOKEN = '[[c:production.vllm.block-size|pin]]'
+const inLesson = (id: string) => (id === 't5.l5' ? BLOCK_TOKEN : CITE)
+const inExport = (id: string) => (id === 't5.l5' ? `${CITE} (claim production.vllm.block-size)` : CITE)
 const scope = () => (lessonClaims as Record<string, unknown>).ENGINE_BLOCK_SCOPE as string | undefined
 
 describe("B1/R1: vLLM's default is stated once per lesson, on CUDA, with the same scope words and no ROCm number", () => {
@@ -56,10 +59,10 @@ describe("B1/R1: vLLM's default is stated once per lesson, on CUDA, with the sam
   for (const id of ['t1.l4', 't2.l7', 't5.l5', 't5.l6']) {
     test(`${id}: "vLLM's default on CUDA is <cite>" with the scope words, exactly once`, () => {
       const t = text(id)
-      expect(t).toContain(`vLLM's default on CUDA is ${CITE}`)
+      expect(t).toContain(`vLLM's default on CUDA is ${inLesson(id)}`)
       expect(t).toContain(String(scope()))
       expect(t.match(/\bon CUDA\b/g)).toHaveLength(1)
-      expect(read(`public/lessons-md/${id}.md`)).toContain(`vLLM's default on CUDA is ${CITE}`)
+      expect(read(`public/lessons-md/${id}.md`)).toContain(`vLLM's default on CUDA is ${inExport(id)}`)
     })
   }
 

@@ -6,7 +6,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { ContentBlock, LessonHeading } from '@/data/lessons/types'
-import { LESSON_TOKEN_SOURCE, lessonCodeIn, lessonTokensIn, type LabelledLesson } from '@/lib/lesson-label'
+import { LESSON_TOKEN_SOURCE, lessonCodeIn, type LabelledLesson } from '@/lib/lesson-label'
+import { ClaimToken } from '@/components/ClaimToken'
+import { CLAIM_TOKEN_SOURCE } from '@/lib/claim-token-syntax'
 
 export function slugify(text: string): string {
   return text
@@ -34,11 +36,22 @@ export function extractHeadings(blocks: ContentBlock[]): LessonHeading[] {
   return out
 }
 
-const INLINE_RE = new RegExp(`(${LESSON_TOKEN_SOURCE})|(\`[^\`]+\`)|(\\*\\*[^*]+\\*\\*)|(\\*[^*\\n]+\\*)|(\\[[^\\]]+\\]\\([^)\\s]+\\))`, 'g')
+const INLINE_RE = new RegExp(
+  [
+    `(${LESSON_TOKEN_SOURCE})`,
+    `(${CLAIM_TOKEN_SOURCE})`,
+    '(`[^`]+`)',
+    '(\\*\\*[^*]+\\*\\*)',
+    '(\\*[^*\\n]+\\*)',
+    '(\\[[^\\]]+\\]\\([^)\\s]+\\))',
+  ].join('|'),
+  'g',
+)
 
 /** Bold or emphasis text: recurse only when it holds a token, so today's plain runs render exactly as before. */
+const HAS_INLINE_TOKEN = /\[\[(?:l|c):/
 const inlineInner = (text: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): ReactNode =>
-  lessonTokensIn(text).length > 0 ? renderInline(text, order) : text
+  HAS_INLINE_TOKEN.test(text) ? renderInline(text, order) : text
 
 export function renderInline(text: string, order?: readonly Pick<LabelledLesson, 'id' | 'trackId'>[]): ReactNode[] {
   const out: ReactNode[] = []
@@ -49,7 +62,7 @@ export function renderInline(text: string, order?: readonly Pick<LabelledLesson,
   const re = new RegExp(INLINE_RE.source, 'g')
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index))
-    const [tok, token, code, bold, em, link] = m
+    const [tok, token, claimTok, code, bold, em, link] = m
     if (token) {
       const id = token.slice('[[l:'.length, -']]'.length)
       out.push(
@@ -61,6 +74,10 @@ export function renderInline(text: string, order?: readonly Pick<LabelledLesson,
           {lessonCodeIn(id, order)}
         </Link>,
       )
+    } else if (claimTok) {
+      const body = claimTok.slice('[[c:'.length, -']]'.length)
+      const [id, mode] = body.split('|')
+      out.push(<ClaimToken key={key++} id={id} pin={mode === 'pin'} />)
     } else if (code) {
       out.push(
         <code

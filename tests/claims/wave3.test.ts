@@ -160,7 +160,9 @@ function gateOn(file: string, edit: (text: string) => string): { code: number; o
     mkdirSync(join(dir, 'scripts'))
     mkdirSync(join(dir, 'public'))
     mkdirSync(join(dir, 'src/data'), { recursive: true })
+    mkdirSync(join(dir, 'src/lib'), { recursive: true })
     cpSync(join(root, 'scripts/verify-claims.ts'), join(dir, 'scripts/verify-claims.ts'))
+    cpSync(join(root, 'src/lib/claim-token-syntax.ts'), join(dir, 'src/lib/claim-token-syntax.ts'))
     cpSync(join(root, 'src/data/claims'), join(dir, 'src/data/claims'), { recursive: true })
     cpSync(join(root, 'src/data/engine'), join(dir, 'src/data/engine'), { recursive: true }) // models.ts reads the token corpus
     cpSync(join(root, 'public/claims.json'), join(dir, 'public/claims.json'))

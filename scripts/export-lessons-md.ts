@@ -11,6 +11,7 @@
 import { writeFileSync, mkdirSync } from 'fs'
 import { ALL_LESSONS, TRACK_EXTRAS } from '../src/data/lessons'
 import { lessonLabel, replaceLessonTokens, replaceLessonTokensWithLinks } from '../src/lib/lesson-label'
+import { replaceClaimTokens } from '../src/lib/claim-tokens'
 import type { ContentBlock, Lesson } from '../src/data/lessons/types'
 import { findQuestion, PROTEGE_STEPS } from '../src/lib/learner/protege'
 import { exportOrder } from '../src/lib/rng'
@@ -165,7 +166,7 @@ export function lessonToMd(l: Lesson): string {
     })
     .filter(Boolean)
     .join('\n\n---\n\n')
-  return `${header}${replaceLessonTokensWithLinks(body, undefined, `${SITE}/lesson`)}\n`
+  return `${header}${replaceLessonTokensWithLinks(replaceClaimTokens(body), undefined, `${SITE}/lesson`)}\n`
 }
 
 function writeLessons(): number {
@@ -177,7 +178,7 @@ function writeLessons(): number {
 /* llms.txt — the agent manifest (llmstxt.org shape) */
 const byTrack = TRACKS.map((t) => {
   const lessons = ALL_LESSONS.filter((l) => l.trackId === t.id)
-    .map((l) => `- [${lessonLabel(l)} ${l.title}](${SITE}/lessons-md/${l.id}.md): ${replaceLessonTokens(l.hook)}`)
+    .map((l) => `- [${lessonLabel(l)} ${l.title}](${SITE}/lessons-md/${l.id}.md): ${replaceClaimTokens(replaceLessonTokens(l.hook))}`)
     .join('\n')
   const extras = TRACK_EXTRAS[t.id as keyof typeof TRACK_EXTRAS]
   return `### ${t.code} — ${t.name}\n\n_${extras?.pitch ?? ''}_\n\n${lessons}`

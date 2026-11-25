@@ -1,11 +1,11 @@
 import type { Lesson } from '../types'
-import { ENGINE_BLOCK_SCOPE, claimCite, claimNumber, claimRelease, fractionText } from '../claims'
+import { ENGINE_BLOCK_SCOPE, claimNumber, claimRelease, fractionText } from '../claims'
 import { kernelCostStory, wasteStory } from '../pagedMix'
 
 // The lesson works the 2023 paper's block; vLLM's default is its own claim, and so are the pool claims. Prose reads each from the registry.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
-const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_CITE = '[[c:production.vllm.block-size|pin]]'
 const ENGINE_RELEASE = claimRelease('production.vllm.block-size')
 // The block-table explorer's slider tops out at 64 and its graded task blk.sweep asks for 64: the sim's own number, not vLLM's default.
 // tests/lessons/k0-fix2-rules.test.ts holds it equal to the top of SWEEP_SIZES in lib/sims/models/blocks.ts.

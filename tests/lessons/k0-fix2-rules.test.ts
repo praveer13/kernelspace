@@ -28,6 +28,10 @@ const lessonText = (id: string) => {
 const root = new URL('../../', import.meta.url).pathname
 const read = (path: string) => readFileSync(`${root}${path}`, 'utf8')
 const cite = claimCite('production.vllm.block-size')
+/** t5.l5 renders the block-size sentence through the claim token (K3-1); its export spells the claim out. */
+const BLOCK_TOKEN = '[[c:production.vllm.block-size|pin]]'
+const inLesson = (id: string) => (id === 't5.l5' ? BLOCK_TOKEN : cite)
+const inExport = (id: string) => (id === 't5.l5' ? `${cite} (claim production.vllm.block-size)` : cite)
 
 describe('t5.l5 types no number or date without a claim', () => {
   const text = lessonText('t5.l5')
@@ -44,14 +48,11 @@ describe('t5.l5 types no number or date without a claim', () => {
 })
 
 describe("vLLM's default carries the erratum's qualifier where t5.l5's and t1.l4's prose states it", () => {
-  for (const [id, words] of [
-    ['t5.l5', `vLLM's default on CUDA is ${cite} (${ENGINE_BLOCK_SCOPE})`],
-    ['t1.l4', `vLLM's default on CUDA is ${cite} (${ENGINE_BLOCK_SCOPE})`],
-  ] as const) {
+  for (const id of ['t5.l5', 't1.l4'] as const) {
     test(id, () => {
-      expect(lessonText(id)).toContain(words)
+      expect(lessonText(id)).toContain(`vLLM's default on CUDA is ${inLesson(id)} (${ENGINE_BLOCK_SCOPE})`)
       expect(lessonText(id)).toContain('--block-size')
-      expect(read(`public/lessons-md/${id}.md`)).toContain(words)
+      expect(read(`public/lessons-md/${id}.md`)).toContain(`vLLM's default on CUDA is ${inExport(id)} (${ENGINE_BLOCK_SCOPE})`)
     })
   }
 })
