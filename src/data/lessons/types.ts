@@ -135,6 +135,11 @@ export interface StatChipData {
   label: string
   /** plain-English tooltip */
   hint?: string
+  /**
+   * A claim id: K3-1b renders the chip through ClaimToken, whose value, unit and source come from the generated token
+   * map. Until then the statline shows the authored `value`.
+   */
+  claim?: string
 }
 
 export interface StatlineBlock {

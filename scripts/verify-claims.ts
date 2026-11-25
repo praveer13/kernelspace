@@ -10,8 +10,9 @@
  * A `phys.*` claim (the fitted physics v2 values) is reproduced by docs/physics/report.json, decisions.json or controls.json
  * (`physProblems`, spec s5 §4.5); a `phys.*` claim none of them carries fails.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { ALL_CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
+import { claimTokensIn } from '../src/lib/claim-token-syntax'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -200,12 +201,38 @@ export function readPhysReports(dir = 'docs/physics'): { reports: Partial<Record
   return { reports, problems }
 }
 
+/**
+ * Every `[[c:<id>]]` token in the lesson files, with the file that holds it. The scan reads raw TS, so a token written in a
+ * code sample is treated as live (conservative: the site leaves it literal).
+ */
+function lessonTokens(dir: string): { id: string; file: string }[] {
+  const out: { id: string; file: string }[] = []
+  const walk = (at: string): void => {
+    for (const name of readdirSync(at)) {
+      const path = `${at}/${name}`
+      if (statSync(path).isDirectory()) walk(path)
+      else if (name.endsWith('.ts')) {
+        const text = readFileSync(path, 'utf8')
+        for (const t of claimTokensIn(text)) out.push({ id: t.id, file: path })
+        for (const m of text.matchAll(/\bclaim:\s*'([a-z0-9._-]+)'/g)) out.push({ id: m[1]!, file: path })
+      }
+    }
+  }
+  if (existsSync(dir)) walk(dir)
+  return out
+}
+
 /** The whole check; the script runs it when started directly, and tests import the pure helpers above without running it. */
 async function main(): Promise<void> {
   const byId = new Map<string, Claim>()
   for (const c of ALL_CLAIMS) {
     if (byId.has(c.id)) fail(c.id, 'duplicate id')
     byId.set(c.id, c)
+  }
+
+  // a [[c:<id>]] token has no fallback: an unknown id must fail here, not render on a learner's page (K3-1)
+  for (const token of lessonTokens('src/data/lessons')) {
+    if (!byId.has(token.id)) fail(token.id, `a lesson token names no claim (${token.file})`)
   }
 
   for (const c of ALL_CLAIMS) {

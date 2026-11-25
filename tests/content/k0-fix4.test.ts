@@ -107,8 +107,13 @@ describe('R1: the first statement of vLLM\'s default a learner meets says "on CU
   // The rendered order of a lesson is the order of its blocks; a prequestion's why and a chip's hint come before the body.
   for (const id of ['t1.l4', 't2.l7', 't5.l5', 't5.l6']) {
     test(`${id}: the first "vLLM's default" is the qualified one, in the lesson and in its export`, () => {
-      const qualified = `vLLM's default on CUDA is ${CITE} (${ENGINE_BLOCK_SCOPE})`
-      for (const t of [text(id), read(`public/lessons-md/${id}.md`)]) {
+      const token = '[[c:production.vllm.block-size|pin]]'
+      const lessonQualified = `vLLM's default on CUDA is ${id === 't5.l5' ? token : CITE} (${ENGINE_BLOCK_SCOPE})`
+      const exportQualified = `vLLM's default on CUDA is ${id === 't5.l5' ? `${CITE} (claim production.vllm.block-size)` : CITE} (${ENGINE_BLOCK_SCOPE})`
+      for (const [t, qualified] of [
+        [text(id), lessonQualified],
+        [read(`public/lessons-md/${id}.md`), exportQualified],
+      ] as const) {
         const first = t.indexOf("vLLM's default")
         expect(first).toBeGreaterThanOrEqual(0)
         expect(t.slice(first, first + qualified.length)).toBe(qualified)

@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { claimNumber, getClaim } from '@/data/claims'
+import { claimNumber, formatClaimValue, getClaim } from '@/data/claims'
 import { claimCite, claimRelease } from '@/data/claims/cite'
 import '@/data/claims/lazy/kvpool'
 import * as lessonClaims from '@/data/lessons/claims'
-import { claimImports, LESSON_CLAIMS, OUT, render } from '../../scripts/gen-lesson-claims'
+import { claimText } from '@/lib/claim-tokens'
+import { claimTokensIn } from '@/lib/claim-token-syntax'
+import { claimImports, LESSON_CLAIMS, LESSON_TOKEN_CLAIMS, OUT, render } from '../../scripts/gen-lesson-claims'
 
 const root = new URL('../../src/data/lessons/', import.meta.url).pathname
 function files(dir: string): string[] {
@@ -24,6 +26,7 @@ describe('the lessons read their claims from a generated snapshot (K0-Z2 fix)', 
       expect(lessonClaims.claimCite(id)).toBe(getClaim(id).pin ? claimCite(id) : String(getClaim(id).value))
       if (typeof getClaim(id).value === 'number') expect(lessonClaims.claimNumber(id)).toBe(claimNumber(id))
       if (getClaim(id).pin) expect(lessonClaims.claimRelease(id)).toBe(claimRelease(id))
+      if (LESSON_TOKEN_CLAIMS.includes(id)) expect(claimText(id)).toBe(formatClaimValue(getClaim(id)))
     }
   })
 
@@ -34,6 +37,7 @@ describe('the lessons read their claims from a generated snapshot (K0-Z2 fix)', 
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from '@\/data\/claims/)
       for (const m of src.matchAll(/claim(?:Number|Cite|Release)\(\s*'([^']+)'/g)) read.add(m[1]!)
+      for (const t of claimTokensIn(src)) read.add(t.id)
     }
     expect(read.size).toBeGreaterThan(3)
     for (const id of read) expect(LESSON_CLAIMS).toContain(id)
