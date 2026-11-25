@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import { claimNumber } from '@/data/claims'
-import { claimCite } from '@/data/claims/cite'
 import { ALL_LESSONS } from '@/data/lessons'
 import '@/data/claims/lazy/kvpool'
 
@@ -13,7 +12,7 @@ describe('t2.l7 block-size and waste claims (K0-D16)', () => {
     expect(claimNumber('serving.pagedattention.paper-block-size')).toBe(16)
     expect(text).toContain('(16 in the paper)')
     expect(text).toContain('Fixed-size token units (16 in the paper)')
-    expect(text).toContain(`whose token count was 16 in the paper. vLLM's default on CUDA is ${claimCite('production.vllm.block-size')}`)
+    expect(text).toContain("whose token count was 16 in the paper. vLLM's default on CUDA is [[c:production.vllm.block-size|pin]]")
     expect(text).not.toContain('(default 16)')
     expect(text).not.toContain('Fixed 16-token units')
   })
