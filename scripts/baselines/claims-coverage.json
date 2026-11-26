@@ -1,0 +1,2617 @@
+{
+  "chips": [
+    {
+      "lesson": "t0.l1",
+      "label": "Dynamo",
+      "value": "2025"
+    },
+    {
+      "lesson": "t0.l1",
+      "label": "idea half-life",
+      "value": "~50y"
+    },
+    {
+      "lesson": "t0.l1",
+      "label": "PagedAttention",
+      "value": "2023"
+    },
+    {
+      "lesson": "t0.l1",
+      "label": "virtual memory",
+      "value": "1962"
+    },
+    {
+      "lesson": "t0.l2",
+      "label": "DRAM",
+      "value": "~100 ns"
+    },
+    {
+      "lesson": "t0.l2",
+      "label": "L1 cache",
+      "value": "~0.5 ns"
+    },
+    {
+      "lesson": "t0.l2",
+      "label": "L2 cache",
+      "value": "~5 ns"
+    },
+    {
+      "lesson": "t0.l2",
+      "label": "L3 cache",
+      "value": "~15 ns"
+    },
+    {
+      "lesson": "t0.l2",
+      "label": "NVMe SSD",
+      "value": "~100 µs"
+    },
+    {
+      "lesson": "t0.l5",
+      "label": "JIT threshold",
+      "value": "~10k"
+    },
+    {
+      "lesson": "t0.l5",
+      "label": "object header",
+      "value": "12–16 B"
+    },
+    {
+      "lesson": "t0.l5",
+      "label": "TLAB alloc",
+      "value": "~1 ns"
+    },
+    {
+      "lesson": "t0.l5",
+      "label": "ZGC pause",
+      "value": "<1 ms"
+    },
+    {
+      "lesson": "t1.l4",
+      "label": "external frag (fixed)",
+      "value": "0"
+    },
+    {
+      "lesson": "t1.l4",
+      "label": "KV memory not holding token states before paging (Figure 2, Orca)",
+      "value": "61.8–79.6%"
+    },
+    {
+      "lesson": "t1.l4",
+      "label": "KV waste, mixed batch at the paper's 16-token blocks (course estimate)",
+      "value": "<4%"
+    },
+    {
+      "lesson": "t1.l4",
+      "label": "pow2 worst case",
+      "value": "~50%"
+    },
+    {
+      "lesson": "t2.l1",
+      "label": "EEVDF base slice",
+      "value": "~0.75–3 ms"
+    },
+    {
+      "lesson": "t2.l1",
+      "label": "process switch",
+      "value": "~3–10 µs"
+    },
+    {
+      "lesson": "t2.l1",
+      "label": "syscall",
+      "value": "~50–100 ns"
+    },
+    {
+      "lesson": "t2.l1",
+      "label": "thread switch",
+      "value": "~1–3 µs"
+    },
+    {
+      "lesson": "t2.l2",
+      "label": "major fault",
+      "value": "~100 µs+"
+    },
+    {
+      "lesson": "t2.l2",
+      "label": "minor fault",
+      "value": "~1–10 µs"
+    },
+    {
+      "lesson": "t2.l2",
+      "label": "TLB hit",
+      "value": "~1 cyc"
+    },
+    {
+      "lesson": "t2.l2",
+      "label": "TLB miss walk",
+      "value": "~20–100 ns"
+    },
+    {
+      "lesson": "t2.l4",
+      "label": "base slice",
+      "value": "~0.75–3 ms"
+    },
+    {
+      "lesson": "t2.l4",
+      "label": "EEVDF pick",
+      "value": "O(log n)"
+    },
+    {
+      "lesson": "t2.l4",
+      "label": "Mars Pathfinder",
+      "value": "1997"
+    },
+    {
+      "lesson": "t2.l4",
+      "label": "the real metric",
+      "value": "p99"
+    },
+    {
+      "lesson": "t3.l6",
+      "label": "Chromium severe bugs",
+      "value": "70%"
+    },
+    {
+      "lesson": "t3.l6",
+      "label": "GC pauses",
+      "value": "0"
+    },
+    {
+      "lesson": "t3.l6",
+      "label": "KV transfer",
+      "value": "~GB/s"
+    },
+    {
+      "lesson": "t3.l6",
+      "label": "TTFT budget",
+      "value": "ms-scale"
+    },
+    {
+      "lesson": "t4.l1",
+      "label": "CPU cores",
+      "value": "8–32"
+    },
+    {
+      "lesson": "t4.l1",
+      "label": "FP32 lanes (H100)",
+      "value": "~16k"
+    },
+    {
+      "lesson": "t4.l1",
+      "label": "SMs (H100)",
+      "value": "132"
+    },
+    {
+      "lesson": "t4.l1",
+      "label": "threads per warp",
+      "value": "32"
+    },
+    {
+      "lesson": "t4.l2",
+      "label": "HBM3 (H100)",
+      "value": "80 GB · 3.35 TB/s"
+    },
+    {
+      "lesson": "t4.l2",
+      "label": "L2 (H100)",
+      "value": "~50 MiB"
+    },
+    {
+      "lesson": "t4.l2",
+      "label": "registers / SM",
+      "value": "256 KiB"
+    },
+    {
+      "lesson": "t4.l2",
+      "label": "shared mem / SM",
+      "value": "228 KiB"
+    },
+    {
+      "lesson": "t4.l3",
+      "label": "batch lever",
+      "value": "×N"
+    },
+    {
+      "lesson": "t4.l3",
+      "label": "big matmul AI",
+      "value": "~1000+"
+    },
+    {
+      "lesson": "t4.l3",
+      "label": "decode AI @ b=1",
+      "value": "≈1 FLOP/B"
+    },
+    {
+      "lesson": "t4.l3",
+      "label": "H100 ridge (FP16)",
+      "value": "~295 F/B"
+    },
+    {
+      "lesson": "t4.l7",
+      "label": "FP8 decode rate",
+      "value": "×2"
+    },
+    {
+      "lesson": "t4.l7",
+      "label": "group size",
+      "value": "128"
+    },
+    {
+      "lesson": "t4.l7",
+      "label": "INT4 capacity",
+      "value": "×4"
+    },
+    {
+      "lesson": "t4.l7",
+      "label": "INT4 quality cost",
+      "value": "~1%"
+    },
+    {
+      "lesson": "t5.l1",
+      "label": "attention cost",
+      "value": "∝ t"
+    },
+    {
+      "lesson": "t5.l1",
+      "label": "FLOPs per token",
+      "value": "2 × params"
+    },
+    {
+      "lesson": "t5.l1",
+      "label": "MLP share",
+      "value": "70-80%"
+    },
+    {
+      "lesson": "t5.l1",
+      "label": "weight bytes per token",
+      "value": "2 × params B"
+    },
+    {
+      "lesson": "t5.l2",
+      "label": "token = 1 decode step",
+      "value": "1"
+    },
+    {
+      "lesson": "t5.l2",
+      "label": "tokens for one CJK character",
+      "value": "1–3"
+    },
+    {
+      "lesson": "t5.l2",
+      "label": "vocab (LLaMA-3)",
+      "value": "128k"
+    },
+    {
+      "lesson": "t5.l2",
+      "label": "words/token (EN)",
+      "value": "~0.75"
+    },
+    {
+      "lesson": "t5.l3",
+      "label": "ITL comfort",
+      "value": "<100 ms"
+    },
+    {
+      "lesson": "t5.l3",
+      "label": "ITL driver",
+      "value": "∝ bytes/token"
+    },
+    {
+      "lesson": "t5.l3",
+      "label": "the real KPI",
+      "value": "goodput"
+    },
+    {
+      "lesson": "t5.l3",
+      "label": "TTFT driver",
+      "value": "∝ prompt × params"
+    },
+    {
+      "lesson": "t5.l4",
+      "label": "70B 128k ctx",
+      "value": "40 GiB"
+    },
+    {
+      "lesson": "t5.l4",
+      "label": "70B FP16 / token",
+      "value": "320 KiB"
+    },
+    {
+      "lesson": "t5.l4",
+      "label": "FP8 / INT4 KV",
+      "value": "×2 / ×4"
+    },
+    {
+      "lesson": "t5.l4",
+      "label": "the formula",
+      "value": "2×L×d×b"
+    },
+    {
+      "lesson": "t5.l6",
+      "label": "cache key",
+      "value": "tokens"
+    },
+    {
+      "lesson": "t5.l6",
+      "label": "prefill skipped",
+      "value": "94%"
+    },
+    {
+      "lesson": "t5.l6",
+      "label": "quality change",
+      "value": "0"
+    },
+    {
+      "lesson": "t5.l7",
+      "label": "goodput gain (course estimate)",
+      "value": "2–8×"
+    },
+    {
+      "lesson": "t5.l7",
+      "label": "mean time per output token",
+      "value": "11.8 ms"
+    },
+    {
+      "lesson": "t5.l7",
+      "label": "preemption latency",
+      "value": "1 step"
+    },
+    {
+      "lesson": "t5.l7",
+      "label": "slot recycle",
+      "value": "O(1)"
+    },
+    {
+      "lesson": "t5.l8",
+      "label": "draft length",
+      "value": "k ≈ 4–8"
+    },
+    {
+      "lesson": "t5.l8",
+      "label": "quality delta",
+      "value": "0"
+    },
+    {
+      "lesson": "t5.l8",
+      "label": "typical speedup",
+      "value": "1.5–2.5×"
+    },
+    {
+      "lesson": "t5.l8",
+      "label": "verify FLOPs",
+      "value": "~free"
+    },
+    {
+      "lesson": "t5.l9",
+      "label": "HBM (intra-GPU)",
+      "value": "3.35 TB/s"
+    },
+    {
+      "lesson": "t5.l9",
+      "label": "NVLink 4 (GPU↔GPU)",
+      "value": "900 GB/s"
+    },
+    {
+      "lesson": "t5.l9",
+      "label": "PCIe gen5 x16",
+      "value": "~64 GB/s"
+    },
+    {
+      "lesson": "t5.l9",
+      "label": "RDMA (node↔node)",
+      "value": "25–100 GB/s"
+    },
+    {
+      "lesson": "t6.l1",
+      "label": "all-to-alls per forward",
+      "value": "2 × 58"
+    },
+    {
+      "lesson": "t6.l1",
+      "label": "DeepSeek decode EP width",
+      "value": "EP144"
+    },
+    {
+      "lesson": "t6.l1",
+      "label": "DeepSeek-V3 params: total / per-token",
+      "value": "671B / 37B"
+    },
+    {
+      "lesson": "t6.l1",
+      "label": "routed experts + shared",
+      "value": "256 + 1"
+    },
+    {
+      "lesson": "t6.l10",
+      "label": "cache timing is an observable signal",
+      "value": "hit ≠ miss"
+    },
+    {
+      "lesson": "t6.l10",
+      "label": "credentials inside a tool worker",
+      "value": "0 ambient"
+    },
+    {
+      "lesson": "t6.l10",
+      "label": "Firecracker minimum reported startup",
+      "value": "125 ms"
+    },
+    {
+      "lesson": "t6.l10",
+      "label": "one H100 confidential-inference study",
+      "value": "4–8%"
+    },
+    {
+      "lesson": "t6.l12",
+      "label": "DeepSeek-V3, same setup",
+      "value": "2,324 tok/s/GPU"
+    },
+    {
+      "lesson": "t6.l12",
+      "label": "MegaScale-Infer per GPU",
+      "value": "up to 1.90×"
+    },
+    {
+      "lesson": "t6.l12",
+      "label": "Step-3 decode, 50 ms TPOT",
+      "value": "4,039 tok/s/GPU"
+    },
+    {
+      "lesson": "t6.l2",
+      "label": "input / output tok/s per node",
+      "value": "52.3k / 22.3k"
+    },
+    {
+      "lesson": "t6.l2",
+      "label": "per M output tokens (est.)",
+      "value": "$0.20"
+    },
+    {
+      "lesson": "t6.l2",
+      "label": "SGLang reproduction fleet",
+      "value": "96×H100"
+    },
+    {
+      "lesson": "t6.l2",
+      "label": "vLLM wide-EP per H200",
+      "value": "2.2k tok/s"
+    },
+    {
+      "lesson": "t6.l5",
+      "label": "B200 HBM bandwidth",
+      "value": "~8 TB/s"
+    },
+    {
+      "lesson": "t6.l5",
+      "label": "B200 HBM3e (as shipped)",
+      "value": "~180 GB"
+    },
+    {
+      "lesson": "t6.l5",
+      "label": "DeepSeek-R1 per user on 8×B200",
+      "value": "368 tok/s"
+    },
+    {
+      "lesson": "t6.l5",
+      "label": "NVLink 5 per GPU",
+      "value": "~1.8 TB/s"
+    },
+    {
+      "lesson": "t6.l6",
+      "label": "DeepSeek drafter in production, before DSpark",
+      "value": "MTP-1"
+    },
+    {
+      "lesson": "t6.l6",
+      "label": "MTP gain on DeepSeek-R1",
+      "value": "2–3×"
+    },
+    {
+      "lesson": "t6.l6",
+      "label": "quality loss",
+      "value": "0%"
+    },
+    {
+      "lesson": "t6.l6",
+      "label": "typical draft length",
+      "value": "k = 2–4"
+    },
+    {
+      "lesson": "t6.l7",
+      "label": "of RL wall-clock is rollout",
+      "value": "70–90%"
+    },
+    {
+      "lesson": "t6.l7",
+      "label": "samples per prompt group",
+      "value": "k = 8–64"
+    },
+    {
+      "lesson": "t6.l7",
+      "label": "tokens per reasoning rollout",
+      "value": "10k–100k"
+    },
+    {
+      "lesson": "t6.l7",
+      "label": "weight refresh interval",
+      "value": "every few min"
+    },
+    {
+      "lesson": "t6.l8",
+      "label": "less prefill work at 90% hit",
+      "value": "~10×"
+    },
+    {
+      "lesson": "t6.l8",
+      "label": "may cross many grammar states",
+      "value": "1 token"
+    },
+    {
+      "lesson": "t6.l8",
+      "label": "shared prefix per agent turn",
+      "value": "85–95%"
+    },
+    {
+      "lesson": "t6.l8",
+      "label": "XGrammar 2 compile speedup",
+      "value": "6×+"
+    },
+    {
+      "lesson": "t6.l9",
+      "label": "active adapters per vLLM batch",
+      "value": "max_loras"
+    },
+    {
+      "lesson": "t6.l9",
+      "label": "adapter pages + KV pages",
+      "value": "1 pool"
+    },
+    {
+      "lesson": "t6.l9",
+      "label": "Punica paper peak vs its baselines",
+      "value": "12×"
+    },
+    {
+      "lesson": "t6.l9",
+      "label": "shared base + per-request delta",
+      "value": "W + BA"
+    },
+    {
+      "lesson": "t7.l1",
+      "label": "Meta TTFT goal",
+      "value": "under 350 ms"
+    },
+    {
+      "lesson": "t7.l1",
+      "label": "Meta TTIT goal",
+      "value": "under 25 ms"
+    },
+    {
+      "lesson": "t7.l1",
+      "label": "the honest percentile",
+      "value": "p95"
+    },
+    {
+      "lesson": "t7.l1",
+      "label": "the objective",
+      "value": "goodput"
+    },
+    {
+      "lesson": "t7.l2",
+      "label": "GuideLLM + AIPerf",
+      "value": "2 harnesses"
+    },
+    {
+      "lesson": "t7.l2",
+      "label": "InferenceX cadence",
+      "value": "nightly"
+    },
+    {
+      "lesson": "t7.l2",
+      "label": "requests per load step",
+      "value": "hundreds"
+    },
+    {
+      "lesson": "t7.l2",
+      "label": "traffic, warmup, samples, identical stacks",
+      "value": "4 rules"
+    },
+    {
+      "lesson": "t7.l4",
+      "label": "DeepSeek cost vs list-price revenue, one day",
+      "value": "$87k / $562k"
+    },
+    {
+      "lesson": "t7.l4",
+      "label": "deepseek-v4-pro output tokens, peak hours",
+      "value": "$3.96/M"
+    },
+    {
+      "lesson": "t7.l4",
+      "label": "KV-cache hit rate",
+      "value": "56.3%"
+    },
+    {
+      "lesson": "t7.l4",
+      "label": "output tokens, SGLang 96×H100",
+      "value": "$0.20/M"
+    },
+    {
+      "lesson": "t7.l5",
+      "label": "prefill:decode split, keep-warm pool",
+      "value": "2 ratios"
+    },
+    {
+      "lesson": "t7.l5",
+      "label": "queue, shed, degrade",
+      "value": "3 options"
+    },
+    {
+      "lesson": "t7.l5",
+      "label": "the leading signal",
+      "value": "queue age"
+    },
+    {
+      "lesson": "t7.l5",
+      "label": "worker cold start",
+      "value": "minutes"
+    }
+  ],
+  "sentences": [
+    {
+      "lesson": "r.l4",
+      "hash": "m33966",
+      "facts": [
+        "year"
+      ],
+      "sample": "A more precise checker, Polonius, accepts it, but no stable release through Rust 1.100.0, Nov 2026, ships Polonius:"
+    },
+    {
+      "lesson": "r.l9",
+      "hash": "1m2ma0f",
+      "facts": [
+        "year"
+      ],
+      "sample": "A more precise analysis, Polonius, accepts it, but no stable release through Rust 1.100.0, Nov 2026, ships Polonius."
+    },
+    {
+      "lesson": "t0.l1",
+      "hash": "17b162n",
+      "facts": [
+        "unit"
+      ],
+      "sample": "HBM3 bandwidth is about 3.35 TB/s, so the physics floor is roughly 5 ms per token — no matter how clever your kernel is, because the ALUs…"
+    },
+    {
+      "lesson": "t0.l1",
+      "hash": "hwv00x",
+      "facts": [
+        "unit"
+      ],
+      "sample": "An 8-billion-parameter model in FP16 means moving ~16 GB per token."
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1408cub",
+      "facts": [
+        "unit"
+      ],
+      "sample": "You cannot buy 128 GB of SRAM at any price that fits in a server chassis."
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "16b2ic",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "19w045e",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Above HBM sits a ~50 MiB L2, and above that, per-SM SRAM (\"shared memory\") of up to 228 KiB with ~20+ TB/s of aggregate bandwidth."
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1iwa0d",
+      "facts": [
+        "unit"
+      ],
+      "sample": "L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table."
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1lm8xk1",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The ~100 µs NVMe figure is a typical modern random read, rounded: Dean's 2012 table lists 150 µs, and Eskildsen's [napkin-math](https://g…"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1r4d0kp",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| Registers | ~1 KiB per core | <0.3 ns | instant |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1tnrznt",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| Level | Size (typical) | Latency | Analogy (L1 = 1 s) |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "1x796vw",
+      "facts": [
+        "unit"
+      ],
+      "sample": "In the simulator below you will walk this ladder yourself: fire accesses at different working-set sizes and stride patterns, watch which …"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "9xett",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| L2 cache | 256 KiB–2 MiB per core | ~5 ns | 10 seconds |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "hpmuez",
+      "facts": [
+        "unit"
+      ],
+      "sample": "L2 and L3 are typical rounded values (Dean lists L2 at 7 ns)."
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "l3y55d",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| DRAM | 32–512 GB | ~100 ns | ~3.5 minutes |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "nrg7hf",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| L1 cache | 32–64 KiB per core | ~0.5 ns | 1 second |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "qqm1nk",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| L3 cache | 16–64 MiB shared | ~15 ns | 30 seconds |"
+    },
+    {
+      "lesson": "t0.l2",
+      "hash": "zu9lc2",
+      "facts": [
+        "unit"
+      ],
+      "sample": "An H100 pairs huge compute with **HBM3** — high-bandwidth memory delivering ~3.35 TB/s and ~80 GB of capacity."
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "16bu9bd",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| Column-major (stride 64 KiB) | jumps of 65,536 B | 1 of 8 doubles | ~67 M (8× waste, no reuse) |"
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "16ylye0",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Our matrix row is 64 KiB — 16 pages *per row*."
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "172sve",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| Traversal | Addresses touched | Cache lines used per 64 B fetched | DRAM trips for 512 MiB |"
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "1n44cz4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A 64 KiB stride is too wide and too irregular to help: every access is a cold miss."
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "4fazvo",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data."
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "du3k1c",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**The TLB, again.** Pages are 4 KiB."
+    },
+    {
+      "lesson": "t0.l3",
+      "hash": "ytodhm",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Walk upward and you *jump* bytes per step: 64 KiB per hop for our 8192-column matrix."
+    },
+    {
+      "lesson": "t0.l5",
+      "hash": "1c8565g",
+      "facts": [
+        "unit"
+      ],
+      "sample": "That is not machismo — it is what you want when the workload is *moving 16 GB of weights per generated token* and every percent of bandwi…"
+    },
+    {
+      "lesson": "t0.l5",
+      "hash": "8ijwot",
+      "facts": [
+        "unit"
+      ],
+      "sample": "T0 is done when these five things feel like home: the latency ladder (0.5 ns → 100 µs), the 20× row/column gap, the 64-byte line and fals…"
+    },
+    {
+      "lesson": "t1.l1",
+      "hash": "1avvhym",
+      "facts": [
+        "unit"
+      ],
+      "sample": "- **Stack overflow** — recursion deeper than the 1–8 MiB region; the stack pointer walks off the end into a guard page and the OS kills y…"
+    },
+    {
+      "lesson": "t1.l1",
+      "hash": "6y1agm",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The call stack is a contiguous region of memory (typically 1–8 MiB per thread, set at thread creation) plus one register, the **stack poi…"
+    },
+    {
+      "lesson": "t1.l3",
+      "hash": "10tv24k",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The kernel deals in pages (4 KiB); the allocator deals in bytes."
+    },
+    {
+      "lesson": "t1.l3",
+      "hash": "18apg21",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A **database buffer pool** is segregated fit taken to the extreme: every \"block\" is exactly one page (8 KiB), so fit-search is O(1) and e…"
+    },
+    {
+      "lesson": "t1.l3",
+      "hash": "6a1g7v",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**Coalescing.** Freeing a block can leave it adjacent to other free blocks: three 16-byte crumbs in a row are useless for a 1 KiB request…"
+    },
+    {
+      "lesson": "t1.l3",
+      "hash": "wjswte",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Without splitting, the first would consume the entire 1 MiB slab."
+    },
+    {
+      "lesson": "t1.l4",
+      "hash": "1hnnmu4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Sources: alignment padding (rounding 33 bytes to 48), size-class rounding (a 9 KiB request landing in a 16 KiB slab), block headers, and …"
+    },
+    {
+      "lesson": "t1.l4",
+      "hash": "4jnjdr",
+      "facts": [
+        "unit"
+      ],
+      "sample": "And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothi…"
+    },
+    {
+      "lesson": "t1.l4",
+      "hash": "elrmhg",
+      "facts": [
+        "unit"
+      ],
+      "sample": "- **Database buffer pools** — everything is an 8 KiB page, full stop."
+    },
+    {
+      "lesson": "t1.l4",
+      "hash": "j95pk4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A heap can report 60% free and still fail a 1 MiB allocation, the way a parking lot can have 60 free spaces and nowhere to park a bus."
+    },
+    {
+      "lesson": "t1.l4",
+      "hash": "pbgy4m",
+      "facts": [
+        "unit"
+      ],
+      "sample": "- **OS page frames** — RAM is managed as 4 KiB frames."
+    },
+    {
+      "lesson": "t2.l1",
+      "hash": "1k66gzk",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The *real* cost is the **cache and TLB aftermath**: the new thread starts with cold caches, and every miss is a ~100 ns DRAM trip."
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "1cfqtk7",
+      "facts": [
+        "unit"
+      ],
+      "sample": "This is also the entire case for **huge pages** (2 MiB/1 GiB): same TLB, 512× the reach per entry."
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "1s8cowd",
+      "facts": [
+        "unit"
+      ],
+      "sample": "So x86-64 uses a **4-level radix tree**: each level is a 4 KiB page of 512 8-byte entries, and the walk descends ."
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "1yn12t1",
+      "facts": [
+        "unit"
+      ],
+      "sample": "One table can't hold 2³⁶ entries per process — that's 512 GiB of metadata."
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "du9an9",
+      "facts": [
+        "unit"
+      ],
+      "sample": "(Your 1 GiB in Java \"succeeds\" instantly for this reason.)"
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "g0siop",
+      "facts": [
+        "unit"
+      ],
+      "sample": "TLB miss: the walk (hardware \"page walker\" does it, ~10–100 ns) and the entry is cached."
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "rxv1vk",
+      "facts": [
+        "unit"
+      ],
+      "sample": "With 1536 L2-TLB entries and 4 KiB pages, that's 6 MiB — smaller than your matrix from [[l:t0.l3]], which is why that column walk thrashe…"
+    },
+    {
+      "lesson": "t2.l2",
+      "hash": "y8w0uj",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Virtual and physical memory are both cut into fixed-size chunks: **pages** (virtual, 4 KiB typically) and **frames** (physical, same size)."
+    },
+    {
+      "lesson": "t2.l3",
+      "hash": "1qzpq90",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The policy that chooses the victim is one of the most-studied decisions in systems, because it directly prices your latency tail: evict t…"
+    },
+    {
+      "lesson": "t2.l3",
+      "hash": "vdzh6o",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Beautiful for loops and working sets; catastrophically wrong for scans — read a 10 GiB file once through a 4 GiB cache and LRU evicts *ev…"
+    },
+    {
+      "lesson": "t2.l3",
+      "hash": "yfew4u",
+      "facts": [
+        "unit"
+      ],
+      "sample": "It is the swap-vs-reread decision the OS makes for anonymous pages versus file-backed pages, running at 3 TB/s inside a GPU cluster, with…"
+    },
+    {
+      "lesson": "t2.l4",
+      "hash": "15wetoc",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**Continuous batching** re-decides the batch at *iteration* granularity: after every single decode step (11.8 ms per output token in one …"
+    },
+    {
+      "lesson": "t2.l4",
+      "hash": "166i14j",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**Preemptive multitasking** (the default world you live in) fixes it with the time slice: any thread can be interrupted when its slice en…"
+    },
+    {
+      "lesson": "t2.l4",
+      "hash": "drjcaf",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Simple, fair-ish, and poisoned by **head-of-line blocking** — one 60-second job ahead of your 5 ms job and your p99 is 60 seconds."
+    },
+    {
+      "lesson": "t2.l5",
+      "hash": "1ij1b9l",
+      "facts": [
+        "unit"
+      ],
+      "sample": "That two-level design (fast path userspace, slow path kernel) is why \"mutexes are slow\" is usually wrong: uncontended acquisition is a si…"
+    },
+    {
+      "lesson": "t2.l5",
+      "hash": "ogq69a",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A **spinlock** burns CPU re-checking the flag — perfect when the wait is ~50 ns and preemption would cost microseconds; catastrophic othe…"
+    },
+    {
+      "lesson": "t2.l6",
+      "hash": "1ad3m8y",
+      "facts": [
+        "year"
+      ],
+      "sample": "**io_uring** (Linux, 2019) goes further."
+    },
+    {
+      "lesson": "t2.l6",
+      "hash": "4lmrcn",
+      "facts": [
+        "unit"
+      ],
+      "sample": "No garbage collector, no per-connection stack — a suspended task is its state-machine struct in the heap (about 1 KiB for the echo server…"
+    },
+    {
+      "lesson": "t2.l6",
+      "hash": "5dybyx",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| Thread-per-conn | OS thread | ~1 MiB stack + scheduler entry | kernel context switch |"
+    },
+    {
+      "lesson": "t2.l6",
+      "hash": "d5nj3w",
+      "facts": [
+        "unit"
+      ],
+      "sample": "10,000 connections means 10,000 threads — 10,000 stacks (~80 GiB of address space), constant context switches, and a scheduler drowning i…"
+    },
+    {
+      "lesson": "t2.l6",
+      "hash": "k6kgrr",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| tokio task | state-machine struct | ~1 KiB here: whatever lives across an await | userspace poll, work-stealing |"
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "1diki33",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The paper's motivation, translated: a transformer's **KV cache** — the per-token key/value tensors needed for attention — grows linearly …"
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "1jo2r2h",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A sequence is small (≤ ~1M tokens → ≤ 65k blocks), so a **flat array** block table is tiny (65k × 8 B = 512 KiB worst case) and translati…"
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "1rr5v99",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The paper's throughput curves are that DBA lesson at 2 TB/s."
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "qlq563",
+      "facts": [
+        "year"
+      ],
+      "sample": "(That is the 2023 paper's menu: vLLM V1 later kept only recomputation.) Admission is FCFS; preemption is last-in-first-out among the runn…"
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "scbovf",
+      "facts": [
+        "year"
+      ],
+      "sample": "You are going to read the paper that kicked off modern LLM serving, [\"Efficient Memory Management for Large Language Model Serving with P…"
+    },
+    {
+      "lesson": "t2.l7",
+      "hash": "yx18jc",
+      "facts": [
+        "year"
+      ],
+      "sample": "Existing engines (2022–2023: FasterTransformer, Orca) stored each sequence's cache in **one contiguous GPU buffer, reserved up front**: f…"
+    },
+    {
+      "lesson": "t3.l2",
+      "hash": "1r8kxtl",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A copy is the most expensive \"simple\" thing a program does: a stray on a 100 MiB buffer costs tens of milliseconds of allocation, page fa…"
+    },
+    {
+      "lesson": "t3.l5",
+      "hash": "my73hx",
+      "facts": [
+        "year"
+      ],
+      "sample": "Server-side Wasm is the reason to care beyond this course: **WASI** began as a POSIX-inspired module API (0.1, also called Preview 1); si…"
+    },
+    {
+      "lesson": "t3.l6",
+      "hash": "1ey4gtx",
+      "facts": [
+        "year"
+      ],
+      "sample": "Google's Android team then reports what happens when new code moves to Rust: memory-safety vulnerabilities fell below 20% of the total fo…"
+    },
+    {
+      "lesson": "t3.l6",
+      "hash": "1npil86",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Every bullet is a memory-management and concurrency problem where a 10 ms GC pause or a use-after-free is an incident."
+    },
+    {
+      "lesson": "t3.l6",
+      "hash": "3lxnki",
+      "facts": [
+        "year"
+      ],
+      "sample": "In March 2025 NVIDIA open-sourced **Dynamo**, its distributed inference serving stack — the layer meant to sit beneath/around engines lik…"
+    },
+    {
+      "lesson": "t3.l6",
+      "hash": "ackia2",
+      "facts": [
+        "year"
+      ],
+      "sample": "The business case is a measured figure from one large C++ codebase: the Chromium project finds that around 70% of its high-severity secur…"
+    },
+    {
+      "lesson": "t3.l7",
+      "hash": "10isb0g",
+      "facts": [
+        "year"
+      ],
+      "sample": "This lesson turns that chain into a rubric you can run in a meeting, then checks it against what the field actually ships in 2026."
+    },
+    {
+      "lesson": "t3.l7",
+      "hash": "1m6404c",
+      "facts": [
+        "year"
+      ],
+      "sample": "That's Rust's table stakes, and the reason Chromium counts around 70% of its high-severity security bugs (since 2015) as memory unsafety …"
+    },
+    {
+      "lesson": "t3.l7",
+      "hash": "rnn365",
+      "facts": [
+        "version"
+      ],
+      "sample": "**Where Rust already won in this field:** NVIDIA Dynamo's entire data plane (the [[l:t3.l6]] decision, shipped at v1.3 scale — orchestrat…"
+    },
+    {
+      "lesson": "t3.l7",
+      "hash": "tw6l9e",
+      "facts": [
+        "version"
+      ],
+      "sample": "The framework is only as good as the evidence: **Dynamo** (github.com/ai-dynamo/dynamo — the Rust components are named in the tree: NIXL …"
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "10960zz",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "134suva",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KiB per token** ([[l:t5.l4]]); the bottleneck is the s…"
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "1th82da",
+      "facts": [
+        "unit"
+      ],
+      "sample": "At ~50 MiB it holds none of a 16 GB weight stream between decode steps and little of a serving KV cache, so it earns its keep inside one …"
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "1y6tqry",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "34amr4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.5 MiB per token in FP16** — a 4k-token …"
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "4u5i52",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The FlashAttention paper puts an A100's SRAM at about 19 TB/s against 1.5–2.0 TB/s of HBM, an order of magnitude."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "ct4z5u",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**Shared memory / SRAM** (~228 KiB per SM on H100, configurable split with L1): the signature GPU feature."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "fu1dfq",
+      "facts": [
+        "unit"
+      ],
+      "sample": "This is where a 70B model's weights (140 GB in FP16 → 2 GPUs) and every sequence's KV cache live."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "pargfs",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**HBM** (80 GB at 3.35 TB/s on H100): stacked DRAM sitting on the same package as the die — 5× the bandwidth of server DDR, at datacenter…"
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "qtq7tf",
+      "facts": [
+        "unit"
+      ],
+      "sample": "T0 gave you the CPU ladder: registers → L1 → L2 → L3 → DRAM, with ~0.5 ns at the top and ~100 ns at the bottom."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "sibmsw",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**Registers** (~256 KiB per SM, 64K 32-bit registers): per-thread, zero-latency-ish, allocated at compile time."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "smwzy",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere."
+    },
+    {
+      "lesson": "t4.l2",
+      "hash": "vzrzuy",
+      "facts": [
+        "unit"
+      ],
+      "sample": "NVIDIA publishes no per-SM figure for the H100, so this course's simulator assumes 20 TB/s, about 6× the H100's HBM: a teaching constant,…"
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "1bv8nxd",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Attainable rate = — the ALUs could do the math in microseconds; the memory system takes 5 ms."
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "1ibyjb4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| paged attention, 32-token prefill chunk | 2,048 GFLOPs | 8 GB | AI, then the side of the ridge |"
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "1q4x1rx",
+      "facts": [
+        "unit"
+      ],
+      "sample": "AI ≈ 1 FLOP/byte — *300× below* the ridge."
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "1tm1juo",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| router scoring | 0.12 GFLOPs | 0.08 GB | AI, then the side of the ridge |"
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "1wthgtr",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| 70B prefill, 512 tokens | 71,680 GFLOPs | 140 GB | AI, then the side of the ridge |"
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "k21oq0",
+      "facts": [
+        "unit"
+      ],
+      "sample": "| 70B decode, batch 32 | 4,480 GFLOPs | 140 GB | AI, then the side of the ridge |"
+    },
+    {
+      "lesson": "t4.l3",
+      "hash": "wlf8xl",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The B200 worksheet uses one GPU at dense FP16: **2.25 PFLOP/s** and **8 TB/s HBM3e**, derived from NVIDIA's eight-GPU [HGX B200 compute s…"
+    },
+    {
+      "lesson": "t4.l4",
+      "hash": "1nkqxyc",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Take a kernel with 128 registers per thread, 100 KiB of shared memory per block and blocks of 64 threads (2 warps each)."
+    },
+    {
+      "lesson": "t4.l4",
+      "hash": "1ymcwwr",
+      "facts": [
+        "unit"
+      ],
+      "sample": "How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory…"
+    },
+    {
+      "lesson": "t4.l5",
+      "hash": "greckk",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The 16M vector-add option executes a bounded representative sample, then honestly models the count, 65,536 logical workgroups, and 192 Mi…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "13ch8si",
+      "facts": [
+        "year"
+      ],
+      "sample": "The idea did not stop in 2022: [FlashAttention-2](https://arxiv.org/abs/2307.08691) reworked how the work is split across thread blocks a…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "14dd4sn",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Total: FLOPs against elements *touched* (a row and a column per output) if you naively re-read from DRAM: that is FLOP/byte for -byte ele…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "1dzern2",
+      "facts": [
+        "year"
+      ],
+      "sample": "The 2022 FlashAttention paper (Tri Dao et al.) noticed two things: (1) attention is three matmul-shaped ops around a softmax, and (2) the…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "1ea30t9",
+      "facts": [
+        "unit"
+      ],
+      "sample": "And nothing carries over between waves: A and B are 512 MiB each at this size, so the next wave starts cold."
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "1s94nds",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Choose and so those slabs fit in **shared memory** ([[l:t4.l2]]'s 228 KiB scratchpad), and the algorithm becomes: cooperatively load both…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "5fcwpz",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Per step of K that is FLOPs against bytes, **≈ 130 FLOP/B**."
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "9djvih",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The first to ask pulls the slab from HBM into **L2** (50 MB, shared by every SM); the others hit it there."
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "acfbus",
+      "facts": [
+        "unit"
+      ],
+      "sample": "On an H100 (ridge ≈ 295 FLOP/byte at FP16, [[l:t4.l3]]) HBM can feed only 0.5 × 3.35 TB/s ≈ 1.7 TFLOP/s of the ~989 TFLOP/s the tensor co…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "avdhif",
+      "facts": [
+        "unit"
+      ],
+      "sample": "SRAM is 228 KiB/SM and registers 256 KiB/SM — tile size trades against **occupancy** ([[l:t4.l4]]): a giant tile leaves room for few warp…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "ghv440",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A **grouped** launch (Triton's ) walks down a group of tile rows before moving one column right, so the same 132 tiles form a block of 11…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "m7hm3j",
+      "facts": [
+        "unit"
+      ],
+      "sample": "With each element of A and B loaded from HBM is reused **T times** from SRAM, and intensity jumps from 0.5 (the naive case is just ) to 6…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "mjkm9b",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The shared slabs must stay in L2 while the wave runs: with two 64-deep stages the row-major wave keeps about 4 MB in flight and the group…"
+    },
+    {
+      "lesson": "t4.l6",
+      "hash": "ovlkb2",
+      "facts": [
+        "unit"
+      ],
+      "sample": "2: 40.3 GB vs 4.4 GB on GPT-2 medium attention), while the memory saving is up to 20× and grows with sequence length N."
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "16jetdu",
+      "facts": [
+        "unit"
+      ],
+      "sample": "You already know from [[l:t4.l3]] what that means: decode at batch 1 moves 16 GB for 16 GFLOPs — arithmetic intensity ≈ 1, hard against t…"
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "18otx60",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Sum across 32 layers and you land at the famous rule of thumb: **~2 FLOPs per parameter per token** (2 × 8e9 = 16 GFLOPs/token for our 8B…"
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "2i9e89",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A 128k-token context on it: — *about 4× the 16 GB (≈15 GiB) of weights*."
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "3q0my7",
+      "facts": [
+        "unit"
+      ],
+      "sample": "- **Context window**: max ; every \"128k context\" claim is a KV-cache capacity claim — 64 GiB for our 8B, before batching."
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "4c2yf9",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Real Llama-3-8B uses GQA with 8 KV heads and needs 128 KiB per token ([[l:t5.l4]]); GQA is exactly the lever that closes that gap."
+    },
+    {
+      "lesson": "t5.l1",
+      "hash": "gpzf9m",
+      "facts": [
+        "unit"
+      ],
+      "sample": "And the bytes: every weight is read once per token (per sequence, at batch 1) — bytes in FP16, 16 GB."
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "13ccjid",
+      "facts": [
+        "version"
+      ],
+      "sample": "The notes of Dynamo v1.0.0 call it \"the first major release\" and describe \"production-grade disaggregated serving\"; Dynamo v1.6.2 is the …"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1926xqa",
+      "facts": [
+        "year"
+      ],
+      "sample": "On top of it: a frontend language for constrained/structured generation (regex/JSON-schema decoding at speed), first-class MoE expert par…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1nxbd5k",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "The stack is deepest exactly on NVIDIA (obviously), the best-tuned paths follow NVIDIA's newest hardware and recipes, and engine versions…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1oaio94",
+      "facts": [
+        "version"
+      ],
+      "sample": "**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational comple…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1p6s96p",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "Its **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, then was **deprecated in v1.5.0** …"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1up9319",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "**What it is now:** SGLang's README introduces it as \"an open-source inference framework for large language, vision-language, and diffusi…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "1wvdrn",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "| **Runs on** | any CUDA (+AMD/TPU ports) | NVIDIA, AMD, TPU, Intel, Apple, Ascend, Moore Threads as of SGLang v0.5.23, read 2026-11-23 |…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "257ylr",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "TRT-LLM's **Kind** follows its migration guide: PyTorch only; TensorRT backend removed as of NVIDIA/TensorRT-LLM v1.4.0rc4, read 2026-11-23."
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "dzw2qj",
+      "facts": [
+        "version"
+      ],
+      "sample": "Under **Language core**, SGLang's radix tree defaults to its Rust core at SGLang v0.5.23."
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "jejufs",
+      "facts": [
+        "year"
+      ],
+      "sample": "The Python scheduler's overhead drove the **V1 engine rewrite** — which shipped as the default in 2025 with a rewritten scheduler/KV-cach…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "llhpa9",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "TRT-LLM began as a *build-time* compiler (models became pre-built TensorRT engines), but that path is gone: PyTorch only; TensorRT backen…"
+    },
+    {
+      "lesson": "t5.l10",
+      "hash": "tylzt7",
+      "facts": [
+        "version"
+      ],
+      "sample": "Its radix tree is no longer pure Python either: the release notes that switched it (PR #39627) say the prefix cache \"now runs on a Rust c…"
+    },
+    {
+      "lesson": "t5.l3",
+      "hash": "1yw9gra",
+      "facts": [
+        "unit"
+      ],
+      "sample": "- **Goodput:** throughput *subject to SLOs* — e.g., requests/s with TTFT < 2 s and ITL < 100 ms."
+    },
+    {
+      "lesson": "t5.l3",
+      "hash": "3egtll",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "The ITL line is a floor, not an estimate: Llama-3.3-70B FP8 on 4 H100s, 1k tokens in and 1k out, measured 11.78 ms per token at 4 users a…"
+    },
+    {
+      "lesson": "t5.l3",
+      "hash": "cgf550",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The user's \"is it fast?\" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms (the course's rule of thumb, not …"
+    },
+    {
+      "lesson": "t5.l4",
+      "hash": "1kg0yf3",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Already counted above; *without* GQA our 70B would need 2.5 MiB/token."
+    },
+    {
+      "lesson": "t5.l4",
+      "hash": "1mjcucy",
+      "facts": [
+        "unit"
+      ],
+      "sample": "One 80 GB H100: 16 GB weights (FP16) + ~2 GB runtime leaves ~60 GB for KV — about **480k tokens** of cache."
+    },
+    {
+      "lesson": "t5.l4",
+      "hash": "2vq2sg",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The only new part is that the sessions cost 320 KiB per *token*."
+    },
+    {
+      "lesson": "t5.l4",
+      "hash": "ic1y5g",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Read those numbers again: to serve 70B with serious context, you need **8 GPUs — of which the weights use barely 2, and the other ~500 GB…"
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "128zwla",
+      "facts": [
+        "year"
+      ],
+      "sample": "This lesson works with the 2023 paper's block of 16 tokens."
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "1jbiex5",
+      "facts": [
+        "version"
+      ],
+      "sample": "The vLLM v0.34.0 release notes list the change to 64 under \"Before you upgrade\" without giving a reason; a larger block saves bookkeeping…"
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "1ttb0nw",
+      "facts": [
+        "version"
+      ],
+      "sample": "In vLLM v0.34.0 the V1 core has no fork: beam search runs in the entrypoints as repeated one-token requests, so what beams share are full…"
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "8gc0wb",
+      "facts": [
+        "version"
+      ],
+      "sample": "At vLLM v0.34.0, vLLM reserves the cache's address range with the driver's virtual-memory API ([[l:t2.l2]]'s move) and commits physical m…"
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "nqbgra",
+      "facts": [
+        "year"
+      ],
+      "sample": "Fig 1 is the 2023 paper's design, and lab 02's."
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "oz6n1w",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Using [[l:t5.l4]]'s 8B model (128 KiB of KV per token, so one paper block holds 16 × 128 KiB = 2 MiB, and one block at vLLM's default hol…"
+    },
+    {
+      "lesson": "t5.l5",
+      "hash": "z2psda",
+      "facts": [
+        "version"
+      ],
+      "sample": "**Block size is a trade:** The paper chose 16 tokens, and vLLM v0.34.0 defaults to 64."
+    },
+    {
+      "lesson": "t5.l6",
+      "hash": "1kdho6x",
+      "facts": [
+        "version"
+      ],
+      "sample": "Dynamo's KVBM tier manager was deprecated in v1.5.0 in favor of engine-native offload: tiering belongs to the cache owner, transport stay…"
+    },
+    {
+      "lesson": "t5.l7",
+      "hash": "1400xyn",
+      "facts": [
+        "unit"
+      ],
+      "sample": "[[l:t2.l4]] ended with a promise: continuous batching is a 1960s scheduler wearing a GPU."
+    },
+    {
+      "lesson": "t5.l7",
+      "hash": "1phigi7",
+      "facts": [
+        "year"
+      ],
+      "sample": "The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the…"
+    },
+    {
+      "lesson": "t5.l7",
+      "hash": "wjub1f",
+      "facts": [
+        "version"
+      ],
+      "sample": "**Preemption policy** shapes fairness: under first-come-first-served, vLLM v0.34.0 preempts the most recently admitted request, which pro…"
+    },
+    {
+      "lesson": "t5.l8",
+      "hash": "1jdb5vv",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "TensorRT-LLM chunks prefill only when you set (its default in the LLM API's arguments is False as of NVIDIA/TensorRT-LLM v1.4.0rc4, read …"
+    },
+    {
+      "lesson": "t5.l8",
+      "hash": "1o6owh1",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "Medusa, the plain-heads version, was removed from vLLM in v0.33.0; vLLM's docs name, among others, these methods: EAGLE, MTP, draft, n-gr…"
+    },
+    {
+      "lesson": "t5.l8",
+      "hash": "9qszyl",
+      "facts": [
+        "version"
+      ],
+      "sample": "SGLang chunks prefill by default too (8,192 tokens a chunk on an H100 when is not given, as of SGLang v0.5.23) but mixes decodes into tho…"
+    },
+    {
+      "lesson": "t5.l8",
+      "hash": "tnx3ze",
+      "facts": [
+        "version"
+      ],
+      "sample": "vLLM chunks prefill and batches it with running decodes by default (as of vLLM v0.34.0 its scheduler has no prefill or decode phase: each…"
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "12vehz4",
+      "facts": [
+        "year"
+      ],
+      "sample": "(The 2026 state of the art on this exact topic — EPD, NIXL, llm-d, and the deprecation of Dynamo's KVBM — is [[l:t6.l3]].)"
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "13dqctv",
+      "facts": [
+        "year"
+      ],
+      "sample": "This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the idea that became…"
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "1dmt77c",
+      "facts": [
+        "year"
+      ],
+      "sample": "Moonshot AI's Mooncake (2024, production at Kimi scale) pushes the idea one level further: the KV cache is not per-worker state — it's a …"
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "h0whvy",
+      "facts": [
+        "unit"
+      ],
+      "sample": "TP belongs *inside* a node, on NVLink (900 GB/s per GPU on H100-class NVLink, 1.8 TB/s per GPU on NVL72) — over Ethernet it starves."
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "jpeo7n",
+      "facts": [
+        "year"
+      ],
+      "sample": "The 2025 rule of thumb: disaggregate at scale and long context; colocate at small scale."
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "px7ipu",
+      "facts": [
+        "year"
+      ],
+      "sample": "The clean idea from Splitwise/DistServe/Mooncake (2024): prefill and decode have *opposite* roofline regimes ([[l:t4.l3]]) and *opposite*…"
+    },
+    {
+      "lesson": "t5.l9",
+      "hash": "t0wn4r",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The cost: the **KV transfer** — a 4k-context KV for our 70B ([[l:t5.l4]]'s 320 KiB per token × 4,096 tokens = 1.34 GB) moved over a 50 GB…"
+    },
+    {
+      "lesson": "t6.l1",
+      "hash": "1jwo72n",
+      "facts": [
+        "unit"
+      ],
+      "sample": "[[l:t5.l4]] taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 327,680 B/token (320 KiB)."
+    },
+    {
+      "lesson": "t6.l1",
+      "hash": "37c7br",
+      "facts": [
+        "unit"
+      ],
+      "sample": "KV cache per token: 576 × 2 B (BF16) = 1,152 B per layer × 61 layers = **70,272 B (≈68.6 KiB)**, against 327,680 B (320 KiB) for Llama-3-…"
+    },
+    {
+      "lesson": "t6.l1",
+      "hash": "7xpnm8",
+      "facts": [
+        "year"
+      ],
+      "sample": "That is why most of the open frontier models of 2025 were MoEs (DeepSeek V3/R1, Kimi K2, Qwen3, Mixtral's descendants and gpt-oss among t…"
+    },
+    {
+      "lesson": "t6.l1",
+      "hash": "7ypqep",
+      "facts": [
+        "price"
+      ],
+      "sample": "Published cost day: 226.75 H800 nodes on average serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k the…"
+    },
+    {
+      "lesson": "t6.l1",
+      "hash": "tyyhrg",
+      "facts": [
+        "year"
+      ],
+      "sample": "Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, B…"
+    },
+    {
+      "lesson": "t6.l10",
+      "hash": "vbyme2",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Firecracker reports application code can start in as little as 125 ms; products such as [E2B](https://www.e2b.dev/docs) use the same snap…"
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "12qvnh4",
+      "facts": [
+        "unit"
+      ],
+      "sample": "MegaScale-Infer's own example: an A100 needs about 312 TFLOPS ÷ 2 TB/s = 156 tokens per weight read to be compute-bound."
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "1b64usp",
+      "facts": [
+        "unit"
+      ],
+      "sample": "As a check on the claim: 6,144 sequences each emitting a token every 50 ms is 122,880 tok/s, or 3,840 per GPU; the reported 3,910 average…"
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "1wvm3zl",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Step-3's 4,039 is a **peak minute** at a **50 ms** TPOT on Hopper with FP8 and 4K context; its long-run average is 3,910, and its DeepSee…"
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "box8my",
+      "facts": [
+        "unit"
+      ],
+      "sample": "MegaScale-Infer's 1.90× is decode throughput per GPU for its 317B Scaled-MoE on 80 GB Ampere GPUs in BF16, at a **150 ms** time-between-t…"
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "f2r9n3",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Step-3 wrote its own GPUDirect RDMA library (StepMesh) to meet its 272 µs per-layer budget without giving any of the GPU's SMs to communi…"
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "j09kvq",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The Step-3 paper itself points at the gap: a 150 ms token is too slow for chat."
+    },
+    {
+      "lesson": "t6.l12",
+      "hash": "rbgv91",
+      "facts": [
+        "unit"
+      ],
+      "sample": "At a 50 ms time per output token (TPOT) with a three-stage pipeline (attention, the network, the FFN), each stage gets 50 ÷ 3 ≈ 16.6 ms p…"
+    },
+    {
+      "lesson": "t6.l2",
+      "hash": "1fe6lhq",
+      "facts": [
+        "year"
+      ],
+      "sample": "**The API has moved since** (one EPBuffer interface for high-throughput and low-latency EP; V1 removed as of DeepEP f6aa38f, read 2026-11…"
+    },
+    {
+      "lesson": "t6.l2",
+      "hash": "1vywdb6",
+      "facts": [
+        "year"
+      ],
+      "sample": "A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs."
+    },
+    {
+      "lesson": "t6.l2",
+      "hash": "84wmtv",
+      "facts": [
+        "year",
+        "price"
+      ],
+      "sample": "The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers…"
+    },
+    {
+      "lesson": "t6.l2",
+      "hash": "rb783y",
+      "facts": [
+        "year"
+      ],
+      "sample": "The all-to-all is so central that DeepSeek open-sourced a dedicated library for it, in February 2025, on day 2 of its Open-Source Week."
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "1k96nob",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Disaggregation lives or dies on KV transfer ([[l:t5.l9]]'s 26.8 ms budget line)."
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "1kpxvi0",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "**Status change: KVBM is deprecated.** Dynamo v1.5.0 (2026-09-21) deprecated it, with removal targeted for v1.7.0 as of Dynamo v1.5.0, re…"
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "1ypvl1i",
+      "facts": [
+        "version"
+      ],
+      "sample": "llm-d made the same move (v0.10 deprecated its fs-connector for vLLM's in-tree )."
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "20xijp",
+      "facts": [
+        "year"
+      ],
+      "sample": "The Mooncake team's [post on deploying Kimi K2 with SGLang](https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/) is a *benchmark*, not M…"
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "b3spm6",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The honest decision procedure: compute the KV-transfer budget per request ([[l:t5.l9]]'s 26.8 ms for 70B 4k over 50 GB/s), compare to the…"
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "u3fmn8",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when t…"
+    },
+    {
+      "lesson": "t6.l3",
+      "hash": "x0778o",
+      "facts": [
+        "year"
+      ],
+      "sample": "The 2025-26 evidence didn't repeal [[l:t5.l9]]'s rule — it sharpened it."
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "1kj9r57",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A 1M-token prompt's KV (Llama-class: ~320 GB; MLA-class: ~70 GB) and its prefill FLOPs exceed one GPU — but attention is embarrassingly s…"
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "1r4e13o",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "Meta's published numbers (Oct 2025): 1M-token prefill in <1 minute on a single H100 host via CP, 10M tokens across 32 hosts; Llama-3-405B…"
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "5g4ue4",
+      "facts": [
+        "year"
+      ],
+      "sample": "The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is C…"
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "6drzcb",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Needs the fattest pipe: NVLink domain only (NVL72 rack, ~1.8 TB/s bidirectional)."
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "enh9aw",
+      "facts": [
+        "year"
+      ],
+      "sample": "Three published configs to recite (one production service, two reported runs): **DeepSeek decode** — routed experts EP144, MLA and shared…"
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "jy97g1",
+      "facts": [
+        "year"
+      ],
+      "sample": "**Kimi K2 benchmark** — P/D disaggregation + large-scale EP on SGLang at one fixed input and output length ([the Mooncake team's post](ht…"
+    },
+    {
+      "lesson": "t6.l4",
+      "hash": "t6ct8s",
+      "facts": [
+        "year"
+      ],
+      "sample": "**Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, …"
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "1a5hjw2",
+      "facts": [
+        "unit"
+      ],
+      "sample": "One 8×B200 node holds 8 × 180 = 1,440 GB, so the weights take about a quarter of it and the rest goes to KV cache and activations."
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "1k8wq34",
+      "facts": [
+        "unit"
+      ],
+      "sample": "671B × 4.5 bits ÷ 8 = ~377 GB of weights [derived]."
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "b0ided",
+      "facts": [
+        "unit"
+      ],
+      "sample": "NVIDIA's B200 DeepSeek-R1 demo: **368 tok/s/user** on 8×B200 with NVFP4 weights + MTP-3 speculative + fused kernels — up from a 67 tok/s …"
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "cf19im",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spe…"
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "f9ogj",
+      "facts": [
+        "unit"
+      ],
+      "sample": "**GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the \"one giant GPU\" fiction made physical."
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "jpfpb6",
+      "facts": [
+        "unit"
+      ],
+      "sample": "At FP8 the same model is ~671 GB, more than one 8×H100 node's 640 GB."
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "n00cee",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "The roofline is vendor-neutral, and so is this lesson's question: \"bandwidth and capacity per dollar?\" MI300X/MI355X compete exactly ther…"
+    },
+    {
+      "lesson": "t6.l5",
+      "hash": "rymm15",
+      "facts": [
+        "version"
+      ],
+      "sample": "Recipes differ in how far they push it, and the checkpoint picks the recipe: vLLM v0.30 defaults to FlashInfer's CuTe DSL kernel for NVFP…"
+    },
+    {
+      "lesson": "t6.l6",
+      "hash": "1amd06g",
+      "facts": [
+        "year"
+      ],
+      "sample": "The 2026 shape in production: MTP-style modules for the frontier MoE stacks, EAGLE-3-class heads for open-weight deployments, draft-model…"
+    },
+    {
+      "lesson": "t6.l6",
+      "hash": "1bbl0o4",
+      "facts": [
+        "year"
+      ],
+      "sample": "EAGLE (and EAGLE-3, the version most engines integrated in 2025) made the draft **feature-level autoregression**: the head consumes the t…"
+    },
+    {
+      "lesson": "t6.l6",
+      "hash": "oez4br",
+      "facts": [
+        "year"
+      ],
+      "sample": "Every 2026 engine integrated this idea (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads)."
+    },
+    {
+      "lesson": "t6.l7",
+      "hash": "1ht9oho",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Weight sync without stop-the-world.** After each update, rollout engines need the new weights — 100s of GB — mid-flight."
+    },
+    {
+      "lesson": "t6.l7",
+      "hash": "fg2ixm",
+      "facts": [
+        "year"
+      ],
+      "sample": "Career note: \"RL infrastructure\" job posts in 2026 list exactly this stack — inference engines, NCCL, Ray — which is why it belongs in a …"
+    },
+    {
+      "lesson": "t6.l7",
+      "hash": "io0ncc",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Same tradeoffs, 400 GB payload."
+    },
+    {
+      "lesson": "t6.l8",
+      "hash": "17rmevb",
+      "facts": [
+        "year"
+      ],
+      "sample": "Two shapes define 2026 products, and each rewards a different part of your stack:"
+    },
+    {
+      "lesson": "t6.l9",
+      "hash": "1i6tblz",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The paper measured up to 12× throughput over its contemporary multi-tenant baselines with about 2 ms/token added latency; treat those as …"
+    },
+    {
+      "lesson": "t6.l9",
+      "hash": "1l30ivb",
+      "facts": [
+        "unit"
+      ],
+      "sample": "A hypothetical adapter of rank 16 on the four 4,096 × 4,096 attention projections of a 32-layer model, stored in BF16: 16 × 8,192 = 131,0…"
+    },
+    {
+      "lesson": "t6.l9",
+      "hash": "5jdu23",
+      "facts": [
+        "unit"
+      ],
+      "sample": "That is tiny beside a base model, so 8 GiB of spare HBM could hold 256 of them; but KV blocks and hot adapters compete for the same pages…"
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "19etpyp",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The same Meta post calls its decode goal TTIT (time to incremental token) and writes \"targeting less than 25ms\"."
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "1cdv9bx",
+      "facts": [
+        "unit"
+      ],
+      "sample": "MLPerf's TPOT limits are 100 ms (Llama3.1-8B conversational) and 30 ms (interactive), 80 ms (DeepSeek-R1 server) and 15 ms (interactive)."
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "1hrpu09",
+      "facts": [
+        "unit"
+      ],
+      "sample": "You've run this objective function before: it's **\"QPS at p99 < 200 ms\" from every capacity review you've sat in** — with one twist."
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "1kvhxz4",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "Meta's [engineering post](https://engineering.fb.com/2025/10/17/ai-research/scaling-llm-inference-innovations-tensor-parallelism-context-…"
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "1on1b81",
+      "facts": [
+        "unit"
+      ],
+      "sample": "req/s with TTFT < 2 s AND TPOT < 100 ms."
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "qaiq42",
+      "facts": [
+        "version",
+        "unit"
+      ],
+      "sample": "[MLPerf Inference](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc) publishes limits per model (v6.1 rul…"
+    },
+    {
+      "lesson": "t7.l1",
+      "hash": "y440xm",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Take a hypothetical 10 s window with 40 requests, where 31 meet TTFT < 2 s, 34 meet TPOT < 100 ms and 29 meet both."
+    },
+    {
+      "lesson": "t7.l2",
+      "hash": "1dapp7j",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Step 32 serves fewer tokens per second than 16 here: 32 streams at 240 ms make fewer tokens than 16 at 96 ms (32 ÷ 240 is less than 16 ÷ …"
+    },
+    {
+      "lesson": "t7.l2",
+      "hash": "1sp83he",
+      "facts": [
+        "year",
+        "version"
+      ],
+      "sample": "Older posts still cite two tools you should skip, LLMPerf (Ray's load generator: archived 2025-12-17, read-only) and GenAI-Perf (NVIDIA's…"
+    },
+    {
+      "lesson": "t7.l2",
+      "hash": "1u4fg0n",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Turned round for capacity, S slots each held H seconds complete at most *S ÷ H* requests a second (64 slots held 8 s each: 8 requests a s…"
+    },
+    {
+      "lesson": "t7.l2",
+      "hash": "fmipuz",
+      "facts": [
+        "unit"
+      ],
+      "sample": "In a hypothetical run with p95 TPOT of 22, 24, 31, 48, 96 and 240 ms at concurrency 1, 2, 4, 8, 16 and 32, and an SLO of TPOT < 100 ms, t…"
+    },
+    {
+      "lesson": "t7.l3",
+      "hash": "1rmk3cm",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Now apply the product's floor, say **at least 50 tok/s/user**: only D and E qualify, and the choice is the one with the most tok/s/GPU, w…"
+    },
+    {
+      "lesson": "t7.l3",
+      "hash": "21k1wl",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The 30 tok/s/user figure belongs to a different comparison: tokens per all-in provisioned MW, where a GB200 NVL72 at FP4 (no MTP) is ~8× …"
+    },
+    {
+      "lesson": "t7.l3",
+      "hash": "53k8hw",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "In SemiAnalysis's InferenceMAX launch (now InferenceX, 2025-10-09), DeepSeek-R1 FP4 shows the GB200 NVL72 with disaggregated prefill beat…"
+    },
+    {
+      "lesson": "t7.l3",
+      "hash": "hyxt3o",
+      "facts": [
+        "year",
+        "unit"
+      ],
+      "sample": "The InferenceMAX launch article (SemiAnalysis, 2025-10-09; the project is now InferenceX), DeepSeek-R1 FP4: above **90 tok/s/user** a B20…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1agshww",
+      "facts": [
+        "unit"
+      ],
+      "sample": "The measured counterpoint is InferenceMAX's ~8× tokens per MW for a GB200 NVL72 at FP4 over a single-node H200 at FP8 on DeepSeek-R1 at 3…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1j0of36",
+      "facts": [
+        "price"
+      ],
+      "sample": "Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek's 56.3% hit: over half the input tokens billed at $0.14/M…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1l2bwh",
+      "facts": [
+        "price",
+        "unit"
+      ],
+      "sample": "That is one decode node priced alone, at the throughput end of the frontier: the same blog lists TTFT of 2–5 seconds and ITL of about 100…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1lmstl1",
+      "facts": [
+        "price",
+        "unit"
+      ],
+      "sample": "The same node-day at a later reading of the same GetDeploying median than the cost stack's, $3.98 per GPU-hour (both readings and their d…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1m7u7on",
+      "facts": [
+        "price"
+      ],
+      "sample": "DeepSeek's open-infra page, SGLang's $0.20/M estimate, and the TCO dashboards on InferenceX (formerly InferenceMAX) are your answer keys."
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1taym0d",
+      "facts": [
+        "year",
+        "price"
+      ],
+      "sample": "Against R1's $2.19/M list price, that gap is the whole story of the 2025 margin."
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1ty7h5m",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Tokens per megawatt divides the same throughput by power instead of price: a hypothetical rack drawing 0.12 MW that delivers 600,000 tok/…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1xzeyrm",
+      "facts": [
+        "year",
+        "price"
+      ],
+      "sample": "Reproduce DeepSeek's day (open-infra index, Feb 2025): **226.75 nodes on average (8×H800 each)** → 1,814 GPUs avg × $2/GPU/hr × 24 h = **…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "1y0w3t2",
+      "facts": [
+        "year"
+      ],
+      "sample": "Worked example, SGLang's DeepSeek reproduction ([[l:t6.l2]]): their blog (May 2025) reports 22.3k output tok/s per node on 8×H100 nodes, …"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "8iuhtw",
+      "facts": [
+        "price",
+        "unit"
+      ],
+      "sample": "To earn gross margin m at price P ($/Mtok), each GPU must deliver at least tok/s = C × 10⁶ ÷ (3,600 × P × (1 − m)) inside its SLO: at C =…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "c165ad",
+      "facts": [
+        "price",
+        "unit"
+      ],
+      "sample": "A hypothetical 8-GPU node at $2 per GPU-hour that delivers 20,000 tok/s costs 16 ÷ 72,000,000 × 10⁶ = **$0.22/Mtok**."
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "cr2hs",
+      "facts": [
+        "year",
+        "price",
+        "unit"
+      ],
+      "sample": "- **Cost stack** — GPU-hours (dominant: an H100 rents on demand at a median $3.49 per GPU-hour across 41 providers on 2026-10-04 per [Get…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "cy5f80",
+      "facts": [
+        "price"
+      ],
+      "sample": "That is the price of a capability, not any one model's list price: DeepSeek's own flagship, deepseek-v4-pro, lists $3.96 per million outp…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "g9gvyp",
+      "facts": [
+        "price"
+      ],
+      "sample": "At $2/GPU/hr × 8 GPUs × 24 = $384/node-day → **$0.20/M output tokens** (their published estimate is $0.20/1M; the blog does not state the…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "m4y5pw",
+      "facts": [
+        "price"
+      ],
+      "sample": "R1 list prices: $0.14/M input hit, $0.55/M input miss, $2.19/M output → revenue ≈ $562,027 (DeepSeek's own total; the token counts are ro…"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "u3xmb4",
+      "facts": [
+        "price",
+        "unit"
+      ],
+      "sample": "Run it backwards for a price target: the node needs ($/hour ÷ target $/Mtok) × 10⁶ ÷ 3,600 tok/s, so $0.10/Mtok asks for 16 ÷ 0.10 × 10⁶ …"
+    },
+    {
+      "lesson": "t7.l4",
+      "hash": "xlo9n3",
+      "facts": [
+        "price"
+      ],
+      "sample": "What DeepSeek calls a **cost profit margin of 545%** is profit over cost: ($562,027 − $87,072) ÷ $87,072 = 5.45, so price is about 6.45× …"
+    },
+    {
+      "lesson": "t7.l5",
+      "hash": "14hveaq",
+      "facts": [
+        "unit"
+      ],
+      "sample": "Inference capacity is *discrete and slow* (a new worker takes minutes to load its weights, 140 GB for a 70B model in BF16 — [[l:t7.l2]]'s…"
+    },
+    {
+      "lesson": "t7.l5",
+      "hash": "fzssst",
+      "facts": [
+        "version"
+      ],
+      "sample": "Its [README](https://github.com/ai-dynamo/modelexpress/blob/v0.8.0/README.md) shows why that alone is not the fix: the peer copy makes th…"
+    }
+  ]
+}
