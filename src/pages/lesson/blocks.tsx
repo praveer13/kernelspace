@@ -83,6 +83,15 @@ const CALLOUT_META: Record<
   isomorphism: { icon: ArrowLeftRight, bar: '#22D3EE', text: '#22D3EE', label: 'ISOMORPHISM' },
 }
 
+function BreakNote({ text }: { text: string }) {
+  return (
+    <p className="mt-1.5 border-l-2 border-line-bright pl-3 text-[13px] leading-snug text-text-3">
+      <span className="mr-1.5 font-mono text-[10px] uppercase">Where it breaks:</span>
+      {text}
+    </p>
+  )
+}
+
 function CalloutView({ block }: { block: CalloutBlock }) {
   const meta = CALLOUT_META[block.variant]
   const Icon = meta.icon
@@ -100,6 +109,7 @@ function CalloutView({ block }: { block: CalloutBlock }) {
       </div>
       <div className="[&_p]:!text-body [&_p]:!leading-[1.6]">
         <ProseView md={block.md} trackColor={meta.bar} compact />
+        {block.variant === 'analogy' && block.breaks && <BreakNote text={block.breaks} />}
       </div>
     </aside>
   )

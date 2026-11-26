@@ -71,6 +71,11 @@ export interface CalloutBlock {
   variant: CalloutVariant
   title?: string
   md: string
+  /**
+   * D10 (wave-5 §5.6): where an analogy stops holding, rendered under it as "where it breaks:" and exported to
+   * lessons-md. Required of every analogy callout from K5-17; absent today means the baseline still lists it.
+   */
+  breaks?: string
 }
 
 /** Step-through SVG diagram (lesson.md §2.4). */
