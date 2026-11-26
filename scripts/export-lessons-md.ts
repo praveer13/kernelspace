@@ -53,8 +53,10 @@ export function blockToMd(
       const tail = align.length > 0 ? [`${align.join('\n\n')}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`] : []
       return [main, ...alt, ...tail].join('\n\n')
     }
-    case 'callout':
-      return `> **[${b.variant}]** ${b.md.replace(/\n/g, '\n> ')}`
+    case 'callout': {
+      const body = `> **[${b.variant}]** ${b.md.replace(/\n/g, '\n> ')}`
+      return b.variant === 'analogy' && b.breaks ? `${body}\n>\n> **Where it breaks:** ${b.breaks.replace(/\n/g, '\n> ')}` : body
+    }
     case 'statline':
       return b.stats.map((s) => `- **${s.value}** — ${s.label}${s.hint ? ` (${s.hint})` : ''}`).join('\n')
     case 'diagram': {

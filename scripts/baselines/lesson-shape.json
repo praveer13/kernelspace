@@ -1,0 +1,801 @@
+[
+  {
+    "lesson": "r.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "r.l1",
+    "rule": "errata-prose",
+    "value": 1
+  },
+  {
+    "lesson": "r.l1",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l1",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l10",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l10",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l2",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l2",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l3",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l4",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l5",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l5",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l6",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l6",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l7",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l7",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "r.l8",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "r.l9",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l2",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l3",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l3",
+    "rule": "long-prose",
+    "value": 1227,
+    "note": "1227 words"
+  },
+  {
+    "lesson": "t0.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l4",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t0.l5",
+    "rule": "long-prose",
+    "value": 953,
+    "note": "953 words"
+  },
+  {
+    "lesson": "t0.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l1",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l2",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t1.l5",
+    "rule": "long-prose",
+    "value": 987,
+    "note": "987 words"
+  },
+  {
+    "lesson": "t1.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l1",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l1",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l1",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l2",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l2",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l2",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l3",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l3",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l3",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l4",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l4",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l5",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l5",
+    "rule": "long-prose",
+    "value": 1145,
+    "note": "1145 words"
+  },
+  {
+    "lesson": "t2.l5",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l5",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l6",
+    "rule": "long-prose",
+    "value": 1060,
+    "note": "1060 words"
+  },
+  {
+    "lesson": "t2.l6",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l6",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l6",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l7",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t2.l7",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l1",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l1",
+    "rule": "long-prose",
+    "value": 1597,
+    "note": "1597 words"
+  },
+  {
+    "lesson": "t3.l1",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l2",
+    "rule": "long-prose",
+    "value": 1103,
+    "note": "1103 words"
+  },
+  {
+    "lesson": "t3.l2",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l2",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l3",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l3",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l4",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l4",
+    "rule": "long-prose",
+    "value": 1343,
+    "note": "1343 words"
+  },
+  {
+    "lesson": "t3.l4",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l4",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l5",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l5",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l6",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l7",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l7",
+    "rule": "errata-prose",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l7",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t3.l7",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l5",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l5",
+    "rule": "long-prose",
+    "value": 1100,
+    "note": "1100 words"
+  },
+  {
+    "lesson": "t4.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l6",
+    "rule": "long-prose",
+    "value": 983,
+    "note": "983 words"
+  },
+  {
+    "lesson": "t4.l7",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l7",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t4.l7",
+    "rule": "long-prose",
+    "value": 942,
+    "note": "942 words"
+  },
+  {
+    "lesson": "t5.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l1",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l10",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l10",
+    "rule": "long-prose",
+    "value": 1269,
+    "note": "1269 words"
+  },
+  {
+    "lesson": "t5.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l2",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l3",
+    "rule": "long-prose",
+    "value": 901,
+    "note": "901 words"
+  },
+  {
+    "lesson": "t5.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l7",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l7",
+    "rule": "legacy-tasks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l8",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t5.l9",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l1",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l10",
+    "rule": "long-prose",
+    "value": 1084,
+    "note": "1084 words"
+  },
+  {
+    "lesson": "t6.l10",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l10",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l12",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l2",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l3",
+    "rule": "errata-prose",
+    "value": 2
+  },
+  {
+    "lesson": "t6.l3",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l4",
+    "rule": "long-prose",
+    "value": 905,
+    "note": "905 words"
+  },
+  {
+    "lesson": "t6.l4",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l4",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l4",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l5",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l5",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l5",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l5",
+    "rule": "title-rule",
+    "value": 1,
+    "note": "FP4 and Blackwell: The New Rooflines"
+  },
+  {
+    "lesson": "t6.l6",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l6",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l7",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l7",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l8",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l8",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t6.l9",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l1",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l1",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l2",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l2",
+    "rule": "long-prose",
+    "value": 996,
+    "note": "996 words"
+  },
+  {
+    "lesson": "t7.l2",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l3",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l3",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l3",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l3",
+    "rule": "ungated-diagram",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l4",
+    "rule": "analogy-no-breaks",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l4",
+    "rule": "long-prose",
+    "value": 1247,
+    "note": "1247 words"
+  },
+  {
+    "lesson": "t7.l4",
+    "rule": "no-predict",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l4",
+    "rule": "quiz-first",
+    "value": 1
+  },
+  {
+    "lesson": "t7.l5",
+    "rule": "long-prose",
+    "value": 1138,
+    "note": "1138 words"
+  },
+  {
+    "lesson": "t7.l5",
+    "rule": "no-predict",
+    "value": 1
+  }
+]
